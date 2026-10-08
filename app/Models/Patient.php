@@ -1,0 +1,141 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\Sex;
+use App\Support\BlindIndex;
+use App\Support\Cpf;
+use Database\Factories\PatientFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+#[Fillable([
+    'name', 'cpf', 'birth_date', 'sex', 'phone', 'email',
+    'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state', 'notes',
+])]
+class Patient extends Model
+{
+    /** @use HasFactory<PatientFactory> */
+    use HasFactory, SoftDeletes;
+
+    /**
+     * Nunca serializar dados sensíveis por acidente (JSON, logs, filas).
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['cpf', 'cpf_hash', 'notes'];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'cpf' => 'encrypted',
+            'notes' => 'encrypted',
+            'birth_date' => 'immutable_date',
+            'sex' => Sex::class,
+        ];
+    }
+
+    protected static function booted(): void
+    {
+        // Mantém o índice cego sempre em sincronia com o CPF gravado.
+        static::saving(function (Patient $patient): void {
+            if ($patient->isDirty('cpf')) {
+                $digits = Cpf::digits($patient->cpf);
+
+                $patient->cpf = $digits;
+                $patient->cpf_hash = BlindIndex::for($digits);
+            }
+        });
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * @return HasOne<PatientAnamnesis, $this>
+     */
+    public function anamnesis(): HasOne
+    {
+        return $this->hasOne(PatientAnamnesis::class);
+    }
+
+    /**
+     * @return HasMany<Treatment, $this>
+     */
+    public function treatments(): HasMany
+    {
+        return $this->hasMany(Treatment::class);
+    }
+
+    /**
+     * Busca por nome (parcial) ou por CPF completo (via índice cego).
+     *
+     * @param  Builder<Patient>  $query
+     */
+    public function scopeSearch(Builder $query, ?string $term): void
+    {
+        $term = trim((string) $term);
+
+        if ($term === '') {
+            return;
+        }
+
+        $digits = Cpf::digits($term);
+
+        if (strlen($digits) === 11 && ! preg_match('/[a-z]/i', $term)) {
+            $query->where('cpf_hash', BlindIndex::for($digits));
+
+            return;
+        }
+
+        // Escapa curingas para o termo ser tratado como texto literal.
+        $query->where('name', 'like', '%'.addcslashes($term, '\\%_').'%');
+    }
+
+    public function formattedCpf(): string
+    {
+        return Cpf::format($this->cpf);
+    }
+
+    public function maskedCpf(): string
+    {
+        return Cpf::mask($this->cpf);
+    }
+
+    public function formattedPhone(): string
+    {
+        $phone = (string) $this->phone;
+
+        return match (strlen($phone)) {
+            11 => sprintf('(%s) %s-%s', substr($phone, 0, 2), substr($phone, 2, 5), substr($phone, 7)),
+            10 => sprintf('(%s) %s-%s', substr($phone, 0, 2), substr($phone, 2, 4), substr($phone, 6)),
+            default => $phone,
+        };
+    }
+
+    public function formattedZipCode(): string
+    {
+        $zip = (string) $this->zip_code;
+
+        return strlen($zip) === 8 ? substr($zip, 0, 5).'-'.substr($zip, 5) : $zip;
+    }
+
+    public function age(): int
+    {
+        return (int) $this->birth_date->diffInYears(now());
+    }
+}

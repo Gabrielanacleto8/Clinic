@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Enums\Permission;
+use App\Services\DashboardMetrics;
+use App\Support\ClinicTime;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+
+class HomeController extends Controller
+{
+    /**
+     * Início: o dia da clínica em resumo. Cada bloco só é montado, e
+     * consultado no banco, para quem tem a permissão correspondente.
+     */
+    public function index(Request $request, DashboardMetrics $metrics): View
+    {
+        $user = $request->user();
+        $seesAgenda = $user->hasPermission(Permission::AgendaView);
+        $seesStock = $user->hasPermission(Permission::StockView);
+
+        return view('home', [
+            'today' => ClinicTime::local(now()),
+            'totals' => $metrics->totals($user),
+            'todayAppointments' => $seesAgenda ? $metrics->todayAppointments() : null,
+            'upcomingAppointments' => $seesAgenda ? $metrics->upcomingAppointments() : null,
+            'lowStockProducts' => $seesStock ? $metrics->lowStockProducts() : null,
+            'expiringBatches' => $seesStock ? $metrics->expiringBatches() : null,
+        ]);
+    }
+}

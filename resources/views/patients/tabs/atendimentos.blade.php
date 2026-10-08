@@ -1,0 +1,50 @@
+<section class="mt-4" aria-labelledby="atendimentos">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h2 id="atendimentos" class="text-lg font-semibold tracking-tight">Atendimentos</h2>
+            <p class="mt-0.5 text-sm text-slate-600">{{ $records->total() }} {{ $records->total() === 1 ? 'registro' : 'registros' }}</p>
+        </div>
+        @can('create', App\Models\Treatment::class)
+            <a href="{{ route('patients.treatments.create', $patient) }}" class="btn btn-primary">Novo atendimento</a>
+        @endcan
+    </div>
+
+    <div class="card mt-4 overflow-x-auto">
+        <table class="w-full min-w-2xl text-left text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
+                <tr>
+                    <th scope="col" class="px-4 py-3 font-medium">Data</th>
+                    <th scope="col" class="px-4 py-3 font-medium">Procedimento</th>
+                    <th scope="col" class="px-4 py-3 font-medium">Profissional</th>
+                    <th scope="col" class="px-4 py-3 font-medium">Fotos</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse ($records as $treatment)
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ App\Support\ClinicTime::format($treatment->performed_at) }}</td>
+                        <td class="px-4 py-3 font-medium">
+                            <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-teal-800 hover:underline">{{ $treatment->procedure->name }}</a>
+                            @if ($treatment->isDraft())
+                                <span class="badge ml-1 align-middle {{ $treatment->status->badgeClasses() }}">{{ $treatment->status->label() }}</span>
+                            @endif
+                            @if ($treatment->treated_areas)
+                                <span class="block text-xs font-normal text-slate-500">{{ $treatment->treated_areas }}</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 text-slate-600">{{ $treatment->professional->name }}</td>
+                        <td class="px-4 py-3 text-slate-600 tabular-nums">{{ $treatment->photos_count ?: '—' }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="4" class="px-4 py-10 text-center text-slate-500">Nenhum atendimento registrado para este paciente.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-4">
+        {{ $records->links() }}
+    </div>
+</section>

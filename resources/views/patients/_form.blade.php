@@ -1,0 +1,51 @@
+@csrf
+
+<section class="card p-6">
+    <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Identificação</h2>
+    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
+        <x-form.input class="md:col-span-4" name="name" label="Nome completo" :value="$patient->name" required maxlength="150" autocomplete="off" />
+        <x-form.input class="md:col-span-2" name="cpf" label="CPF" :value="$patient->exists ? $patient->formattedCpf() : null"
+                      required inputmode="numeric" maxlength="14" placeholder="000.000.000-00" data-mask="cpf" autocomplete="off" />
+        <x-form.input class="md:col-span-2" name="birth_date" label="Data de nascimento" type="date"
+                      :value="$patient->birth_date?->format('Y-m-d')" required min="1900-01-02" :max="now()->format('Y-m-d')" />
+        <x-form.select class="md:col-span-2" name="sex" label="Sexo" :options="App\Enums\Sex::options()"
+                       :selected="$patient->sex?->value" placeholder="Não informado" />
+    </div>
+</section>
+
+<section class="card p-6">
+    <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Contato</h2>
+    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
+        <x-form.input class="md:col-span-2" name="phone" label="Telefone" type="tel" :value="$patient->exists ? $patient->formattedPhone() : null"
+                      inputmode="numeric" maxlength="15" placeholder="(00) 00000-0000" data-mask="phone" autocomplete="off" />
+        <x-form.input class="md:col-span-4" name="email" label="E-mail" type="email" :value="$patient->email" maxlength="255" autocomplete="off" />
+    </div>
+</section>
+
+<section class="card p-6">
+    <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Endereço</h2>
+    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
+        <x-form.input class="md:col-span-2" name="zip_code" label="CEP" :value="$patient->exists ? $patient->formattedZipCode() : null"
+                      inputmode="numeric" maxlength="9" placeholder="00000-000" data-mask="cep" autocomplete="off" />
+        <x-form.input class="md:col-span-3" name="street" label="Logradouro" :value="$patient->street" maxlength="150" autocomplete="off" />
+        <x-form.input class="md:col-span-1" name="number" label="Número" :value="$patient->number" maxlength="20" autocomplete="off" />
+        <x-form.input class="md:col-span-2" name="complement" label="Complemento" :value="$patient->complement" maxlength="100" autocomplete="off" />
+        <x-form.input class="md:col-span-2" name="district" label="Bairro" :value="$patient->district" maxlength="100" autocomplete="off" />
+        <x-form.input class="md:col-span-1" name="city" label="Cidade" :value="$patient->city" maxlength="100" autocomplete="off" />
+        <x-form.select class="md:col-span-1" name="state" label="UF" :options="App\Support\BrazilianStates::options()"
+                       :selected="$patient->state" placeholder="—" />
+    </div>
+</section>
+
+<section class="card p-6">
+    <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Observações</h2>
+    <div class="mt-4">
+        <x-form.textarea name="notes" label="Observações gerais" :value="$patient->notes" rows="4" maxlength="5000"
+                         hint="Campo gravado com criptografia. Não substitui o prontuário." />
+    </div>
+</section>
+
+<div class="flex flex-wrap items-center justify-end gap-3">
+    <a href="{{ $patient->exists ? route('patients.show', $patient) : route('patients.index') }}" class="btn btn-secondary">Cancelar</a>
+    <button type="submit" class="btn btn-primary">{{ $patient->exists ? 'Salvar alterações' : 'Cadastrar paciente' }}</button>
+</div>
