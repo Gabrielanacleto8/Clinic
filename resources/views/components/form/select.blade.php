@@ -3,8 +3,9 @@
     $id = $attributes->get('id', $name);
     // Ver o comentário sobre "scope" em form/input.blade.php.
     $inScope = $scope === null || old('_dialog') === $scope;
-    $hasError = $inScope && $errors->has($name);
-    $current = (string) ($inScope ? old($name, $selected) : $selected);
+    $key = str_replace(['[', ']'], ['.', ''], $name);
+    $hasError = $inScope && $errors->has($key);
+    $current = (string) ($inScope ? old($key, $selected) : $selected);
 @endphp
 <div {{ $attributes->only('class') }}>
     <label for="{{ $id }}" class="label">
@@ -27,6 +28,6 @@
         @endforeach
     </select>
     @if ($hasError)
-        <p id="{{ $id }}-error" class="mt-1 text-sm text-red-700">{{ $errors->first($name) }}</p>
+        <p id="{{ $id }}-error" class="mt-1 text-sm text-red-700">{{ $errors->first($key) }}</p>
     @endif
 </div>

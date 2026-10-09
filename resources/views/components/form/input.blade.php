@@ -5,9 +5,11 @@
     // envio que falhou partiu daquele diálogo. Evita que um diálogo mostre o
     // erro de outro quando os dois têm campos com o mesmo nome.
     $inScope = $scope === null || old('_dialog') === $scope;
-    $hasError = $inScope && $errors->has($name);
+    // Campo de lista (items[0][name]): valores antigos e erros usam a chave com pontos.
+    $key = str_replace(['[', ']'], ['.', ''], $name);
+    $hasError = $inScope && $errors->has($key);
     // Senhas nunca são devolvidas ao formulário.
-    $current = $type === 'password' ? null : ($inScope ? old($name, $value) : $value);
+    $current = $type === 'password' ? null : ($inScope ? old($key, $value) : $value);
 @endphp
 <div {{ $attributes->only('class') }}>
     <label for="{{ $id }}" class="label">
@@ -28,6 +30,6 @@
         <p class="mt-1 text-xs text-slate-500">{{ $hint }}</p>
     @endif
     @if ($hasError)
-        <p id="{{ $id }}-error" class="mt-1 text-sm text-red-700">{{ $errors->first($name) }}</p>
+        <p id="{{ $id }}-error" class="mt-1 text-sm text-red-700">{{ $errors->first($key) }}</p>
     @endif
 </div>

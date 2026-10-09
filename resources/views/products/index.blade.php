@@ -8,6 +8,7 @@
 <x-stock.page active="produtos" :alerts="$alerts" :subtitle="$products->total().' '.($products->total() === 1 ? 'produto' : 'produtos')">
     @if ($canCreate)
         <x-slot:actions>
+            <button type="button" class="btn btn-secondary" data-dialog-open="invoice-import">Importar nota fiscal</button>
             <button type="button" class="btn btn-primary" data-dialog-open="product-create">Novo produto</button>
         </x-slot:actions>
     @endif
@@ -151,5 +152,7 @@
                 ])
             </form>
         </x-dialog>
+
+        @include('stock._invoice_dialog')
     @endif
 </x-stock.page>

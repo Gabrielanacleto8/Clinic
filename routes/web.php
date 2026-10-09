@@ -16,6 +16,7 @@ use App\Http\Controllers\ProductBatchController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\StockInventoryController;
+use App\Http\Controllers\StockInvoiceController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\TreatmentDocumentController;
@@ -107,6 +108,10 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::get('estoque/movimentacoes', [StockMovementController::class, 'index'])->name('stock.movements.index');
         Route::get('estoque/lotes', [ProductBatchController::class, 'index'])->name('stock.batches.index');
         Route::get('estoque/lotes/{batch}', [ProductBatchController::class, 'show'])->name('stock.batches.show');
+        Route::post('estoque/nota-fiscal', [StockInvoiceController::class, 'store'])->name('stock.invoice.store');
+        Route::get('estoque/nota-fiscal', [StockInvoiceController::class, 'edit'])->name('stock.invoice.edit');
+        Route::put('estoque/nota-fiscal', [StockInvoiceController::class, 'update'])->name('stock.invoice.update');
+        Route::delete('estoque/nota-fiscal', [StockInvoiceController::class, 'destroy'])->name('stock.invoice.destroy');
         Route::get('estoque/inventario', [StockInventoryController::class, 'edit'])->name('stock.inventory.edit');
         Route::put('estoque/inventario', [StockInventoryController::class, 'update'])->name('stock.inventory.update');
 

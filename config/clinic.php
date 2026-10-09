@@ -21,6 +21,8 @@ return [
     'stock' => [
         // Com quantos dias de antecedência um lote entra no alerta de vencimento.
         'expiry_alert_days' => (int) env('STOCK_EXPIRY_ALERT_DAYS', 60),
+        // Tamanho máximo do XML de nota fiscal aceito na importação.
+        'invoice_max_upload_kilobytes' => 1024,
     ],
 
     'documents' => [
