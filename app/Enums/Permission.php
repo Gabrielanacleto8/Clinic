@@ -26,6 +26,7 @@ enum Permission: string
 
     case StockView = 'stock.view';
     case StockManage = 'stock.manage';
+    case StockAdjust = 'stock.adjust';
 
     case FinanceView = 'finance.view';
     case FinanceManage = 'finance.manage';
@@ -43,7 +44,8 @@ enum Permission: string
             self::ProceduresView => 'Ver o catálogo de procedimentos',
             self::ProceduresManage => 'Cadastrar e editar procedimentos',
             self::StockView => 'Ver produtos, lotes e movimentações',
-            self::StockManage => 'Cadastrar produtos e lançar entradas, saídas e ajustes',
+            self::StockManage => 'Cadastrar produtos e lançar entradas, saídas e perdas',
+            self::StockAdjust => 'Fazer inventário e ajustar saldos de estoque',
             self::FinanceView => 'Ver lançamentos e totais financeiros',
             self::FinanceManage => 'Lançar receitas e despesas e registrar pagamentos',
         };
@@ -59,7 +61,7 @@ enum Permission: string
             self::RecordsView, self::RecordsManage => 'Prontuário',
             self::AgendaView, self::AgendaManage => 'Agenda',
             self::ProceduresView, self::ProceduresManage => 'Procedimentos',
-            self::StockView, self::StockManage => 'Estoque',
+            self::StockView, self::StockManage, self::StockAdjust => 'Estoque',
             self::FinanceView, self::FinanceManage => 'Financeiro',
         };
     }
@@ -76,6 +78,7 @@ enum Permission: string
             self::AgendaManage => self::AgendaView,
             self::ProceduresManage => self::ProceduresView,
             self::StockManage => self::StockView,
+            self::StockAdjust => self::StockManage,
             self::FinanceManage => self::FinanceView,
             default => null,
         };

@@ -82,7 +82,7 @@
 
     @if ($tab !== null)
         @php $tabClass = fn (bool $active) => 'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap '.($active ? 'bg-teal-700 text-white' : 'text-slate-700 hover:bg-slate-100'); @endphp
-        <nav id="historico" class="mt-6 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1" aria-label="Histórico do paciente">
+        <nav id="historico" class="mt-6 flex gap-1 relative overflow-x-auto rounded-xl border border-slate-200 bg-white p-1" aria-label="Histórico do paciente">
             @foreach ($tabs as $key => $label)
                 <a href="{{ route('patients.show', [$patient, 'aba' => $key]) }}#historico" class="{{ $tabClass($tab === $key) }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}</a>
             @endforeach

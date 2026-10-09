@@ -13,6 +13,16 @@ use App\Models\User;
  */
 class TreatmentPolicy
 {
+    /**
+     * Tela de atendimentos: quem espera e quem está sendo atendido. É a
+     * agenda do dia em andamento, sem dado clínico, por isso segue a
+     * permissão da agenda e a recepção também a acompanha.
+     */
+    public function viewQueue(User $user): bool
+    {
+        return $user->hasPermission(Permission::AgendaView);
+    }
+
     public function view(User $user, Treatment $treatment): bool
     {
         return $user->hasPermission(Permission::RecordsView);

@@ -152,8 +152,15 @@ class HomeTest extends TestCase
             ->assertSee('Remarcar')->assertSee('Faltou')->assertSee('Confirmar presença')
             ->assertDontSee('Iniciar atendimento')->assertDontSee($startUrl, false);
 
+        // Sem a chegada confirmada, nem o profissional inicia o atendimento.
         $this->actingAs(User::factory()->professional()->create())->get('/')
-            ->assertSee('Iniciar atendimento')->assertSee(e($startUrl), false);
+            ->assertSee('Confirmar presença')->assertDontSee('Iniciar atendimento')->assertDontSee($startUrl, false);
+
+        $this->patch("/agendamentos/{$appointment->id}/situacao", ['status' => 'confirmed'])->assertSessionHasNoErrors();
+
+        $this->get('/')->assertSee('Iniciar atendimento')->assertSee(e($startUrl), false);
+
+        $this->actingAs(User::factory()->create())->get('/')->assertDontSee('Iniciar atendimento')->assertDontSee($startUrl, false);
     }
 
     public function test_closed_appointments_show_the_right_actions(): void
@@ -188,8 +195,9 @@ class HomeTest extends TestCase
 
         $this->get('/')->assertOk();
 
-        // 16 agendamentos e 6 produtos em tela, com número fixo de consultas.
-        $this->assertLessThanOrEqual(16, count(DB::getQueryLog()));
+        // 16 agendamentos e 6 produtos em tela, com número fixo de consultas. Quatro
+        // delas são as listas do diálogo "Novo atendimento" (ver StartTreatmentFromHomeTest).
+        $this->assertLessThanOrEqual(20, count(DB::getQueryLog()));
     }
 
     public function test_output_is_escaped(): void

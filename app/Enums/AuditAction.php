@@ -30,6 +30,10 @@ enum AuditAction: string
     case InstallmentPaid = 'finance.installment_paid';
     case InstallmentReopened = 'finance.installment_reopened';
 
+    case ProductCreated = 'product.created';
+    case ProductUpdated = 'product.updated';
+    case StockMoved = 'stock.moved';
+
     case AnamnesisUpdated = 'anamnesis.updated';
 
     case TreatmentViewed = 'treatment.viewed';

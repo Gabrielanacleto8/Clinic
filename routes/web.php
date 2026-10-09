@@ -12,13 +12,17 @@ use App\Http\Controllers\InstallmentPaymentController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProcedureController;
+use App\Http\Controllers\ProductBatchController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\StockEntryController;
+use App\Http\Controllers\StockInventoryController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\TreatmentDocumentController;
 use App\Http\Controllers\TreatmentFinalizationController;
 use App\Http\Controllers\TreatmentNoteController;
 use App\Http\Controllers\TreatmentPhotoController;
+use App\Http\Controllers\TreatmentQueueController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -61,11 +65,18 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             ->withTrashed()
             ->name('patients.restore');
 
+        // Atendimentos: quem está em atendimento e quem espera a vez.
+        Route::get('atendimentos', [TreatmentQueueController::class, 'index'])->name('treatments.index');
+
+        // "Novo atendimento" do Início: o paciente é escolhido no próprio formulário.
+        Route::post('atendimentos', [TreatmentController::class, 'storeForChosenPatient'])->name('treatments.store');
+
         // Prontuário. scopeBindings garante o encadeamento: o atendimento tem
         // de ser daquele paciente e a foto daquele atendimento, ou dá 404.
         Route::prefix('pacientes/{patient}')->name('patients.')->scopeBindings()->group(function () {
             Route::get('ficha-de-saude', [AnamnesisController::class, 'edit'])->name('anamnesis.edit');
             Route::put('ficha-de-saude', [AnamnesisController::class, 'update'])->name('anamnesis.update');
+            Route::get('alertas-de-saude', [AnamnesisController::class, 'alerts'])->middleware('throttle:60,1')->name('health-alerts');
 
             Route::resource('atendimentos', TreatmentController::class)
                 ->parameters(['atendimentos' => 'treatment'])
@@ -89,6 +100,15 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             ->parameters(['procedimentos' => 'procedure'])
             ->names('procedures')
             ->only(['index', 'create', 'store', 'edit', 'update']);
+
+        // Abas do estoque. Antes do resource de produtos, para não serem lidas como um id.
+        Route::get('estoque/entradas', [StockEntryController::class, 'index'])->name('stock.entries.index');
+        Route::post('estoque/entradas', [StockEntryController::class, 'store'])->name('stock.entries.store');
+        Route::get('estoque/movimentacoes', [StockMovementController::class, 'index'])->name('stock.movements.index');
+        Route::get('estoque/lotes', [ProductBatchController::class, 'index'])->name('stock.batches.index');
+        Route::get('estoque/lotes/{batch}', [ProductBatchController::class, 'show'])->name('stock.batches.show');
+        Route::get('estoque/inventario', [StockInventoryController::class, 'edit'])->name('stock.inventory.edit');
+        Route::put('estoque/inventario', [StockInventoryController::class, 'update'])->name('stock.inventory.update');
 
         Route::resource('estoque', ProductController::class)
             ->parameters(['estoque' => 'product'])

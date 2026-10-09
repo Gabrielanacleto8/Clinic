@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AppointmentStatus;
 use App\Enums\AuditAction;
+use App\Http\Requests\TreatmentRequest;
 use App\Models\Appointment;
 use App\Models\AuditLog;
 use App\Models\Patient;
@@ -33,7 +34,8 @@ class StartTreatmentFromAppointmentTest extends TestCase
 
         $this->professional = User::factory()->professional()->create(['name' => 'Dra. Helena']);
         $this->patient = Patient::factory()->create();
-        $this->appointment = Appointment::factory()->at('2026-10-08 12:30')->create([
+        // Chegada confirmada: é o que libera o início do atendimento.
+        $this->appointment = Appointment::factory()->at('2026-10-08 12:30')->status(AppointmentStatus::Confirmed)->create([
             'patient_id' => $this->patient->id,
             'professional_id' => $this->professional->id,
             'procedure_id' => $this->procedure('Preenchimento labial')->id,
@@ -75,7 +77,7 @@ class StartTreatmentFromAppointmentTest extends TestCase
 
         // Iniciado: ligado ao atendimento, mas ainda não "atendido".
         $this->assertSame($treatment->id, $this->appointment->treatment_id);
-        $this->assertSame(AppointmentStatus::Scheduled, $this->appointment->status);
+        $this->assertSame(AppointmentStatus::Confirmed, $this->appointment->status);
         $this->assertSame($this->professional->id, $treatment->professional_id);
         $this->assertTrue($treatment->isDraft());
 
@@ -87,7 +89,7 @@ class StartTreatmentFromAppointmentTest extends TestCase
         $this->assertSame(AppointmentStatus::Completed, $this->appointment->refresh()->status);
 
         $log = AuditLog::where('action', AuditAction::AppointmentStatusChanged->value)->sole();
-        $this->assertSame(['scheduled', 'completed'], [$log->metadata['from'], $log->metadata['to']]);
+        $this->assertSame(['confirmed', 'completed'], [$log->metadata['from'], $log->metadata['to']]);
 
         $this->get('/')->assertSee('Atendido')->assertSee('Ver atendimento')->assertDontSee('Continuar atendimento');
     }
@@ -121,15 +123,17 @@ class StartTreatmentFromAppointmentTest extends TestCase
         $this->assertSame(1, Treatment::count());
     }
 
-    public function test_appointment_must_belong_to_the_patient_be_open_and_not_be_in_the_future(): void
+    public function test_appointment_must_belong_to_the_patient_be_confirmed_and_not_be_in_the_future(): void
     {
         $this->actingAs($this->professional);
 
-        $ofAnotherPatient = Appointment::factory()->at('2026-10-08 11:00')->create();
+        $confirmed = Appointment::factory()->status(AppointmentStatus::Confirmed);
+        $ofAnotherPatient = $confirmed->at('2026-10-08 11:00')->create();
+        $tomorrow = $confirmed->at('2026-10-09 10:00')->create(['patient_id' => $this->patient->id]);
         $cancelled = Appointment::factory()->at('2026-10-08 10:00')->status(AppointmentStatus::Cancelled)->create(['patient_id' => $this->patient->id]);
-        $tomorrow = Appointment::factory()->at('2026-10-09 10:00')->create(['patient_id' => $this->patient->id]);
+        $notArrived = Appointment::factory()->at('2026-10-08 09:00')->create(['patient_id' => $this->patient->id]);
 
-        foreach ([$ofAnotherPatient, $cancelled, $tomorrow] as $appointment) {
+        foreach ([$ofAnotherPatient, $tomorrow, $cancelled, $notArrived] as $appointment) {
             $this->post($this->url, $this->payload(['appointment_id' => $appointment->id]))->assertSessionHasErrors('appointment_id');
         }
 
@@ -142,7 +146,7 @@ class StartTreatmentFromAppointmentTest extends TestCase
 
     public function test_form_ignores_an_appointment_that_is_not_open_for_this_patient(): void
     {
-        $other = Appointment::factory()->at('2026-10-08 11:00')->create(['procedure_id' => $this->procedure('Procedimento Alheio')->id]);
+        $other = Appointment::factory()->at('2026-10-08 11:00')->status(AppointmentStatus::Confirmed)->create(['procedure_id' => $this->procedure('Procedimento Alheio')->id]);
 
         $this->actingAs($this->professional)
             ->get("{$this->url}/novo?agendamento={$other->id}")
@@ -166,9 +170,50 @@ class StartTreatmentFromAppointmentTest extends TestCase
         $this->assertTrue($this->appointment->refresh()->isOpen());
     }
 
+    public function test_an_appointment_cannot_be_started_before_the_arrival_is_confirmed(): void
+    {
+        $scheduled = Appointment::factory()->at('2026-10-08 11:00')->create([
+            'patient_id' => $this->patient->id,
+            'professional_id' => $this->professional->id,
+            'procedure_id' => $this->procedure('Limpeza de pele')->id,
+        ]);
+        $startUrl = "{$this->url}/novo?agendamento={$scheduled->id}";
+        $payload = $this->payload(['appointment_id' => $scheduled->id, 'procedure_id' => $scheduled->procedure_id]);
+
+        $this->actingAs($this->professional);
+
+        // Agendado, mas sem a chegada confirmada: sem botão, o formulário
+        // ignora o agendamento e o envio direto é recusado.
+        $this->get('/agenda')->assertSee('Confirmar presença')->assertDontSee("agendamento={$scheduled->id}", false);
+        $this->get($startUrl)->assertOk()->assertDontSee('Atendimento do agendamento')->assertDontSee('name="appointment_id"', false);
+        $this->post($this->url, $payload)->assertSessionHasErrors(['appointment_id' => TreatmentRequest::APPOINTMENT_NOT_READY]);
+
+        $this->assertSame(0, Treatment::count());
+        $this->assertNull($scheduled->refresh()->treatment_id);
+
+        $this->patch("/agendamentos/{$scheduled->id}/situacao", ['status' => 'confirmed'])->assertSessionHasNoErrors();
+
+        $this->get('/agenda')->assertSee("agendamento={$scheduled->id}", false);
+        $this->get($startUrl)->assertSee('Atendimento do agendamento de 08/10/2026')->assertSee('selected>Limpeza de pele</option>', false);
+        $this->post($this->url, $payload)->assertSessionHasNoErrors();
+
+        $this->assertSame(Treatment::sole()->id, $scheduled->refresh()->treatment_id);
+    }
+
+    public function test_the_administrator_also_needs_the_arrival_confirmed(): void
+    {
+        $scheduled = Appointment::factory()->at('2026-10-08 12:45')->create(['patient_id' => $this->patient->id]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post($this->url, $this->payload(['appointment_id' => $scheduled->id]))
+            ->assertSessionHasErrors('appointment_id');
+
+        $this->assertSame(0, Treatment::count());
+    }
+
     public function test_a_past_appointment_left_open_can_still_be_started(): void
     {
-        $yesterday = Appointment::factory()->at('2026-10-07 16:00')->create(['patient_id' => $this->patient->id]);
+        $yesterday = Appointment::factory()->at('2026-10-07 16:00')->status(AppointmentStatus::Confirmed)->create(['patient_id' => $this->patient->id]);
 
         $this->actingAs($this->professional)
             ->post($this->url, $this->payload(['appointment_id' => $yesterday->id, 'performed_at' => '2026-10-07T16:10']))

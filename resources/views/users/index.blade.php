@@ -7,8 +7,8 @@
         <a href="{{ route('users.create') }}" class="btn btn-primary">Novo usuário</a>
     </div>
 
-    <div class="card mt-6 overflow-x-auto">
-        <table class="w-full min-w-2xl text-left text-sm">
+    <div class="card mt-6 relative overflow-x-auto">
+        <table class="table-stack w-full min-w-2xl text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>
                     <th scope="col" class="px-4 py-3 font-medium">Nome</th>
@@ -27,9 +27,9 @@
                                 <span class="font-normal text-slate-400">(você)</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-slate-600">{{ $user->email }}</td>
-                        <td class="px-4 py-3 text-slate-600">{{ $user->role->label() }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">
+                        <td data-label="E-mail" class="px-4 py-3 text-slate-600">{{ $user->email }}</td>
+                        <td data-label="Perfil" class="px-4 py-3 text-slate-600">{{ $user->role->label() }}</td>
+                        <td data-label="Situação" class="px-4 py-3 whitespace-nowrap">
                             @if (! $user->is_active)
                                 <span class="badge bg-slate-200 text-slate-700">Inativo</span>
                             @elseif ($user->mustChangePassword())

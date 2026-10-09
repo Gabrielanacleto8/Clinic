@@ -221,7 +221,7 @@ class TreatmentTest extends TestCase
 
         // Produtos: lote vencido, lote inexistente, quantidade ausente ou zerada, lote repetido e linhas demais.
         $this->post($url, $this->payload(['products' => [['product_batch_id' => $expired->id, 'quantity' => '1']]]))
-            ->assertSessionHasErrors(['products.0.product_batch_id' => 'Este lote não existe ou está vencido.']);
+            ->assertSessionHasErrors(['products.0.product_batch_id' => 'Este lote não existe, está vencido ou é de um produto inativo.']);
         $this->post($url, $this->payload(['products' => [['product_batch_id' => 999999, 'quantity' => '1']]]))->assertSessionHasErrors('products.0.product_batch_id');
         $this->post($url, $this->payload(['products' => [['product_batch_id' => $this->toxin->id, 'quantity' => '']]]))->assertSessionHasErrors('products.0.quantity');
         $this->post($url, $this->payload(['products' => [['product_batch_id' => $this->toxin->id, 'quantity' => '0']]]))->assertSessionHasErrors('products.0.quantity');

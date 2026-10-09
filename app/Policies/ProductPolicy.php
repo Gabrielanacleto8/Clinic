@@ -29,10 +29,19 @@ class ProductPolicy
     }
 
     /**
-     * Lançar entrada, saída ou ajuste de estoque.
+     * Lançar entrada, saída ou perda de estoque.
      */
-    public function move(User $user, Product $product): bool
+    public function move(User $user, ?Product $product = null): bool
     {
         return $user->hasPermission(Permission::StockManage);
+    }
+
+    /**
+     * Inventário e ajuste de saldo mexem no estoque sem documento de origem:
+     * exigem autorização própria, além da de movimentar.
+     */
+    public function adjust(User $user, ?Product $product = null): bool
+    {
+        return $user->hasPermission(Permission::StockAdjust);
     }
 }

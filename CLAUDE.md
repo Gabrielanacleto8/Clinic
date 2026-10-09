@@ -23,12 +23,12 @@ O fluxo central é paciente → agenda → atendimento → procedimento → esto
 - Perfis em `App\Enums\UserRole`. Permissões em `App\Enums\Permission`, concedidas por perfil na tabela `role_permissions` e lidas uma vez por requisição por `App\Services\RolePermissions`. O administrador tem sempre acesso total. Policies checam `User::hasPermission()`.
 - `role`, `is_active` e `password_changed_at` do usuário ficam fora do mass assignment de propósito.
 - Dados sensíveis usam o cast `encrypted`: CPF e observações do paciente, ficha de saúde, textos clínicos do atendimento e evoluções. Busca e unicidade de CPF passam por `App\Support\BlindIndex`.
-- Leitura e alteração de paciente, prontuário, agenda, financeiro e permissões são registradas com `App\Services\AuditLogger`.
+- Leitura e alteração de paciente, prontuário, agenda, financeiro e permissões são registradas com `App\Services\AuditLogger`. No estoque, o cadastro de produto e toda movimentação também.
 - Datas são gravadas em UTC e convertidas com `App\Support\ClinicTime`. Números digitados no padrão brasileiro passam por `App\Support\LocalizedDecimal`.
 - Rotas do prontuário são aninhadas em `/pacientes/{patient}` com `scopeBindings`, para um registro nunca ser alcançado pelo paciente errado.
-- Agenda: `Appointment`. Toda gravação passa por `AppointmentScheduler`, que impede horários sobrepostos por profissional. "Atendido" só é definido ao finalizar o atendimento.
+- Agenda: `Appointment`. Toda gravação passa por `AppointmentScheduler`, que impede horários sobrepostos por profissional. "Atendido" só é definido ao finalizar o atendimento. Um agendamento só vira atendimento depois de confirmada a chegada do paciente (`Appointment::isReadyForTreatment()`).
 - Atendimento: `Treatment` nasce rascunho e é finalizado por `TreatmentFinalizer`, que baixa estoque, gera o financeiro e encerra o agendamento em uma transação. Finalizado é imutável: informação nova entra em `TreatmentNote`.
-- Estoque: saldo só muda por `StockLedger`, que grava a movimentação e o saldo do lote juntos. Nunca atribua `product_batches.quantity` direto.
+- Estoque: saldo só muda por `StockLedger`, que grava a movimentação e o saldo do lote juntos. Nunca atribua `product_batches.quantity` direto. Tipos em `StockMovementType`: entrada (com custo, fornecedor e nota fiscal na própria movimentação), saída, perda, ajuste e consumo, que só nasce da finalização do atendimento. Toda movimentação manual tem motivo; lote vencido só sai como perda; ajuste e inventário exigem a permissão `stock.adjust`. Lotes são usados na ordem `ProductBatch::firstToExpire()`.
 - Financeiro: lançamentos só nascem de `FinancialRecorder`. O valor total é a soma das parcelas, e pago é ter `paid_at`.
 - Anexos: `TreatmentAttachment` guarda fotos e documentos. Fotos passam por `PhotoProcessor` (recodifica em JPEG). Todo arquivo é gravado por `AttachmentVault` (criptografa no disco privado `patient_photos`). Nunca use o nome de arquivo enviado nem sirva anexo por URL pública.
 
@@ -50,3 +50,4 @@ O fluxo central é paciente → agenda → atendimento → procedimento → esto
 - Antes de criar tabela ou coluna, confirme que o dado não deriva do que já existe. Valor derivado só é gravado com motivo, explicado em comentário na migration.
 - Conte as consultas de cada tela: use eager loading, carregue só o que a tela exibe e cubra listagens com teste de número de consultas.
 - Janelas modais usam o componente `x-dialog`. Campos dentro delas recebem `scope` com o id do diálogo.
+- Telas valem para celular e desktop. Tabela de listagem leva a classe `table-stack` e `data-label` em cada célula de valor, para virar blocos em tela estreita. Contêiner com `overflow-x-auto` leva também `relative`.

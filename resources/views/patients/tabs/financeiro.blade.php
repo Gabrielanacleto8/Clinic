@@ -10,12 +10,12 @@
     </div>
 </dl>
 
-<section class="card mt-4 overflow-x-auto" aria-labelledby="financeiro-do-paciente">
+<section class="card mt-4 relative overflow-x-auto" aria-labelledby="financeiro-do-paciente">
     <h2 id="financeiro-do-paciente" class="sr-only">Histórico financeiro</h2>
     @if ($records->isEmpty())
         <p class="px-4 py-10 text-center text-sm text-slate-500">Nenhum lançamento financeiro ligado a este paciente.</p>
     @else
-        <table class="w-full min-w-2xl text-left text-sm">
+        <table class="table-stack w-full min-w-2xl text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>
                     <th scope="col" class="px-4 py-3 font-medium">Vencimento</th>
@@ -31,8 +31,8 @@
                         $badge = $installment->statusBadge();
                     @endphp
                     <tr>
-                        <td class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $installment->due_date->format('d/m/Y') }}</td>
-                        <td class="px-4 py-3">
+                        <td data-label="Vencimento" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $installment->due_date->format('d/m/Y') }}</td>
+                        <td data-label="Descrição" class="px-4 py-3">
                             @if ($entry->treatment_id)
                                 <a href="{{ route('patients.treatments.show', [$patient, $entry->treatment_id]) }}" class="font-medium text-teal-800 hover:underline">{{ $entry->description }}</a>
                             @else
@@ -42,8 +42,8 @@
                                 {{ $entry->payment_method->label() }} · {{ $entry->installments_count > 1 ? 'Parcela '.$installment->number.'/'.$entry->installments_count : 'À vista' }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::money($installment->amount) }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">
+                        <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::money($installment->amount) }}</td>
+                        <td data-label="Situação" class="px-4 py-3 whitespace-nowrap">
                             <span class="badge {{ $badge['classes'] }}">{{ $badge['label'] }}</span>
                             @if ($installment->isPaid())
                                 <span class="ml-1 text-xs text-slate-500">em {{ $installment->paid_at->format('d/m/Y') }}</span>

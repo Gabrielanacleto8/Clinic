@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use App\Enums\StockMovementType;
+use App\Support\ClinicTime;
+use App\Support\Like;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
@@ -25,6 +28,7 @@ class StockMovement extends Model
         return [
             'type' => StockMovementType::class,
             'quantity' => 'decimal:3',
+            'unit_cost' => 'decimal:2',
             'created_at' => 'datetime',
         ];
     }
@@ -33,6 +37,33 @@ class StockMovement extends Model
     {
         static::updating(fn () => throw new LogicException('Movimentações de estoque são imutáveis.'));
         static::deleting(fn () => throw new LogicException('Movimentações de estoque são imutáveis.'));
+    }
+
+    /**
+     * Busca por produto, lote, fornecedor ou nota fiscal.
+     *
+     * @param  Builder<StockMovement>  $query
+     */
+    public function scopeSearch(Builder $query, string $term): void
+    {
+        $like = Like::contains($term);
+
+        $query->where(fn (Builder $inner) => $inner
+            ->where('supplier', 'like', $like)
+            ->orWhere('invoice_number', 'like', $like)
+            ->orWhereHas('batch', fn (Builder $batch) => $batch->search($term)));
+    }
+
+    /**
+     * Movimentações lançadas entre dois dias do calendário da clínica (Y-m-d), inclusive.
+     *
+     * @param  Builder<StockMovement>  $query
+     */
+    public function scopeInPeriod(Builder $query, ?string $from, ?string $until): void
+    {
+        $query
+            ->when($from, fn (Builder $inner, string $day) => $inner->where('created_at', '>=', ClinicTime::dayBounds($day)[0]))
+            ->when($until, fn (Builder $inner, string $day) => $inner->where('created_at', '<=', ClinicTime::dayBounds($day)[1]));
     }
 
     /**

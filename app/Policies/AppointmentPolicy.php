@@ -33,7 +33,7 @@ class AppointmentPolicy
 
     public function startTreatment(User $user, Appointment $appointment): bool
     {
-        // Em aberto e ainda sem atendimento iniciado.
-        return $user->hasPermission(Permission::RecordsManage) && $appointment->isOpen() && $appointment->treatment_id === null;
+        // Só depois de confirmada a chegada do paciente.
+        return $user->hasPermission(Permission::RecordsManage) && $appointment->isReadyForTreatment();
     }
 }

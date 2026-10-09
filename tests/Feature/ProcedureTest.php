@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ProcedureTest extends TestCase
@@ -241,6 +242,63 @@ class ProcedureTest extends TestCase
             ->assertSessionHasErrors('products');
 
         $this->assertSame(0, Procedure::count());
+    }
+
+    public function test_each_listed_procedure_opens_a_dialog_with_its_details_and_the_edit_option(): void
+    {
+        $procedure = Procedure::factory()->create([
+            'name' => 'Preenchimento labial',
+            'description' => "Ácido hialurônico.\nRetorno em 15 dias.",
+            'category' => ProcedureCategory::Injectable,
+            'price' => '1800.00',
+            'duration_minutes' => 60,
+        ]);
+        $procedure->products()->sync([Product::factory()->create(['name' => 'Preenchedor 1 mL'])->id => ['quantity' => '1.500']]);
+        $bare = Procedure::factory()->create(['name' => 'Avaliação', 'description' => null]);
+
+        $response = $this->actingAs(User::factory()->admin()->create())->get('/procedimentos')->assertOk();
+
+        // A linha e o nome abrem o diálogo; a tabela não tem mais o link de editar.
+        $response->assertSee('<tr class="cursor-pointer hover:bg-slate-50" data-dialog-open="procedure-'.$procedure->id.'">', false);
+        $this->assertDoesNotMatchRegularExpression('/<table.*Editar.*<\/table>/s', $response->getContent());
+
+        $dialog = $this->procedureDialog($response->getContent(), $procedure);
+
+        foreach (['Preenchimento labial', 'Retorno em 15 dias.', ProcedureCategory::Injectable->label(), 'R$ 1.800,00', 'Ativo', 'Preenchedor 1 mL', '1,5 '] as $text) {
+            $this->assertStringContainsString($text, $dialog);
+        }
+
+        $this->assertStringContainsString('href="'.route('procedures.edit', $procedure).'"', $dialog);
+        $this->assertStringContainsString('Nenhum produto definido.', $this->procedureDialog($response->getContent(), $bare));
+
+        // Quem só consulta vê os mesmos detalhes, sem a opção de editar.
+        $readOnly = $this->procedureDialog($this->actingAs(User::factory()->professional()->create())->get('/procedimentos')->getContent(), $procedure);
+
+        $this->assertStringContainsString('Preenchedor 1 mL', $readOnly);
+        $this->assertStringNotContainsString('Editar', $readOnly);
+    }
+
+    public function test_listing_runs_a_fixed_number_of_queries(): void
+    {
+        $products = Product::factory()->count(3)->create();
+
+        Procedure::factory()->count(15)->create()
+            ->each(fn (Procedure $procedure) => $procedure->products()->sync($products->mapWithKeys(fn (Product $product) => [$product->id => ['quantity' => 1]])->all()));
+
+        $this->actingAs(User::factory()->admin()->create());
+        DB::enableQueryLog();
+
+        $this->get('/procedimentos')->assertOk();
+
+        // Contagem, página e produtos típicos, mais sessão e permissões.
+        $this->assertLessThanOrEqual(6, count(DB::getQueryLog()));
+    }
+
+    private function procedureDialog(string $html, Procedure $procedure): string
+    {
+        $this->assertSame(1, preg_match('/<dialog id="procedure-'.$procedure->id.'".*?<\/dialog>/s', $html, $matches), 'Diálogo do procedimento não encontrado.');
+
+        return $matches[0];
     }
 
     public function test_output_is_escaped(): void

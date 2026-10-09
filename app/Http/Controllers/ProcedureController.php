@@ -29,6 +29,8 @@ class ProcedureController extends Controller
         $status = $filters['situacao'] ?? 'ativos';
 
         $procedures = Procedure::query()
+            // Produtos de uso típico, exibidos nos detalhes de cada procedimento.
+            ->with('products:id,name,unit')
             ->when($filters['q'] ?? null, fn ($query, string $term) => $query->where('name', 'like', '%'.addcslashes($term, '\\%_').'%'))
             ->when($filters['categoria'] ?? null, fn ($query, string $category) => $query->where('category', $category))
             ->when($status !== 'todos', fn ($query) => $query->where('is_active', $status === 'ativos'))

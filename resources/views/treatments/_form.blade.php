@@ -13,6 +13,11 @@
         : []);
     $rows = min(App\Http\Requests\TreatmentRequest::MAX_PRODUCTS, max(3, count($saved) + 2));
     $batchesByProduct = $batches->groupBy('product_id');
+
+    // No Início o formulário abre em um diálogo ($scope é o id dele) e o
+    // paciente é escolhido no próprio formulário, em vez de vir do prontuário.
+    $scope ??= null;
+    $section = $scope ? 'border-t border-slate-200 pt-5' : 'card p-6';
 @endphp
 @csrf
 
@@ -28,24 +33,37 @@
     <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{{ $message }}</div>
 @enderror
 
-<x-health-alerts :anamnesis="$patient->anamnesis" />
+@if ($scope)
+    <input type="hidden" name="_dialog" value="{{ $scope }}">
+    <x-patient-picker :scope="$scope" :patient="$patient" autofocus />
+    {{-- Avisos de saúde do paciente escolhido, buscados e preenchidos por app.js. --}}
+    <div hidden data-health-alerts data-url="{{ route('patients.health-alerts', ['patient' => '__ID__']) }}" role="note" aria-live="polite"
+         class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p class="font-semibold">Atenção</p>
+        <ul class="mt-1 space-y-1" data-health-alerts-list></ul>
+    </div>
+@else
+    <x-health-alerts :anamnesis="$patient->anamnesis" />
+@endif
 
-<section class="card p-6">
+<section class="{{ $section }}">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Atendimento</h2>
-        @can('updateClinicalRecords', $patient)
-            <a href="{{ route('patients.anamnesis.edit', $patient) }}" class="text-sm text-teal-800 hover:underline" target="_blank" rel="noopener">
-                {{ $patient->anamnesis ? 'Atualizar a ficha de saúde (anamnese)' : 'Preencher a ficha de saúde (anamnese)' }}
-            </a>
-        @endcan
+        @unless ($scope)
+            @can('updateClinicalRecords', $patient)
+                <a href="{{ route('patients.anamnesis.edit', $patient) }}" class="text-sm text-teal-800 hover:underline" target="_blank" rel="noopener">
+                    {{ $patient->anamnesis ? 'Atualizar a ficha de saúde (anamnese)' : 'Preencher a ficha de saúde (anamnese)' }}
+                </a>
+            @endcan
+        @endunless
     </div>
     <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
-        <x-form.input class="md:col-span-2" name="performed_at" label="Data e hora" type="datetime-local" required
+        <x-form.input :scope="$scope" class="md:col-span-2" name="performed_at" label="Data e hora" type="datetime-local" required
                       :value="ClinicTime::toInput($treatment->performed_at ?? now())"
                       :max="ClinicTime::toInput(now()->addMinutes(5))" />
 
         @if ($user->isAdmin())
-            <x-form.select class="md:col-span-4" name="professional_id" label="Profissional responsável" required
+            <x-form.select :scope="$scope" class="md:col-span-4" name="professional_id" label="Profissional responsável" required
                            :options="$professionals->pluck('name', 'id')->all()" :selected="$treatment->professional_id ?? $user->id" />
         @else
             <div class="md:col-span-4">
@@ -54,19 +72,19 @@
             </div>
         @endif
 
-        <x-form.select class="md:col-span-3" name="procedure_id" label="Procedimento" required placeholder="Selecione"
+        <x-form.select :scope="$scope" class="md:col-span-3" name="procedure_id" label="Procedimento" required placeholder="Selecione"
                        :options="$procedures->pluck('name', 'id')->all()" :selected="$treatment->procedure_id" />
-        <x-form.input class="md:col-span-3" name="treated_areas" label="Áreas tratadas" :value="$treatment->treated_areas" maxlength="255"
+        <x-form.input :scope="$scope" class="md:col-span-3" name="treated_areas" label="Áreas tratadas" :value="$treatment->treated_areas" maxlength="255"
                       autocomplete="off" placeholder="Ex.: Glabela, frontal e periorbital" />
 
-        <x-form.textarea class="md:col-span-6" name="assessment" label="Avaliação" :value="$treatment->assessment" rows="3" maxlength="5000"
+        <x-form.textarea :scope="$scope" class="md:col-span-6" name="assessment" label="Avaliação" :value="$treatment->assessment" rows="3" maxlength="5000"
                          hint="Queixa, exame da pele, indicação e plano. Gravado com criptografia." />
-        <x-form.textarea class="md:col-span-6" name="description" label="Descrição do procedimento" :value="$treatment->description" required rows="5" maxlength="10000"
+        <x-form.textarea :scope="$scope" class="md:col-span-6" name="description" label="Descrição do procedimento" :value="$treatment->description" required rows="5" maxlength="10000"
                          hint="Técnica, pontos de aplicação, unidades ou volume por região, anestesia e evolução. Gravado com criptografia." />
     </div>
 </section>
 
-<section class="card p-6">
+<section class="{{ $section }}">
     <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Produtos utilizados</h2>
     <p class="mt-1 text-sm text-slate-600">
         Escolha o lote aplicado e a quantidade. A baixa no estoque acontece ao finalizar o atendimento.
@@ -122,17 +140,21 @@
     @endif
 </section>
 
-<section class="card p-6">
+<section class="{{ $section }}">
     <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Pós-procedimento</h2>
     <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
-        <x-form.textarea class="md:col-span-6" name="post_care" label="Orientações dadas ao paciente" :value="$treatment->post_care" rows="3" maxlength="5000" />
-        <x-form.textarea class="md:col-span-6" name="complications" label="Intercorrências" :value="$treatment->complications" rows="2" maxlength="5000"
+        <x-form.textarea :scope="$scope" class="md:col-span-6" name="post_care" label="Orientações dadas ao paciente" :value="$treatment->post_care" rows="3" maxlength="5000" />
+        <x-form.textarea :scope="$scope" class="md:col-span-6" name="complications" label="Intercorrências" :value="$treatment->complications" rows="2" maxlength="5000"
                          hint="Reações, hematomas, queixas. Deixe em branco se não houve." />
-        <x-form.input class="md:col-span-2" name="return_date" label="Retorno previsto" type="date" :value="$treatment->return_date?->format('Y-m-d')" />
+        <x-form.input :scope="$scope" class="md:col-span-2" name="return_date" label="Retorno previsto" type="date" :value="$treatment->return_date?->format('Y-m-d')" />
     </div>
 </section>
 
 <div class="flex flex-wrap items-center justify-end gap-3">
-    <a href="{{ $treatment->exists ? route('patients.treatments.show', [$patient, $treatment]) : route('patients.show', $patient) }}" class="btn btn-secondary">Cancelar</a>
+    @if ($scope)
+        <button type="button" class="btn btn-secondary" data-dialog-close>Cancelar</button>
+    @else
+        <a href="{{ $treatment->exists ? route('patients.treatments.show', [$patient, $treatment]) : route('patients.show', $patient) }}" class="btn btn-secondary">Cancelar</a>
+    @endif
     <button type="submit" class="btn btn-primary">{{ $treatment->exists ? 'Salvar alterações' : 'Salvar atendimento' }}</button>
 </div>

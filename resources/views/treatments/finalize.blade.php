@@ -23,12 +23,12 @@
             @enderror
         @endforeach
 
-        <section class="card mt-6 overflow-x-auto">
+        <section class="card mt-6 relative overflow-x-auto">
             <h2 class="px-6 pt-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">Baixa no estoque</h2>
             @if ($treatment->products->isEmpty())
                 <p class="px-6 pt-4 pb-6 text-sm text-slate-600">Nenhum produto neste atendimento. Nada será baixado do estoque.</p>
             @else
-                <table class="mt-4 w-full min-w-lg text-left text-sm">
+                <table class="table-stack mt-4 w-full min-w-lg text-left text-sm">
                     <thead class="border-y border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                         <tr>
                             <th scope="col" class="px-6 py-3 font-medium">Produto e lote</th>
@@ -37,11 +37,16 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
+                        @php $usedBatchIds = $treatment->products->pluck('product_batch_id'); @endphp
                         @foreach ($treatment->products as $used)
                             @php
                                 $batch = $used->batch;
                                 $unit = $batch->product->unit->symbol();
                                 $short = (float) $batch->quantity < (float) $used->quantity;
+                                // Lote que vence antes do escolhido e não está neste atendimento.
+                                $earlier = $firstToExpire->get($batch->product_id);
+                                $earlier = $earlier && $earlier->id !== $batch->id && ! $usedBatchIds->contains($earlier->id)
+                                    && ($batch->expires_on === null || $earlier->expires_on?->lessThan($batch->expires_on)) ? $earlier : null;
                             @endphp
                             <tr>
                                 <td class="px-6 py-3">
@@ -52,9 +57,14 @@
                                             <span class="badge ml-1 bg-red-100 text-red-800">Vencido</span>
                                         @endif
                                     </p>
+                                    @if ($earlier)
+                                        <p class="mt-1 text-xs text-amber-700">
+                                            O lote {{ $earlier->batch_code }} vence antes ({{ $earlier->expires_on->format('d/m/Y') }}). Use-o primeiro, se for o caso.
+                                        </p>
+                                    @endif
                                 </td>
-                                <td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::quantity($used->quantity) }} {{ $unit }}</td>
-                                <td @class(['px-6 py-3 text-right whitespace-nowrap tabular-nums', 'font-medium text-red-700' => $short])>
+                                <td data-label="Baixar" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::quantity($used->quantity) }} {{ $unit }}</td>
+                                <td data-label="Saldo do lote" @class(['px-6 py-3 text-right whitespace-nowrap tabular-nums', 'font-medium text-red-700' => $short])>
                                     {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $unit }}
                                     @if ($short)
                                         <span class="block text-xs font-normal">insuficiente</span>

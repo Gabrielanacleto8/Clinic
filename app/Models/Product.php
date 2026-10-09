@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ProductCategory;
 use App\Enums\ProductUnit;
 use App\Support\ClinicTime;
+use App\Support\Like;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'category', 'brand', 'manufacturer', 'supplier', 'unit', 'minimum_stock', 'cost', 'price', 'is_active'])]
+#[Fillable(['name', 'code', 'category', 'brand', 'manufacturer', 'supplier', 'unit', 'minimum_stock', 'cost', 'price', 'is_active'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -39,6 +40,18 @@ class Product extends Model
     public function batches(): HasMany
     {
         return $this->hasMany(ProductBatch::class);
+    }
+
+    /**
+     * Busca por nome ou código.
+     *
+     * @param  Builder<Product>  $query
+     */
+    public function scopeSearch(Builder $query, string $term): void
+    {
+        $like = Like::contains($term);
+
+        $query->where(fn (Builder $inner) => $inner->where('name', 'like', $like)->orWhere('code', 'like', $like));
     }
 
     /**

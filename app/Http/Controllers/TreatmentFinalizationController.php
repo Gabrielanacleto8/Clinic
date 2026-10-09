@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\FinalizeTreatmentRequest;
 use App\Models\Patient;
+use App\Models\ProductBatch;
 use App\Models\Treatment;
 use App\Services\TreatmentFinalizer;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -19,10 +21,36 @@ class TreatmentFinalizationController extends Controller
     {
         Gate::authorize('finalize', $treatment);
 
+        $treatment->load(['procedure:id,name,price', 'professional:id,name', 'products.batch.product:id,name,unit']);
+
         return view('treatments.finalize', [
             'patient' => $patient,
-            'treatment' => $treatment->load(['procedure:id,name,price', 'professional:id,name', 'products.batch.product:id,name,unit']),
+            'treatment' => $treatment,
+            'firstToExpire' => $this->firstBatchesToExpire($treatment),
         ]);
+    }
+
+    /**
+     * Para cada produto do atendimento, o lote que deveria sair primeiro: o de
+     * vencimento mais próximo. A tela avisa quando o escolhido é outro.
+     *
+     * @return Collection<int, ProductBatch> Indexada pelo id do produto.
+     */
+    private function firstBatchesToExpire(Treatment $treatment): Collection
+    {
+        $productIds = $treatment->products->pluck('batch.product_id')->unique();
+
+        if ($productIds->isEmpty()) {
+            return new Collection;
+        }
+
+        return ProductBatch::query()
+            ->whereIn('product_id', $productIds)
+            ->availableForUse()
+            ->firstToExpire()
+            ->get(['id', 'product_id', 'batch_code', 'expires_on'])
+            ->unique('product_id')
+            ->keyBy('product_id');
     }
 
     public function store(FinalizeTreatmentRequest $request, Patient $patient, Treatment $treatment, TreatmentFinalizer $finalizer): RedirectResponse

@@ -45,7 +45,9 @@ class AnamnesisTest extends TestCase
             ->assertOk()
             ->assertDontSee('Ficha de saúde')
             ->assertDontSee('Lidocaína')
-            ->assertDontSee('Atendimentos');
+            // "Atendimentos" também é um item do menu: aqui importa a aba do prontuário.
+            ->assertDontSee('aba=atendimentos', false)
+            ->assertDontSee('id="atendimentos"', false);
 
         $this->assertSame('Lidocaína', $patient->anamnesis()->first()->allergies);
     }

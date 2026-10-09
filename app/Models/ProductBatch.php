@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\ClinicTime;
+use App\Support\Like;
 use Carbon\CarbonImmutable;
 use Database\Factories\ProductBatchFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,6 +28,7 @@ class ProductBatch extends Model
     protected function casts(): array
     {
         return [
+            'manufactured_on' => 'immutable_date',
             'expires_on' => 'immutable_date',
             'quantity' => 'decimal:3',
         ];
@@ -56,6 +58,39 @@ class ProductBatch extends Model
     public function scopeUsable(Builder $query): void
     {
         $query->where(fn (Builder $inner) => $inner->whereNull('expires_on')->orWhere('expires_on', '>=', ClinicTime::today()));
+    }
+
+    /**
+     * Busca pelo código do lote ou pelo nome ou código do produto.
+     *
+     * @param  Builder<ProductBatch>  $query
+     */
+    public function scopeSearch(Builder $query, string $term): void
+    {
+        $query->where(fn (Builder $inner) => $inner
+            ->where('batch_code', 'like', Like::contains($term))
+            ->orWhereHas('product', fn (Builder $product) => $product->search($term)));
+    }
+
+    /**
+     * Ordem de uso: vence primeiro, sai primeiro. Lotes sem validade ficam por último.
+     *
+     * @param  Builder<ProductBatch>  $query
+     */
+    public function scopeFirstToExpire(Builder $query): void
+    {
+        $query->orderByRaw('expires_on is null')->orderBy('expires_on')->orderBy('id');
+    }
+
+    /**
+     * Lotes que podem ser aplicados em um atendimento: dentro da validade,
+     * com saldo e de produto ativo.
+     *
+     * @param  Builder<ProductBatch>  $query
+     */
+    public function scopeAvailableForUse(Builder $query): void
+    {
+        $query->usable()->where('quantity', '>', 0)->whereHas('product', fn (Builder $product) => $product->where('is_active', true));
     }
 
     /**

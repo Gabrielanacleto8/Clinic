@@ -89,13 +89,17 @@ class TreatmentFinalizer
             $batch = $used->batch;
             $name = $batch->product->name.', lote '.$batch->batch_code;
 
-            // Produto vencido não é aplicado em paciente.
+            // Produto vencido ou retirado de uso não é aplicado em paciente.
             if ($batch->isExpired()) {
                 throw ValidationException::withMessages(['products' => "O lote de {$name} está vencido. Troque o lote antes de finalizar."]);
             }
 
+            if (! $batch->product->is_active) {
+                throw ValidationException::withMessages(['products' => "O produto {$batch->product->name} está inativo. Retire-o do atendimento antes de finalizar."]);
+            }
+
             try {
-                $this->stock->withdraw($batch, $used->quantity, null, $user, $treatment);
+                $this->stock->consume($batch, $used->quantity, $treatment, $user);
             } catch (InsufficientStockException $exception) {
                 throw ValidationException::withMessages([
                     'products' => "Saldo insuficiente de {$name}. Disponível: ".LocalizedDecimal::quantity($exception->available)

@@ -2,21 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\AppointmentStatus;
 use App\Enums\AuditAction;
 use App\Enums\Permission;
 use App\Enums\TreatmentStatus;
+use App\Http\Requests\StartTreatmentRequest;
 use App\Http\Requests\TreatmentRequest;
 use App\Models\Appointment;
 use App\Models\Patient;
-use App\Models\Procedure;
-use App\Models\ProductBatch;
 use App\Models\Treatment;
-use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\TreatmentFormOptions;
 use App\Services\TypicalProductSuggester;
 use App\Support\ClinicTime;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +27,7 @@ class TreatmentController extends Controller
 
     public function __construct(private readonly AuditLogger $audit) {}
 
-    public function create(Request $request, Patient $patient): View
+    public function create(Request $request, Patient $patient, TreatmentFormOptions $options): View
     {
         Gate::authorize('viewClinicalRecords', $patient);
         Gate::authorize('create', Treatment::class);
@@ -50,7 +47,7 @@ class TreatmentController extends Controller
             'patient' => $patient->load('anamnesis'),
             'treatment' => $treatment,
             'appointment' => $appointment,
-            ...$this->formOptions($treatment),
+            ...$options->for($treatment, $request->user()),
         ]);
     }
 
@@ -95,6 +92,16 @@ class TreatmentController extends Controller
             : 'Atendimento salvo. Adicione as fotos e finalize quando concluir.');
     }
 
+    /**
+     * "Novo atendimento" do Início: o paciente vem do formulário, e não da URL.
+     */
+    public function storeForChosenPatient(StartTreatmentRequest $request, TypicalProductSuggester $suggester): RedirectResponse
+    {
+        $patient = Patient::query()->findOrFail((int) $request->validated('patient_id'));
+
+        return $this->store($request, $patient, $suggester);
+    }
+
     public function show(Request $request, Patient $patient, Treatment $treatment): View
     {
         Gate::authorize('view', $treatment);
@@ -121,7 +128,7 @@ class TreatmentController extends Controller
         ]);
     }
 
-    public function edit(Patient $patient, Treatment $treatment): View
+    public function edit(Request $request, Patient $patient, Treatment $treatment, TreatmentFormOptions $options): View
     {
         Gate::authorize('update', $treatment);
 
@@ -130,7 +137,7 @@ class TreatmentController extends Controller
         return view('treatments.edit', [
             'patient' => $patient->load('anamnesis'),
             'treatment' => $treatment->load(['products', 'professional:id,name']),
-            ...$this->formOptions($treatment),
+            ...$options->for($treatment, $request->user()),
         ]);
     }
 
@@ -185,7 +192,7 @@ class TreatmentController extends Controller
     }
 
     /**
-     * Agendamento em aberto deste paciente indicado na URL ou devolvido pelo formulário.
+     * Agendamento deste paciente, com a chegada confirmada, indicado na URL ou devolvido pelo formulário.
      */
     private function appointmentToStart(Request $request, Patient $patient): ?Appointment
     {
@@ -198,8 +205,7 @@ class TreatmentController extends Controller
         return Appointment::query()
             ->whereKey((int) $id)
             ->where('patient_id', $patient->getKey())
-            ->whereIn('status', AppointmentStatus::open())
-            ->whereNull('treatment_id')
+            ->readyForTreatment()
             ->first();
     }
 
@@ -212,10 +218,8 @@ class TreatmentController extends Controller
     {
         $appointment = Appointment::query()->whereKey($appointmentId)->lockForUpdate()->first();
 
-        if (! $appointment?->isOpen() || $appointment->treatment_id !== null || $appointment->patient_id !== $treatment->patient_id) {
-            throw ValidationException::withMessages([
-                'appointment_id' => 'O agendamento informado não está mais em aberto. Volte ao Início e tente de novo.',
-            ]);
+        if (! $appointment?->isReadyForTreatment() || $appointment->patient_id !== $treatment->patient_id) {
+            throw ValidationException::withMessages(['appointment_id' => TreatmentRequest::APPOINTMENT_NOT_READY]);
         }
 
         $appointment->treatment_id = $treatment->getKey();
@@ -234,30 +238,5 @@ class TreatmentController extends Controller
         }
 
         return $default;
-    }
-
-    /**
-     * Listas dos campos de seleção do formulário.
-     *
-     * @return array{professionals: Collection<int, User>, procedures: Collection<int, Procedure>, batches: Collection<int, ProductBatch>}
-     */
-    private function formOptions(Treatment $treatment): array
-    {
-        $current = $treatment->exists ? $treatment->products->pluck('product_batch_id')->all() : [];
-
-        return [
-            'professionals' => User::query()->attending()->orderBy('name')->get(['id', 'name']),
-            'procedures' => Procedure::query()->selectable($treatment->procedure_id)->orderBy('name')->get(['id', 'name']),
-            // Lotes dentro da validade e com saldo, mais os que este atendimento já usa.
-            'batches' => ProductBatch::query()
-                ->with('product:id,name,unit')
-                ->where(fn ($query) => $query
-                    ->where(fn ($usable) => $usable->usable()->where('quantity', '>', 0))
-                    ->when($current !== [], fn ($inner) => $inner->orWhereIn('id', $current)))
-                ->orderBy('product_id')
-                ->orderByRaw('expires_on is null')
-                ->orderBy('expires_on')
-                ->get(['id', 'product_id', 'batch_code', 'expires_on', 'quantity']),
-        ];
     }
 }

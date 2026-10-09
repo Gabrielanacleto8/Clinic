@@ -27,8 +27,8 @@
         @endif
     </form>
 
-    <div class="card mt-4 overflow-x-auto">
-        <table class="w-full min-w-3xl text-left text-sm">
+    <div class="card mt-4 relative overflow-x-auto">
+        <table class="table-stack w-full min-w-3xl text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>
                     <th scope="col" class="px-4 py-3 font-medium">Nome</th>
@@ -49,12 +49,12 @@
                             @endif
                         </td>
                         {{-- Na listagem o CPF aparece parcialmente oculto. --}}
-                        <td class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $patient->maskedCpf() }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-slate-600">
+                        <td data-label="CPF" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $patient->maskedCpf() }}</td>
+                        <td data-label="Nascimento" class="px-4 py-3 whitespace-nowrap text-slate-600">
                             {{ $patient->birth_date->format('d/m/Y') }}
                             <span class="text-slate-400">· {{ $patient->age() }} {{ $patient->age() === 1 ? 'ano' : 'anos' }}</span>
                         </td>
-                        <td class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $patient->formattedPhone() ?: '—' }}</td>
+                        <td data-label="Telefone" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $patient->formattedPhone() ?: '—' }}</td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             @if ($archived)
                                 @can('restore', $patient)

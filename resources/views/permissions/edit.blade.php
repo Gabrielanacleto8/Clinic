@@ -13,8 +13,8 @@
             <p class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{{ $errors->first() }}</p>
         @endif
 
-        <div class="card overflow-x-auto">
-            <table class="w-full min-w-2xl text-left text-sm">
+        <div class="card relative overflow-x-auto">
+            <table class="table-stack w-full min-w-2xl text-left text-sm">
                 <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                     <tr>
                         <th scope="col" class="px-4 py-3 font-medium">Permissão</th>
@@ -32,11 +32,11 @@
                         @foreach ($permissions as $permission)
                             <tr>
                                 <th scope="row" class="px-4 py-3 font-normal">{{ $permission->label() }}</th>
-                                <td class="px-4 py-3 text-center">
+                                <td data-label="{{ App\Enums\UserRole::Admin->label() }}" class="px-4 py-3 text-center">
                                     <input type="checkbox" checked disabled class="size-4 accent-teal-700" aria-label="{{ $permission->label() }}: administrador, sempre permitido">
                                 </td>
                                 @foreach ($roles as $role)
-                                    <td class="px-4 py-3 text-center">
+                                    <td data-label="{{ $role->label() }}" class="px-4 py-3 text-center">
                                         <input type="checkbox" name="permissions[{{ $role->value }}][]" value="{{ $permission->value }}"
                                                class="size-4 cursor-pointer accent-teal-700" aria-label="{{ $permission->label() }}: {{ $role->label() }}"
                                                @checked($rolePermissions->allows($role, $permission))>

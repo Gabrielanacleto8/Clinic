@@ -74,12 +74,12 @@
         </p>
     @endif
 
-    <section class="card mt-6 overflow-x-auto" aria-labelledby="parcelas">
+    <section class="card mt-6 relative overflow-x-auto" aria-labelledby="parcelas">
         <h2 id="parcelas" class="px-4 pt-5 text-sm font-semibold tracking-wide text-slate-500 uppercase sm:px-6">Lançamentos do mês</h2>
         @if ($installments->isEmpty())
             <p class="px-4 pt-4 pb-6 text-sm text-slate-600 sm:px-6">Nenhum lançamento para este filtro.</p>
         @else
-            <table class="mt-3 w-full min-w-3xl text-left text-sm">
+            <table class="table-stack mt-3 w-full min-w-3xl text-left text-sm">
                 <thead class="border-y border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                     <tr>
                         <th scope="col" class="px-4 py-3 font-medium sm:px-6">Vencimento</th>
@@ -98,18 +98,18 @@
                             $parcel = $entry->installments_count > 1 ? 'Parcela '.$installment->number.'/'.$entry->installments_count : 'À vista';
                         @endphp
                         <tr>
-                            <td class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums sm:px-6">{{ $installment->due_date->format('d/m/Y') }}</td>
-                            <td class="px-4 py-3">
+                            <td data-label="Vencimento" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums sm:px-6">{{ $installment->due_date->format('d/m/Y') }}</td>
+                            <td data-label="Descrição" class="px-4 py-3">
                                 <p class="font-medium">{{ $entry->description }}</p>
                                 <p class="mt-0.5 text-xs text-slate-500">
                                     {{ $entry->category->label() }} · {{ $entry->payment_method->label() }} · {{ $parcel }}
                                     @if ($entry->patient) · {{ $entry->patient->name }} @endif
                                 </p>
                             </td>
-                            <td @class(['px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums', 'text-emerald-700' => $isIncome, 'text-red-700' => ! $isIncome])>
+                            <td data-label="Valor" @class(['px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums', 'text-emerald-700' => $isIncome, 'text-red-700' => ! $isIncome])>
                                 {{ $isIncome ? '+' : '−' }} {{ LocalizedDecimal::money($installment->amount) }}
                             </td>
-                            <td class="px-4 py-3 whitespace-nowrap">
+                            <td data-label="Situação" class="px-4 py-3 whitespace-nowrap">
                                 <span class="badge {{ $badge['classes'] }}">{{ $badge['label'] }}</span>
                                 @if ($installment->isPaid())
                                     <span class="ml-1 text-xs text-slate-500">em {{ $installment->paid_at->format('d/m/Y') }}</span>

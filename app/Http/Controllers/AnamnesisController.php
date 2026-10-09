@@ -7,6 +7,7 @@ use App\Http\Requests\AnamnesisRequest;
 use App\Models\Patient;
 use App\Models\PatientAnamnesis;
 use App\Services\AuditLogger;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -48,5 +49,21 @@ class AnamnesisController extends Controller
         });
 
         return redirect()->route('patients.show', $patient)->with('success', 'Ficha de saúde atualizada.');
+    }
+
+    /**
+     * Avisos de saúde do paciente escolhido no "Novo atendimento" do Início:
+     * os mesmos que o formulário do prontuário mostra antes de um procedimento.
+     */
+    public function alerts(Patient $patient): JsonResponse
+    {
+        Gate::authorize('viewClinicalRecords', $patient);
+
+        $this->audit->log(AuditAction::PatientViewed, $patient, ['context' => 'health_alerts']);
+
+        return response()->json([
+            'pregnant_or_lactating' => (bool) $patient->anamnesis?->pregnant_or_lactating,
+            'allergies' => $patient->anamnesis?->allergies,
+        ]);
     }
 }

@@ -223,7 +223,7 @@ if (photoInput) {
     });
 }
 
-// Seletor de paciente do agendamento: busca no servidor conforme a digitação.
+// Seletor de paciente (agendamento e novo atendimento): busca no servidor conforme a digitação.
 // Os resultados entram na página só via textContent, nunca como HTML.
 const picker = document.querySelector('[data-patient-picker]');
 
@@ -236,6 +236,9 @@ if (picker) {
     let active = -1;
     let timer = null;
     let request = null;
+
+    // Avisa o resto da página quando o paciente escolhido muda (ver os avisos de saúde, abaixo).
+    const announce = () => picker.dispatchEvent(new CustomEvent('patientchange', { detail: { id: hidden.value } }));
 
     const close = () => {
         list.hidden = true;
@@ -257,6 +260,7 @@ if (picker) {
         input.value = patient.name;
         status.textContent = `Paciente selecionado: ${patient.name}, CPF ${patient.cpf}.`;
         close();
+        announce();
     };
 
     const render = () => {
@@ -319,7 +323,11 @@ if (picker) {
 
     input.addEventListener('input', () => {
         // Qualquer edição no texto desfaz a seleção anterior.
-        hidden.value = '';
+        if (hidden.value !== '') {
+            hidden.value = '';
+            announce();
+        }
+
         clearTimeout(timer);
 
         const term = input.value.trim();
@@ -349,11 +357,68 @@ if (picker) {
             event.preventDefault();
             choose(results[active]);
         } else if (event.key === 'Escape') {
+            // Dentro de um diálogo, o Esc fecha só a lista, e não a janela junto.
+            event.preventDefault();
             close();
         }
     });
 
     input.addEventListener('blur', close);
+}
+
+// Novo atendimento pelo Início: ao escolher o paciente, mostra os avisos de
+// saúde dele (alergias, gestação), como o formulário do prontuário já faz.
+const healthAlerts = document.querySelector('[data-health-alerts]');
+
+if (picker && healthAlerts) {
+    const items = healthAlerts.querySelector('[data-health-alerts-list]');
+    let request = null;
+
+    const show = (lines) => {
+        items.replaceChildren(...lines.map((line) => {
+            const item = document.createElement('li');
+
+            item.className = 'whitespace-pre-line';
+            item.textContent = line;
+
+            return item;
+        }));
+
+        healthAlerts.hidden = lines.length === 0;
+    };
+
+    const load = async (patientId) => {
+        request?.abort();
+        show([]);
+
+        if (!patientId) return;
+
+        request = new AbortController();
+
+        try {
+            const response = await fetch(healthAlerts.dataset.url.replace('__ID__', encodeURIComponent(patientId)), {
+                headers: { Accept: 'application/json' },
+                signal: request.signal,
+            });
+
+            if (!response.ok) throw new Error(String(response.status));
+
+            const alerts = await response.json();
+
+            show([
+                ...(alerts.pregnant_or_lactating ? ['Gestante ou lactante.'] : []),
+                ...(alerts.allergies ? [`Alergias: ${alerts.allergies}`] : []),
+            ]);
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+
+            // Uma falha na consulta não pode parecer "paciente sem avisos".
+            show(['Não foi possível consultar os avisos de saúde deste paciente. Confira a ficha de saúde antes de continuar.']);
+        }
+    };
+
+    picker.addEventListener('patientchange', (event) => load(event.detail.id));
+    load(picker.querySelector('[data-patient-id]').value);
 }
 
 // No agendamento, escolher o procedimento ajusta a duração para a estimada no catálogo.
@@ -373,6 +438,7 @@ document.addEventListener('change', (event) => {
 
 // Janelas modais (<dialog>). O botão que abre pode preencher campos do
 // formulário, como o lote da linha clicada: data-dialog-values='{"campo": valor}'.
+// Com data-dialog-action ele também define para onde o formulário é enviado.
 document.addEventListener('click', (event) => {
     const opener = event.target.closest('[data-dialog-open]');
 
@@ -382,9 +448,19 @@ document.addEventListener('click', (event) => {
         if (!dialog) return;
 
         for (const [name, value] of Object.entries(JSON.parse(opener.dataset.dialogValues ?? '{}'))) {
-            const field = dialog.querySelector(`[name="${CSS.escape(name)}"]`);
+            const fields = [...dialog.querySelectorAll(`[name="${CSS.escape(name)}"]`)];
+            const checkbox = fields.find((field) => field.type === 'checkbox');
 
-            if (field) field.value = value;
+            // Em um checkbox, o campo oculto de mesmo nome (o valor de "desmarcado") fica como está.
+            if (checkbox) {
+                checkbox.checked = Boolean(value);
+            } else if (fields[0]) {
+                fields[0].value = value ?? '';
+            }
+        }
+
+        if (opener.dataset.dialogAction) {
+            dialog.querySelector('form').action = opener.dataset.dialogAction;
         }
 
         // Texto de contexto do diálogo, como a parcela que está sendo paga.

@@ -21,9 +21,14 @@
             <h1 class="text-xl font-semibold tracking-tight">Início</h1>
             <p class="mt-1 text-sm text-slate-600">{{ ucfirst($today->locale('pt_BR')->translatedFormat('l, j \d\e F \d\e Y')) }}</p>
         </div>
-        @can('create', App\Models\Appointment::class)
-            <a href="{{ route('appointments.create') }}" class="btn btn-primary">Novo agendamento</a>
-        @endcan
+        <div class="flex flex-wrap gap-2">
+            @can('create', App\Models\Appointment::class)
+                <a href="{{ route('appointments.create') }}" @class(['btn', $treatmentForm ? 'btn-secondary' : 'btn-primary'])>Novo agendamento</a>
+            @endcan
+            @if ($treatmentForm)
+                <button type="button" class="btn btn-primary" data-dialog-open="{{ $treatmentForm['scope'] }}">Novo atendimento</button>
+            @endif
+        </div>
     </div>
 
     @if ($cards !== [])
@@ -125,5 +130,14 @@
 
     @if ($cards === [] && $todayAppointments === null && $lowStockProducts === null)
         <p class="mt-6 text-sm text-slate-600">Seu perfil ainda não tem acesso a nenhum módulo. Fale com o administrador.</p>
+    @endif
+
+    @if ($treatmentForm)
+        <x-dialog :id="$treatmentForm['scope']" title="Novo atendimento" size="lg">
+            <p class="text-sm text-slate-600">O atendimento fica em andamento até ser finalizado. Fotos, documentos e a cobrança vêm depois de salvar.</p>
+            <form method="POST" action="{{ route('treatments.store') }}" class="mt-4 space-y-5" novalidate>
+                @include('treatments._form', $treatmentForm)
+            </form>
+        </x-dialog>
     @endif
 </x-layouts.app>

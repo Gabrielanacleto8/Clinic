@@ -41,6 +41,7 @@ class ProductRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:2', 'max:150', Rule::unique(Product::class)->ignore($this->route('product'))],
+            'code' => ['nullable', 'string', 'max:40', Rule::unique(Product::class)->ignore($this->route('product'))],
             'category' => ['required', Rule::enum(ProductCategory::class)],
             'brand' => ['nullable', 'string', 'max:100'],
             'manufacturer' => ['nullable', 'string', 'max:100'],
@@ -60,6 +61,7 @@ class ProductRequest extends FormRequest
     {
         return [
             'name' => 'nome',
+            'code' => 'código',
             'category' => 'categoria',
             'brand' => 'marca',
             'manufacturer' => 'fabricante',
@@ -77,6 +79,9 @@ class ProductRequest extends FormRequest
      */
     public function messages(): array
     {
-        return ['name.unique' => 'Já existe um produto com este nome.'];
+        return [
+            'name.unique' => 'Já existe um produto com este nome.',
+            'code.unique' => 'Já existe um produto com este código.',
+        ];
     }
 }

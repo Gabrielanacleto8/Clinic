@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use Carbon\CarbonImmutable;
 use Database\Factories\AppointmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -57,6 +58,23 @@ class Appointment extends Model
     public function isOpen(): bool
     {
         return in_array($this->status, AppointmentStatus::open(), true);
+    }
+
+    /**
+     * Pronto para virar atendimento: a chegada do paciente foi confirmada e
+     * nenhum atendimento foi iniciado ainda.
+     */
+    public function isReadyForTreatment(): bool
+    {
+        return $this->status === AppointmentStatus::Confirmed && $this->treatment_id === null;
+    }
+
+    /**
+     * @param  Builder<Appointment>  $query
+     */
+    public function scopeReadyForTreatment(Builder $query): void
+    {
+        $query->where('status', AppointmentStatus::Confirmed)->whereNull('treatment_id');
     }
 
     /**

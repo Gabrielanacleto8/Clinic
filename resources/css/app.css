@@ -65,3 +65,60 @@
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
     }
 }
+
+/* Listagens em telas estreitas (abaixo de "sm"): cada linha da tabela vira um
+   bloco, com o nome da coluna (data-label) à esquerda do valor; célula sem
+   data-label ocupa a linha toda (título, ações). Fica fora das camadas do
+   Tailwind de propósito, para valer sobre os utilitários de espaçamento e
+   alinhamento que as células usam no formato de tabela. */
+@media (width < 40rem) {
+    .table-stack {
+        display: block;
+        min-width: 0;
+    }
+
+    .table-stack thead {
+        @apply sr-only;
+    }
+
+    .table-stack tbody,
+    .table-stack tr {
+        display: block;
+    }
+
+    .table-stack tr {
+        padding-block: 0.5rem;
+    }
+
+    .table-stack :is(td, tbody th) {
+        display: flow-root;
+        padding: 0.25rem 1rem;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .table-stack td[colspan] {
+        padding-block: 1.5rem;
+    }
+
+    /* Célula sem conteúdo nesta linha (ex.: produto sem alertas) não ocupa espaço. */
+    .table-stack td[data-empty] {
+        display: none;
+    }
+
+    .table-stack td[data-label] {
+        text-align: right;
+    }
+
+    .table-stack td[data-label]::before {
+        @apply text-xs/5 font-normal text-slate-500;
+
+        content: attr(data-label);
+        float: left;
+        margin-right: 1rem;
+    }
+
+    .table-stack td[data-label] > .flex {
+        justify-content: flex-end;
+    }
+}

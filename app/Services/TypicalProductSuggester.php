@@ -22,15 +22,11 @@ class TypicalProductSuggester
             return [];
         }
 
-        // Lotes utilizáveis com saldo, do vencimento mais próximo ao mais
-        // distante; os sem validade ficam por último.
+        // Lotes que podem ser usados, do vencimento mais próximo ao mais distante.
         $batches = ProductBatch::query()
             ->whereIn('product_id', $quantities->keys())
-            ->usable()
-            ->where('quantity', '>', 0)
-            ->orderByRaw('expires_on is null')
-            ->orderBy('expires_on')
-            ->orderBy('id')
+            ->availableForUse()
+            ->firstToExpire()
             ->get(['id', 'product_id']);
 
         return $batches

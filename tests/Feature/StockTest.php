@@ -57,9 +57,9 @@ class StockTest extends TestCase
         return $this->post("/estoque/{$product->id}/movimentacoes", $data);
     }
 
-    private function entry(Product $product, string $code, string $quantity, ?string $expiresOn = '2027-06-30'): TestResponse
+    private function entry(Product $product, string $code, string $quantity, ?string $expiresOn = '2027-06-30', array $extra = []): TestResponse
     {
-        return $this->move($product, ['type' => 'entry', 'batch_code' => $code, 'expires_on' => $expiresOn, 'quantity' => $quantity]);
+        return $this->post('/estoque/entradas', ['product_id' => $product->id, 'batch_code' => $code, 'expires_on' => $expiresOn, 'quantity' => $quantity, ...$extra]);
     }
 
     public function test_access_follows_the_role_permissions(): void
@@ -82,7 +82,8 @@ class StockTest extends TestCase
         $this->get('/estoque/novo')->assertForbidden();
         $this->post('/estoque', $this->productPayload())->assertForbidden();
         $this->put("/estoque/{$product->id}", $this->productPayload())->assertForbidden();
-        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '1'])->assertForbidden();
+        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '1', 'reason' => 'Teste'])->assertForbidden();
+        $this->entry($product, 'L9', '5')->assertForbidden();
 
         $this->assertSame('10.000', $batch->refresh()->quantity);
         $this->assertSame(0, StockMovement::count());
@@ -144,8 +145,12 @@ class StockTest extends TestCase
 
         $this->actingAs($this->admin);
 
-        $this->move($product, ['type' => 'entry', 'batch_code' => ' C4821A ', 'expires_on' => '2027-06-30', 'quantity' => '300', 'reason' => 'NF 1234'])
-            ->assertRedirect(route('products.show', $product))->assertSessionHasNoErrors();
+        // Lançada pela página do produto, a entrada volta para ela.
+        $this->from("/estoque/{$product->id}")
+            ->entry($product, ' C4821A ', '300', '2027-06-30', [
+                'manufactured_on' => '2026-06-30', 'unit_cost' => '1.234,56', 'supplier' => 'Distribuidora Y', 'invoice_number' => '1234', 'reason' => 'Compra do trimestre',
+            ])
+            ->assertRedirect("/estoque/{$product->id}")->assertSessionHasNoErrors();
         $this->entry($product, 'C4821A', '100,5')->assertSessionHasNoErrors();
         // Segunda entrada sem repetir a validade também é aceita.
         $this->entry($product, 'C4821A', '0,5', null)->assertSessionHasNoErrors();
@@ -154,6 +159,7 @@ class StockTest extends TestCase
 
         $this->assertSame('C4821A', $batch->batch_code);
         $this->assertSame('2027-06-30', $batch->expires_on->format('Y-m-d'));
+        $this->assertSame('2026-06-30', $batch->manufactured_on->format('Y-m-d'));
         $this->assertSame('401.000', $batch->quantity);
 
         $movements = StockMovement::orderBy('id')->get();
@@ -161,11 +167,16 @@ class StockTest extends TestCase
         $this->assertCount(3, $movements);
         $this->assertSame(StockMovementType::Entry, $movements[0]->type);
         $this->assertSame('300.000', $movements[0]->quantity);
-        $this->assertSame('NF 1234', $movements[0]->reason);
+        $this->assertSame(['1234.56', 'Distribuidora Y', '1234', 'Compra do trimestre'], [
+            $movements[0]->unit_cost, $movements[0]->supplier, $movements[0]->invoice_number, $movements[0]->reason,
+        ]);
         $this->assertSame($this->admin->id, $movements[0]->user_id);
+        // Os dados da compra são de cada entrada, não do lote.
+        $this->assertNull($movements[1]->invoice_number);
 
         $this->get("/estoque/{$product->id}")
-            ->assertSee('C4821A')->assertSee('30/06/2027')->assertSee('401 U')->assertSee('+300 U')->assertSee('NF 1234')->assertSee('Ana Admin');
+            ->assertSee('C4821A')->assertSee('30/06/2027')->assertSee('30/06/2026')->assertSee('401 U')->assertSee('+300 U')
+            ->assertSee('NF 1234 · Distribuidora Y · Compra do trimestre')->assertSee('Ana Admin');
     }
 
     public function test_entry_is_validated(): void
@@ -182,11 +193,20 @@ class StockTest extends TestCase
         $this->entry($product, 'L2', 'dez')->assertSessionHasErrors('quantity');
         // Lote já vencido não entra.
         $this->entry($product, 'L2', '10', '2026-10-07')->assertSessionHasErrors('expires_on');
-        // A validade de um lote existente não é trocada por uma entrada.
+        // Validade e fabricação de um lote existente não são trocadas por uma entrada.
         $this->entry($product, 'L1', '10', '2028-12-31')->assertSessionHasErrors('expires_on');
-        // Na entrada o lote vem pelo código, não por id.
-        $this->move($product, ['type' => 'entry', 'batch_code' => 'L2', 'quantity' => '1', 'product_batch_id' => 1])->assertSessionHasErrors('product_batch_id');
-        $this->move($product, ['type' => 'compra', 'quantity' => '1'])->assertSessionHasErrors('type');
+        $this->entry($product, 'L1', '10', null, ['manufactured_on' => '2026-01-10'])->assertSessionHasErrors('manufactured_on');
+        // Fabricação no futuro, ou validade anterior à fabricação.
+        $this->entry($product, 'L2', '10', '2027-06-30', ['manufactured_on' => '2026-10-09'])->assertSessionHasErrors('manufactured_on');
+        $this->entry($product, 'L2', '10', '2026-10-08', ['manufactured_on' => '2026-10-08'])->assertSessionHasErrors('expires_on');
+        $this->entry($product, 'L2', '10', '2027-06-30', ['unit_cost' => '-1'])->assertSessionHasErrors('unit_cost');
+        $this->entry($product, 'L2', '10', '2027-06-30', ['invoice_number' => str_repeat('9', 61)])->assertSessionHasErrors('invoice_number');
+        // Produto inexistente ou inativo não recebe entrada.
+        $this->entry(Product::factory()->create(['is_active' => false]), 'L2', '10')->assertSessionHasErrors('product_id');
+        $this->post('/estoque/entradas', ['batch_code' => 'L2', 'quantity' => '1'])->assertSessionHasErrors('product_id');
+        // A rota de movimentação de um produto não aceita mais entrada nem tipo desconhecido.
+        $this->move($product, ['type' => 'entry', 'batch_code' => 'L2', 'quantity' => '1'])->assertSessionHasErrors('type');
+        $this->move($product, ['type' => 'consumption', 'quantity' => '1'])->assertSessionHasErrors('type');
 
         $this->assertSame(1, ProductBatch::count());
         $this->assertSame(0, StockMovement::count());
@@ -204,15 +224,16 @@ class StockTest extends TestCase
         $this->assertSame('7.500', $batch->refresh()->quantity);
         $this->assertSame('-2.500', StockMovement::sole()->quantity);
 
-        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '7,501'])
+        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '7,501', 'reason' => 'Uso interno'])
             ->assertSessionHasErrors(['quantity' => 'Saldo insuficiente no lote L1. Disponível: 7,5.']);
+        // Toda saída manual identifica o motivo.
+        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '1'])->assertSessionHasErrors(['reason' => 'Informe o motivo.']);
         // Lote de outro produto não pode ser movimentado por esta página.
-        $this->move($product, ['type' => 'exit', 'product_batch_id' => $foreign->id, 'quantity' => '1'])->assertSessionHasErrors('product_batch_id');
-        $this->move($product, ['type' => 'exit', 'quantity' => '1'])->assertSessionHasErrors('product_batch_id');
-        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '1', 'batch_code' => 'X'])->assertSessionHasErrors('batch_code');
+        $this->move($product, ['type' => 'exit', 'product_batch_id' => $foreign->id, 'quantity' => '1', 'reason' => 'Uso interno'])->assertSessionHasErrors('product_batch_id');
+        $this->move($product, ['type' => 'exit', 'quantity' => '1', 'reason' => 'Uso interno'])->assertSessionHasErrors('product_batch_id');
 
         // Zerar o lote é permitido.
-        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '7,5'])->assertSessionHasNoErrors();
+        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '7,5', 'reason' => 'Devolução'])->assertSessionHasNoErrors();
 
         $this->assertSame('0.000', $batch->refresh()->quantity);
         $this->assertSame('50.000', $foreign->refresh()->quantity);
@@ -259,7 +280,7 @@ class StockTest extends TestCase
         $this->entry($product, 'L1', '0,7');
 
         $batch = ProductBatch::sole();
-        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '0,3']);
+        $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '0,3', 'reason' => 'Uso interno']);
         $this->move($product, ['type' => 'adjustment', 'product_batch_id' => $batch->id, 'quantity' => '0,65', 'reason' => 'Contagem']);
 
         $this->assertSame('0.650', $batch->refresh()->quantity);
@@ -271,7 +292,7 @@ class StockTest extends TestCase
         $batch = ProductBatch::factory()->create(['quantity' => 5]);
 
         try {
-            app(StockLedger::class)->withdraw($batch, '5.001', null, $this->admin);
+            app(StockLedger::class)->withdraw($batch, '5.001', 'Uso interno', $this->admin);
             $this->fail('A retirada deveria ter sido recusada.');
         } catch (InsufficientStockException $exception) {
             $this->assertSame('5.000', $exception->available);
@@ -349,10 +370,11 @@ class StockTest extends TestCase
 
         $this->get('/estoque')->assertOk();
 
-        // Sessão/usuário à parte, a listagem usa contagem + uma consulta com os saldos e alertas.
+        // Sessão/usuário à parte: contagem, uma consulta com os saldos e alertas
+        // de cada produto e uma com os três alertas do topo do módulo.
         $queries = collect(DB::getQueryLog())->filter(fn (array $query) => str_contains($query['query'], 'product'));
 
-        $this->assertLessThanOrEqual(2, $queries->count());
+        $this->assertLessThanOrEqual(3, $queries->count());
     }
 
     public function test_a_dialog_reopens_with_its_own_errors_only(): void
@@ -364,7 +386,7 @@ class StockTest extends TestCase
 
         $html = $this->followingRedirects()
             ->from("/estoque/{$product->id}")
-            ->post("/estoque/{$product->id}/movimentacoes", ['_dialog' => 'stock-exit', 'type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '5'])
+            ->post("/estoque/{$product->id}/movimentacoes", ['_dialog' => 'stock-exit', 'type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '5', 'reason' => 'Uso interno'])
             ->getContent();
 
         $this->assertMatchesRegularExpression('/<dialog id="stock-exit"[^>]*data-dialog-autoshow/', $html);
@@ -373,6 +395,55 @@ class StockTest extends TestCase
         $this->assertSame(1, substr_count($html, 'Saldo insuficiente no lote'));
         $this->assertStringContainsString('id="exit-quantity-error"', $html);
         $this->assertStringNotContainsString('id="entry-quantity-error"', $html);
+    }
+
+    public function test_products_are_edited_in_a_dialog_from_the_listing(): void
+    {
+        $product = Product::factory()->create(['name' => 'Agulha 30G', 'minimum_stock' => 5]);
+
+        // Profissional só consulta: sem botão e sem diálogo.
+        $this->actingAs(User::factory()->professional()->create())->get('/estoque')
+            ->assertOk()->assertSee('Agulha 30G')->assertDontSee('product-edit', false)->assertDontSee('Editar');
+
+        $this->actingAs($this->admin);
+
+        $this->get('/estoque')
+            ->assertSee('<dialog id="product-edit"', false)
+            ->assertSee('data-dialog-open="product-edit"', false)
+            ->assertSee('data-dialog-action="'.route('products.update', $product).'"', false)
+            ->assertDontSee('data-dialog-autoshow', false);
+
+        // Salvar pelo diálogo volta para a listagem, com os filtros que estavam aplicados.
+        $this->from('/estoque?situacao=todos')
+            ->put("/estoque/{$product->id}", $this->productPayload([
+                '_dialog' => 'product-edit', 'product_id' => $product->id, 'name' => 'Agulha 30G curta', 'is_active' => '0',
+            ]))
+            ->assertRedirect('/estoque?situacao=todos')->assertSessionHasNoErrors();
+
+        $product->refresh();
+
+        $this->assertSame('Agulha 30G curta', $product->name);
+        $this->assertFalse($product->is_active);
+    }
+
+    public function test_the_edit_dialog_reopens_for_the_same_product_when_validation_fails(): void
+    {
+        $product = Product::factory()->create(['name' => 'Agulha 30G']);
+        Product::factory()->create(['name' => 'Seringa 1 mL']);
+
+        $this->actingAs($this->admin);
+
+        $this->followingRedirects()->from('/estoque')
+            ->put("/estoque/{$product->id}", $this->productPayload([
+                '_dialog' => 'product-edit', 'product_id' => $product->id, 'name' => '', 'brand' => 'Marca digitada',
+            ]))
+            ->assertOk()
+            ->assertSee('data-dialog-autoshow', false)
+            ->assertSee('<form method="POST" action="'.route('products.update', $product).'"', false)
+            ->assertSee('O campo nome é obrigatório.')
+            ->assertSee('value="Marca digitada"', false);
+
+        $this->assertSame('Agulha 30G', $product->refresh()->name);
     }
 
     public function test_output_is_escaped(): void

@@ -90,14 +90,14 @@
         </section>
     </div>
 
-    <section class="card mt-6 overflow-x-auto">
+    <section class="card mt-6 relative overflow-x-auto">
         <h2 class="px-6 pt-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">
             Produtos {{ $treatment->isFinalized() ? 'utilizados' : 'a utilizar' }}
         </h2>
         @if ($treatment->products->isEmpty())
             <p class="px-6 pt-4 pb-6 text-sm text-slate-600">Nenhum produto registrado.</p>
         @else
-            <table class="mt-4 w-full min-w-lg text-left text-sm">
+            <table class="table-stack mt-4 w-full min-w-lg text-left text-sm">
                 <thead class="border-y border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                     <tr>
                         <th scope="col" class="px-6 py-3 font-medium">Produto</th>
@@ -110,9 +110,9 @@
                     @foreach ($treatment->products as $used)
                         <tr>
                             <td class="px-6 py-3 font-medium">{{ $used->batch->product->name }}</td>
-                            <td class="px-4 py-3 text-slate-600 tabular-nums">{{ $used->batch->batch_code }}</td>
-                            <td class="px-4 py-3 text-slate-600 tabular-nums">{{ $used->batch->expires_on?->format('d/m/Y') ?? '—' }}</td>
-                            <td class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                            <td data-label="Lote" class="px-4 py-3 text-slate-600 tabular-nums">{{ $used->batch->batch_code }}</td>
+                            <td data-label="Validade" class="px-4 py-3 text-slate-600 tabular-nums">{{ $used->batch->expires_on?->format('d/m/Y') ?? '—' }}</td>
+                            <td data-label="Quantidade" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
                                 {{ LocalizedDecimal::quantity($used->quantity) }} {{ $used->batch->product->unit->symbol() }}
                             </td>
                         </tr>
@@ -123,20 +123,20 @@
     </section>
 
     @if ($entry)
-        <section class="card mt-6 overflow-x-auto" aria-labelledby="financeiro">
+        <section class="card mt-6 relative overflow-x-auto" aria-labelledby="financeiro">
             <h2 id="financeiro" class="px-6 pt-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">Financeiro</h2>
             <p class="px-6 pt-1 text-sm text-slate-600">
                 {{ LocalizedDecimal::money($entry->installments->sum('amount')) }} · {{ $entry->payment_method->label() }}
             </p>
-            <table class="mt-4 w-full min-w-md text-left text-sm">
+            <table class="table-stack mt-4 w-full min-w-md text-left text-sm">
                 <tbody class="divide-y divide-slate-100 border-t border-slate-200">
                     @foreach ($entry->installments as $installment)
                         @php $badge = $installment->statusBadge(); @endphp
                         <tr>
-                            <td class="px-6 py-3 text-slate-600">{{ $entry->installments->count() > 1 ? 'Parcela '.$installment->number.'/'.$entry->installments->count() : 'À vista' }}</td>
-                            <td class="px-4 py-3 text-slate-600 tabular-nums">vence em {{ $installment->due_date->format('d/m/Y') }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums">{{ LocalizedDecimal::money($installment->amount) }}</td>
-                            <td class="px-6 py-3 text-right"><span class="badge {{ $badge['classes'] }}">{{ $badge['label'] }}</span></td>
+                            <td data-label="Parcela" class="px-6 py-3 text-slate-600">{{ $entry->installments->count() > 1 ? 'Parcela '.$installment->number.'/'.$entry->installments->count() : 'À vista' }}</td>
+                            <td data-label="Vencimento" class="px-4 py-3 text-slate-600 tabular-nums">vence em {{ $installment->due_date->format('d/m/Y') }}</td>
+                            <td data-label="Valor" class="px-4 py-3 text-right tabular-nums">{{ LocalizedDecimal::money($installment->amount) }}</td>
+                            <td data-label="Situação" class="px-6 py-3 text-right"><span class="badge {{ $badge['classes'] }}">{{ $badge['label'] }}</span></td>
                         </tr>
                     @endforeach
                 </tbody>

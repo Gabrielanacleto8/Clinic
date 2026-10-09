@@ -18,8 +18,10 @@ use App\Models\StockMovement;
 use App\Models\Treatment;
 use App\Models\TreatmentNote;
 use App\Models\User;
+use App\Services\StockLedger;
 use App\Services\TreatmentFinalizer;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -121,7 +123,7 @@ class TreatmentFinalizationTest extends TestCase
 
         $movements = StockMovement::orderBy('id')->get();
         $this->assertCount(2, $movements);
-        $this->assertSame([StockMovementType::Exit, '-30.000', $this->treatment->id, $this->author->id], [
+        $this->assertSame([StockMovementType::Consumption, '-30.000', $this->treatment->id, $this->author->id], [
             $movements[0]->type, $movements[0]->quantity, $movements[0]->treatment_id, $movements[0]->user_id,
         ]);
 
@@ -203,6 +205,69 @@ class TreatmentFinalizationTest extends TestCase
 
         $this->assertTrue($this->treatment->refresh()->isDraft());
         $this->assertSame(0, StockMovement::count());
+    }
+
+    public function test_an_inactive_product_blocks_the_finalization(): void
+    {
+        $this->toxin->product->update(['is_active' => false]);
+
+        $this->actingAs($this->author)->post("{$this->url}/finalizar", $this->payment())->assertSessionHasErrors('products');
+
+        $this->assertTrue($this->treatment->refresh()->isDraft());
+        $this->assertSame('100.000', $this->toxin->refresh()->quantity);
+        $this->assertSame(0, StockMovement::count());
+    }
+
+    public function test_batches_of_inactive_products_cannot_be_added_to_a_treatment(): void
+    {
+        $inactive = ProductBatch::factory()->create(['product_id' => Product::factory()->create(['name' => 'Fora de Uso', 'is_active' => false])->id]);
+
+        $this->actingAs($this->author);
+
+        $this->get("{$this->url}/editar")->assertOk()->assertSee('Agulha 30G')->assertDontSee('Fora de Uso');
+        $this->put($this->url, [
+            'performed_at' => '2026-10-08T12:00',
+            'procedure_id' => $this->treatment->procedure_id,
+            'description' => 'Aplicação.',
+            'products' => [['product_batch_id' => $inactive->id, 'quantity' => '1']],
+        ])->assertSessionHasErrors('products.0.product_batch_id');
+    }
+
+    public function test_finalization_screen_points_to_the_batch_that_expires_first(): void
+    {
+        $this->actingAs($this->author);
+        $this->get("{$this->url}/finalizar")->assertOk()->assertDontSee('vence antes');
+
+        // Outro lote da toxina, com saldo e vencimento anterior ao escolhido.
+        $batch = fn (string $code, int $quantity, string $expiresOn) => ProductBatch::factory()->create([
+            'product_id' => $this->toxin->product_id, 'batch_code' => $code, 'quantity' => $quantity, 'expires_on' => $expiresOn,
+        ]);
+        $batch('C0999', 20, '2026-12-31');
+        // Vencido ou sem saldo não é sugerido.
+        $batch('C0001', 20, '2026-10-01');
+        $batch('C0002', 0, '2026-11-01');
+
+        $this->get("{$this->url}/finalizar")->assertSee('O lote C0999 vence antes (31/12/2026).')->assertDontSee('C0001')->assertDontSee('C0002');
+
+        // É um aviso: o lote registrado no atendimento continua sendo o baixado.
+        $this->post("{$this->url}/finalizar", $this->payment())->assertSessionHasNoErrors();
+        $this->assertSame('70.000', $this->toxin->refresh()->quantity);
+    }
+
+    public function test_a_treatment_never_consumes_the_same_batch_twice(): void
+    {
+        $ledger = app(StockLedger::class);
+        $ledger->consume($this->toxin, '30', $this->treatment, $this->author);
+
+        try {
+            $ledger->consume($this->toxin, '30', $this->treatment, $this->author);
+            $this->fail('O banco deveria recusar o consumo em dobro.');
+        } catch (UniqueConstraintViolationException) {
+            // A segunda baixa é desfeita por inteiro: nem movimentação, nem saldo.
+        }
+
+        $this->assertSame('70.000', $this->toxin->refresh()->quantity);
+        $this->assertSame(1, StockMovement::count());
     }
 
     public function test_a_treatment_cannot_be_finalized_twice(): void

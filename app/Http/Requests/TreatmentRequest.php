@@ -24,6 +24,8 @@ class TreatmentRequest extends FormRequest
 {
     public const MAX_PRODUCTS = 10;
 
+    public const APPOINTMENT_NOT_READY = 'Este agendamento não pode ser iniciado. Confirme a chegada do paciente na agenda e tente de novo.';
+
     public function authorize(): bool
     {
         $treatment = $this->route('treatment');
@@ -85,29 +87,45 @@ class TreatmentRequest extends FormRequest
                     )),
             ],
 
-            // Agendamento que originou o atendimento: tem de ser deste paciente,
-            // estar em aberto, sem outro atendimento e não ser de um dia futuro.
-            'appointment_id' => $treatment instanceof Treatment ? ['prohibited'] : [
-                'nullable',
-                'integer',
-                Rule::exists(Appointment::class, 'id')
-                    ->where('patient_id', $this->route('patient')->getKey())
-                    ->whereIn('status', array_map(fn (AppointmentStatus $status) => $status->value, AppointmentStatus::open()))
-                    ->whereNull('treatment_id')
-                    ->where(fn ($query) => $query->where('scheduled_at', '<=', ClinicTime::dayBounds(ClinicTime::today())[1])),
-            ],
+            'appointment_id' => $this->appointmentRules(),
 
             'products' => ['nullable', 'array', 'max:'.self::MAX_PRODUCTS],
             'products.*.product_batch_id' => [
                 'nullable',
                 'integer',
                 'distinct',
-                // Lote vencido não pode ser escolhido.
+                // Lote vencido ou de produto inativo não pode ser escolhido.
                 Rule::exists(ProductBatch::class, 'id')->where(
-                    fn ($query) => $query->where(fn ($inner) => $inner->whereNull('expires_on')->orWhere('expires_on', '>=', ClinicTime::today())),
+                    fn ($query) => $query
+                        ->where(fn ($inner) => $inner->whereNull('expires_on')->orWhere('expires_on', '>=', ClinicTime::today()))
+                        ->whereIn('product_id', fn ($products) => $products->select('id')->from('products')->where('is_active', true)),
                 ),
             ],
             'products.*.quantity' => ['nullable', 'required_with:products.*.product_batch_id', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'],
+        ];
+    }
+
+    /**
+     * Agendamento que originou o atendimento: tem de ser deste paciente,
+     * estar com a chegada confirmada, sem outro atendimento e não ser de um dia futuro.
+     * Na edição não se troca nem se inclui agendamento.
+     *
+     * @return list<mixed>
+     */
+    protected function appointmentRules(): array
+    {
+        if ($this->route('treatment') instanceof Treatment) {
+            return ['prohibited'];
+        }
+
+        return [
+            'nullable',
+            'integer',
+            Rule::exists(Appointment::class, 'id')
+                ->where('patient_id', $this->route('patient')->getKey())
+                ->where('status', AppointmentStatus::Confirmed->value)
+                ->whereNull('treatment_id')
+                ->where(fn ($query) => $query->where('scheduled_at', '<=', ClinicTime::dayBounds(ClinicTime::today())[1])),
         ];
     }
 
@@ -187,8 +205,8 @@ class TreatmentRequest extends FormRequest
         return [
             'performed_at.date_format' => 'Informe uma data e hora de atendimento válidas.',
             'return_date.date_format' => 'Informe uma data de retorno válida.',
-            'appointment_id.exists' => 'O agendamento informado não está mais em aberto. Volte ao Início e tente de novo.',
-            'products.*.product_batch_id.exists' => 'Este lote não existe ou está vencido.',
+            'appointment_id.exists' => self::APPOINTMENT_NOT_READY,
+            'products.*.product_batch_id.exists' => 'Este lote não existe, está vencido ou é de um produto inativo.',
             'products.*.product_batch_id.distinct' => 'Este lote está repetido na lista.',
             'products.*.quantity.required_with' => 'Informe a quantidade utilizada deste produto.',
         ];

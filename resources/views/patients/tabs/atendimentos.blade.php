@@ -9,8 +9,8 @@
         @endcan
     </div>
 
-    <div class="card mt-4 overflow-x-auto">
-        <table class="w-full min-w-2xl text-left text-sm">
+    <div class="card mt-4 relative overflow-x-auto">
+        <table class="table-stack w-full min-w-2xl text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>
                     <th scope="col" class="px-4 py-3 font-medium">Data</th>
@@ -22,8 +22,8 @@
             <tbody class="divide-y divide-slate-100">
                 @forelse ($records as $treatment)
                     <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ App\Support\ClinicTime::format($treatment->performed_at) }}</td>
-                        <td class="px-4 py-3 font-medium">
+                        <td data-label="Data" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ App\Support\ClinicTime::format($treatment->performed_at) }}</td>
+                        <td data-label="Procedimento" class="px-4 py-3 font-medium">
                             <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-teal-800 hover:underline">{{ $treatment->procedure->name }}</a>
                             @if ($treatment->isDraft())
                                 <span class="badge ml-1 align-middle {{ $treatment->status->badgeClasses() }}">{{ $treatment->status->label() }}</span>
@@ -32,8 +32,8 @@
                                 <span class="block text-xs font-normal text-slate-500">{{ $treatment->treated_areas }}</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-slate-600">{{ $treatment->professional->name }}</td>
-                        <td class="px-4 py-3 text-slate-600 tabular-nums">{{ $treatment->photos_count ?: '—' }}</td>
+                        <td data-label="Profissional" class="px-4 py-3 text-slate-600">{{ $treatment->professional->name }}</td>
+                        <td data-label="Fotos" class="px-4 py-3 text-slate-600 tabular-nums">{{ $treatment->photos_count ?: '—' }}</td>
                     </tr>
                 @empty
                     <tr>
