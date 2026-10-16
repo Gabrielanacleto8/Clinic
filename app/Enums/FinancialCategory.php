@@ -40,7 +40,7 @@ enum FinancialCategory: string
 
     /**
      * Categorias que podem ser escolhidas em um lançamento manual do tipo dado.
-     * "Atendimento" fica de fora: só nasce da finalização de um atendimento.
+     * "Atendimento" fica de fora: só nasce do registro de um atendimento.
      *
      * @return array<string, string>
      */

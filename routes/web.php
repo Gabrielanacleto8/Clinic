@@ -20,10 +20,8 @@ use App\Http\Controllers\StockInvoiceController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\TreatmentDocumentController;
-use App\Http\Controllers\TreatmentFinalizationController;
 use App\Http\Controllers\TreatmentNoteController;
 use App\Http\Controllers\TreatmentPhotoController;
-use App\Http\Controllers\TreatmentQueueController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -66,10 +64,9 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             ->withTrashed()
             ->name('patients.restore');
 
-        // Atendimentos: quem está em atendimento e quem espera a vez.
-        Route::get('atendimentos', [TreatmentQueueController::class, 'index'])->name('treatments.index');
-
-        // "Novo atendimento" do Início: o paciente é escolhido no próprio formulário.
+        // Atendimentos registrados. O diálogo "Registrar atendimento" envia para
+        // cá: o paciente é escolhido no próprio formulário.
+        Route::get('atendimentos', [TreatmentController::class, 'index'])->name('treatments.index');
         Route::post('atendimentos', [TreatmentController::class, 'storeForChosenPatient'])->name('treatments.store');
 
         // Prontuário. scopeBindings garante o encadeamento: o atendimento tem
@@ -82,7 +79,7 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             Route::resource('atendimentos', TreatmentController::class)
                 ->parameters(['atendimentos' => 'treatment'])
                 ->names('treatments')
-                ->except(['index']);
+                ->only(['create', 'store', 'show']);
 
             Route::post('atendimentos/{treatment}/fotos', [TreatmentPhotoController::class, 'store'])->name('treatments.photos.store');
             Route::get('atendimentos/{treatment}/fotos/{photo}', [TreatmentPhotoController::class, 'show'])->name('treatments.photos.show');
@@ -92,8 +89,6 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             Route::get('atendimentos/{treatment}/documentos/{document}', [TreatmentDocumentController::class, 'show'])->name('treatments.documents.show');
             Route::delete('atendimentos/{treatment}/documentos/{document}', [TreatmentDocumentController::class, 'destroy'])->name('treatments.documents.destroy');
 
-            Route::get('atendimentos/{treatment}/finalizar', [TreatmentFinalizationController::class, 'create'])->name('treatments.finalization.create');
-            Route::post('atendimentos/{treatment}/finalizar', [TreatmentFinalizationController::class, 'store'])->name('treatments.finalization.store');
             Route::post('atendimentos/{treatment}/evolucoes', [TreatmentNoteController::class, 'store'])->name('treatments.notes.store');
         });
 

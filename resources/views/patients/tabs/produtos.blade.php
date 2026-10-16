@@ -5,7 +5,7 @@
 <section class="card mt-4 relative overflow-x-auto" aria-labelledby="produtos-utilizados">
     <h2 id="produtos-utilizados" class="sr-only">Produtos utilizados</h2>
     @if ($records->isEmpty())
-        <p class="px-4 py-10 text-center text-sm text-slate-500">Nenhum produto aplicado em atendimentos finalizados.</p>
+        <p class="px-4 py-10 text-center text-sm text-slate-500">Nenhum produto aplicado em atendimentos.</p>
     @else
         <table class="table-stack w-full min-w-2xl text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">

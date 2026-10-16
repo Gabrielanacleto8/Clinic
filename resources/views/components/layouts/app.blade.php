@@ -8,7 +8,7 @@
         'Módulos' => [
             ['label' => 'Início', 'route' => 'home', 'active' => 'home', 'icon' => 'home', 'can' => null],
             ['label' => 'Agenda', 'route' => 'agenda.index', 'active' => ['agenda.*', 'appointments.*'], 'icon' => 'calendar', 'can' => ['viewAny', App\Models\Appointment::class]],
-            ['label' => 'Atendimentos', 'route' => 'treatments.index', 'active' => 'treatments.index', 'icon' => 'activity', 'can' => ['viewQueue', App\Models\Treatment::class]],
+            ['label' => 'Atendimentos', 'route' => 'treatments.index', 'active' => 'treatments.index', 'icon' => 'activity', 'can' => ['viewAny', App\Models\Treatment::class]],
             ['label' => 'Pacientes', 'route' => 'patients.index', 'active' => 'patients.*', 'icon' => 'patients', 'can' => ['viewAny', App\Models\Patient::class]],
             ['label' => 'Procedimentos', 'route' => 'procedures.index', 'active' => 'procedures.*', 'icon' => 'clipboard', 'can' => ['viewAny', App\Models\Procedure::class]],
             ['label' => 'Estoque', 'route' => 'products.index', 'active' => ['products.*', 'stock.*'], 'icon' => 'box', 'can' => ['viewAny', App\Models\Product::class]],

@@ -9,7 +9,7 @@
     $cards = array_filter([
         $todayAppointments !== null ? ['Atendimentos do dia', $activeToday->count(), $activeToday->whereIn('status', AppointmentStatus::open())->count().' aguardando', route('agenda.index')] : null,
         isset($totals['patients']) ? ['Pacientes cadastrados', number_format($totals['patients'], 0, ',', '.'), 'Cadastros ativos', route('patients.index')] : null,
-        isset($totals['finalized_treatments']) ? ['Atendimentos realizados', $totals['finalized_treatments'], 'Finalizados neste mês', null] : null,
+        isset($totals['treatments']) ? ['Atendimentos realizados', $totals['treatments'], 'Registrados neste mês', route('treatments.index', ['de' => $today->startOfMonth()->format('Y-m-d')])] : null,
         isset($totals['revenue']) ? ['Faturamento do período', LocalizedDecimal::money($totals['revenue']), 'Receitas lançadas neste mês', route('finance.index')] : null,
         isset($totals['low_stock']) ? ['Estoque baixo', $totals['low_stock'], $totals['low_stock'] === 1 ? 'Produto no mínimo ou abaixo' : 'Produtos no mínimo ou abaixo', route('products.index', ['situacao' => 'baixo'])] : null,
         isset($totals['expiring_batches']) ? ['Próximos do vencimento', $totals['expiring_batches'], 'Lotes vencidos ou vencendo', route('products.index', ['situacao' => 'vencendo'])] : null,
@@ -26,7 +26,7 @@
                 <a href="{{ route('appointments.create') }}" @class(['btn', $treatmentForm ? 'btn-secondary' : 'btn-primary'])>Novo agendamento</a>
             @endcan
             @if ($treatmentForm)
-                <button type="button" class="btn btn-primary" data-dialog-open="{{ $treatmentForm['scope'] }}">Novo atendimento</button>
+                <button type="button" class="btn btn-primary" data-dialog-open="{{ $treatmentForm['scope'] }}">Registrar atendimento</button>
             @endif
         </div>
     </div>
@@ -133,11 +133,6 @@
     @endif
 
     @if ($treatmentForm)
-        <x-dialog :id="$treatmentForm['scope']" title="Novo atendimento" size="lg">
-            <p class="text-sm text-slate-600">O atendimento fica em andamento até ser finalizado. Fotos, documentos e a cobrança vêm depois de salvar.</p>
-            <form method="POST" action="{{ route('treatments.store') }}" class="mt-4 space-y-5" novalidate>
-                @include('treatments._form', $treatmentForm)
-            </form>
-        </x-dialog>
+        @include('treatments._dialog')
     @endif
 </x-layouts.app>

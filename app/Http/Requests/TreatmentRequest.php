@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\AppointmentStatus;
+use App\Enums\PaymentMethod;
 use App\Enums\Permission;
 use App\Enums\UserRole;
 use App\Models\Appointment;
@@ -11,43 +11,49 @@ use App\Models\ProductBatch;
 use App\Models\Treatment;
 use App\Models\User;
 use App\Services\RolePermissions;
+use App\Services\TreatmentRecorder;
 use App\Support\ClinicTime;
+use App\Support\InstallmentPlan;
 use App\Support\LocalizedDecimal;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Usado tanto no registro quanto na edição de atendimentos em andamento.
+ * Registro de um atendimento: o que foi feito, os produtos usados e a cobrança.
  */
 class TreatmentRequest extends FormRequest
 {
     public const MAX_PRODUCTS = 10;
 
-    public const APPOINTMENT_NOT_READY = 'Este agendamento não pode ser iniciado. Confirme a chegada do paciente na agenda e tente de novo.';
-
     public function authorize(): bool
     {
-        $treatment = $this->route('treatment');
-
-        return $treatment instanceof Treatment
-            ? $this->user()->can('update', $treatment)
-            : $this->user()->can('create', Treatment::class);
+        return $this->user()->can('create', Treatment::class);
     }
 
     protected function prepareForValidation(): void
     {
-        if (! is_array($this->input('products'))) {
-            return;
-        }
-
-        // Quantidades digitadas no padrão brasileiro.
         $this->merge([
-            'products' => array_map(
-                fn ($row) => is_array($row) ? [...$row, 'quantity' => LocalizedDecimal::normalize($row['quantity'] ?? null)] : $row,
-                $this->input('products'),
-            ),
+            'amount' => LocalizedDecimal::normalize($this->input('amount')),
+            // Checkbox desmarcado não é enviado pelo navegador.
+            'first_installment_paid' => $this->boolean('first_installment_paid'),
         ]);
+
+        if (is_array($this->input('products'))) {
+            // Quantidades digitadas no padrão brasileiro.
+            $this->merge([
+                'products' => array_map(
+                    fn ($row) => is_array($row) ? [...$row, 'quantity' => LocalizedDecimal::normalize($row['quantity'] ?? null)] : $row,
+                    $this->input('products'),
+                ),
+            ]);
+        }
+    }
+
+    private function hasCharge(): bool
+    {
+        return is_numeric($this->input('amount')) && (float) $this->input('amount') > 0;
     }
 
     /**
@@ -55,19 +61,12 @@ class TreatmentRequest extends FormRequest
      */
     public function rules(): array
     {
-        $treatment = $this->route('treatment');
+        // Sem cobrança (cortesia, retorno), os dados de pagamento não se aplicam.
+        $whenCharged = $this->hasCharge() ? 'required' : 'nullable';
 
         return [
             'performed_at' => ['required', 'date_format:'.ClinicTime::INPUT_FORMAT],
-            'procedure_id' => [
-                'required',
-                'integer',
-                // Só procedimentos ativos, ou o que o atendimento já usa.
-                Rule::exists(Procedure::class, 'id')->where(fn ($query) => $query->where(
-                    fn ($inner) => $inner->where('is_active', true)
-                        ->when($treatment?->procedure_id, fn ($q, int $current) => $q->orWhere('id', $current)),
-                )),
-            ],
+            'procedure_id' => ['required', 'integer', Rule::exists(Procedure::class, 'id')->where('is_active', true)],
             'treated_areas' => ['nullable', 'string', 'max:255'],
             'assessment' => ['nullable', 'string', 'max:5000'],
             'description' => ['required', 'string', 'max:10000'],
@@ -102,30 +101,38 @@ class TreatmentRequest extends FormRequest
                 ),
             ],
             'products.*.quantity' => ['nullable', 'required_with:products.*.product_batch_id', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'],
+
+            'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999.99'],
+            'payment_method' => [$whenCharged, Rule::enum(PaymentMethod::class)],
+            'installments' => [$whenCharged, 'integer', 'min:1', 'max:'.InstallmentPlan::MAX_INSTALLMENTS],
+            'first_due_date' => [$whenCharged, 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
+            'first_installment_paid' => ['required', 'boolean'],
         ];
     }
 
     /**
-     * Agendamento que originou o atendimento: tem de ser deste paciente,
-     * estar com a chegada confirmada, sem outro atendimento e não ser de um dia futuro.
-     * Na edição não se troca nem se inclui agendamento.
+     * Agendamento que o atendimento encerra: tem de ser deste paciente e
+     * estar aberto para receber o registro.
      *
      * @return list<mixed>
      */
     protected function appointmentRules(): array
     {
-        if ($this->route('treatment') instanceof Treatment) {
-            return ['prohibited'];
-        }
-
         return [
+            'bail',
             'nullable',
             'integer',
-            Rule::exists(Appointment::class, 'id')
-                ->where('patient_id', $this->route('patient')->getKey())
-                ->where('status', AppointmentStatus::Confirmed->value)
-                ->whereNull('treatment_id')
-                ->where(fn ($query) => $query->where('scheduled_at', '<=', ClinicTime::dayBounds(ClinicTime::today())[1])),
+            function (string $attribute, mixed $value, Closure $fail): void {
+                $open = Appointment::query()
+                    ->whereKey((int) $value)
+                    ->where('patient_id', $this->route('patient')->getKey())
+                    ->openForTreatment()
+                    ->exists();
+
+                if (! $open) {
+                    $fail(TreatmentRecorder::APPOINTMENT_NOT_OPEN);
+                }
+            },
         ];
     }
 
@@ -177,6 +184,26 @@ class TreatmentRequest extends FormRequest
     }
 
     /**
+     * Dados de pagamento prontos para o TreatmentRecorder, ou nulo quando não há cobrança.
+     *
+     * @return array{amount: string, payment_method: PaymentMethod, installments: int, first_due_date: string, first_installment_paid: bool}|null
+     */
+    public function payment(): ?array
+    {
+        if (! $this->hasCharge()) {
+            return null;
+        }
+
+        return [
+            'amount' => (string) $this->validated('amount'),
+            'payment_method' => PaymentMethod::from($this->validated('payment_method')),
+            'installments' => (int) $this->validated('installments'),
+            'first_due_date' => $this->validated('first_due_date'),
+            'first_installment_paid' => $this->boolean('first_installment_paid'),
+        ];
+    }
+
+    /**
      * @return array<string, string>
      */
     public function attributes(): array
@@ -194,6 +221,10 @@ class TreatmentRequest extends FormRequest
             'products' => 'produtos',
             'products.*.product_batch_id' => 'produto',
             'products.*.quantity' => 'quantidade',
+            'amount' => 'valor do atendimento',
+            'payment_method' => 'forma de pagamento',
+            'installments' => 'número de parcelas',
+            'first_due_date' => 'primeiro vencimento',
         ];
     }
 
@@ -205,10 +236,10 @@ class TreatmentRequest extends FormRequest
         return [
             'performed_at.date_format' => 'Informe uma data e hora de atendimento válidas.',
             'return_date.date_format' => 'Informe uma data de retorno válida.',
-            'appointment_id.exists' => self::APPOINTMENT_NOT_READY,
             'products.*.product_batch_id.exists' => 'Este lote não existe, está vencido ou é de um produto inativo.',
             'products.*.product_batch_id.distinct' => 'Este lote está repetido na lista.',
             'products.*.quantity.required_with' => 'Informe a quantidade utilizada deste produto.',
+            'amount.numeric' => 'Informe o valor em reais, como 850,00. Use 0 para atendimento sem cobrança.',
         ];
     }
 }

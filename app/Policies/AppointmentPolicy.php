@@ -31,9 +31,8 @@ class AppointmentPolicy
         return $user->hasPermission(Permission::AgendaManage);
     }
 
-    public function startTreatment(User $user, Appointment $appointment): bool
+    public function recordTreatment(User $user, Appointment $appointment): bool
     {
-        // Só depois de confirmada a chegada do paciente.
-        return $user->hasPermission(Permission::RecordsManage) && $appointment->isReadyForTreatment();
+        return $user->hasPermission(Permission::RecordsManage) && $appointment->isOpenForTreatment();
     }
 }

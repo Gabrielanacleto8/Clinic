@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\AppointmentStatus;
 use App\Enums\FinancialEntryType;
 use App\Enums\Permission;
-use App\Enums\TreatmentStatus;
 use App\Models\Appointment;
 use App\Models\Product;
 use App\Models\ProductBatch;
@@ -26,7 +25,7 @@ class DashboardMetrics
     /**
      * Totais do mês em uma única consulta, montada com as partes que o usuário pode ver.
      *
-     * @return array<string, float|int> Chaves possíveis: patients, finalized_treatments, revenue, low_stock, expiring_batches.
+     * @return array<string, float|int> Chaves possíveis: patients, treatments, revenue, low_stock, expiring_batches.
      */
     public function totals(User $user): array
     {
@@ -39,8 +38,8 @@ class DashboardMetrics
         }
 
         if ($user->hasPermission(Permission::RecordsView)) {
-            $selects[] = '(select count(*) from treatments where deleted_at is null and status = ? and finalized_at between ? and ?) as finalized_treatments';
-            array_push($bindings, TreatmentStatus::Finalized->value, $month->utc(), $month->endOfMonth()->utc());
+            $selects[] = '(select count(*) from treatments where deleted_at is null and performed_at between ? and ?) as treatments';
+            array_push($bindings, $month->utc(), $month->endOfMonth()->utc());
         }
 
         if ($user->hasPermission(Permission::FinanceView)) {

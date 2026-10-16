@@ -53,7 +53,7 @@ class StockLedger
     }
 
     /**
-     * Consumo em um atendimento finalizado. O profissional é o do atendimento.
+     * Consumo em um atendimento. O profissional é o do atendimento.
      *
      * @throws InsufficientStockException
      */

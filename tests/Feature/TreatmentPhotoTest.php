@@ -307,30 +307,37 @@ class TreatmentPhotoTest extends TestCase
         $this->assertNotSoftDeleted($photo);
     }
 
-    public function test_only_who_can_edit_the_treatment_can_add_or_remove_photos(): void
+    public function test_any_professional_adds_photos_but_only_admin_removes_them(): void
     {
         $photo = $this->uploadOne();
         $file = fn () => $this->payload([UploadedFile::fake()->image('nova.jpg', 50, 50)]);
 
-        // Recepção: nada. Outro profissional: vê, mas não altera.
-        foreach ([User::factory()->create(), User::factory()->professional()->create()] as $user) {
-            $this->actingAs($user);
-            $this->post("{$this->url}/fotos", $file())->assertForbidden();
-            $this->delete("{$this->url}/fotos/{$photo->id}")->assertForbidden();
+        // Recepção: nada.
+        $this->actingAs(User::factory()->create());
+        $this->post("{$this->url}/fotos", $file())->assertForbidden();
+        $this->delete("{$this->url}/fotos/{$photo->id}")->assertForbidden();
+
+        // O registro é histórico permanente: nem quem enviou remove.
+        foreach ([$this->author, User::factory()->professional()->create()] as $professional) {
+            $this->actingAs($professional)->delete("{$this->url}/fotos/{$photo->id}")->assertForbidden();
         }
 
         $this->assertSame(1, TreatmentAttachment::count());
-        $this->get($this->url)->assertOk()->assertDontSee('Adicionar fotos')->assertDontSee('Remover');
+        $this->assertNotSoftDeleted($photo);
 
-        $this->actingAs(User::factory()->admin()->create())->post("{$this->url}/fotos", $file())->assertSessionHasNoErrors();
+        // Um colega acrescenta, por exemplo, a foto do retorno.
+        $this->get($this->url)->assertOk()->assertSee('Adicionar fotos')->assertDontSee('Remover');
+        $this->post("{$this->url}/fotos", $file())->assertSessionHasNoErrors();
         $this->assertSame(2, TreatmentAttachment::count());
+
+        $this->actingAs(User::factory()->admin()->create())->get($this->url)->assertSee('Remover');
     }
 
     public function test_removed_photo_disappears_but_the_file_is_kept(): void
     {
         $photo = $this->uploadOne();
 
-        $this->delete("{$this->url}/fotos/{$photo->id}")->assertRedirect($this->url);
+        $this->actingAs(User::factory()->admin()->create())->delete("{$this->url}/fotos/{$photo->id}")->assertRedirect($this->url);
 
         $this->assertSoftDeleted($photo);
         Storage::disk('patient_photos')->assertExists($photo->path);

@@ -17,7 +17,7 @@
             <x-form.select scope="stock-exit" id="exit-batch" name="product_batch_id" label="Lote" :options="$batchOptions" required placeholder="Selecione" />
             <x-form.input scope="stock-exit" id="exit-quantity" name="quantity" :label="'Quantidade ('.$unit.')'" required inputmode="decimal" autocomplete="off" />
             <x-form.input scope="stock-exit" id="exit-reason" name="reason" label="Motivo" required maxlength="255" autocomplete="off" placeholder="Ex.: devolução ao fornecedor, uso interno"
-                          hint="O uso em atendimentos é baixado automaticamente ao finalizar o atendimento." />
+                          hint="O uso em atendimentos é baixado automaticamente ao registrar o atendimento." />
 
             <div class="flex justify-end gap-2 pt-2">
                 <button type="button" class="btn btn-secondary" data-dialog-close>Cancelar</button>

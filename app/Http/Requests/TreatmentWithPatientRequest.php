@@ -6,10 +6,10 @@ use App\Models\Patient;
 use Illuminate\Validation\Rule;
 
 /**
- * Atendimento registrado pelo "Novo atendimento" do Início: o paciente é
+ * Atendimento registrado pelo diálogo "Registrar atendimento": o paciente é
  * escolhido no próprio formulário e o registro não parte de um agendamento.
  */
-class StartTreatmentRequest extends TreatmentRequest
+class TreatmentWithPatientRequest extends TreatmentRequest
 {
     /**
      * @return array<string, list<mixed>>

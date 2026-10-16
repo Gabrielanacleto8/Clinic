@@ -119,7 +119,7 @@ class AppointmentController extends Controller
 
     /**
      * Confirmar presença, cancelar, marcar falta ou reabrir. "Atendido" não
-     * entra aqui: só é definido quando o atendimento é finalizado.
+     * entra aqui: só é definido quando o atendimento é registrado.
      */
     public function status(Request $request, Appointment $appointment): RedirectResponse
     {

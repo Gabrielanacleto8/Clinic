@@ -8,7 +8,7 @@ use LogicException;
 
 /**
  * Evolução ou adendo de um atendimento. Só é inserido, nunca alterado: é a
- * forma de acrescentar informação a um atendimento finalizado.
+ * forma de acrescentar informação a um atendimento registrado.
  */
 class TreatmentNote extends Model
 {

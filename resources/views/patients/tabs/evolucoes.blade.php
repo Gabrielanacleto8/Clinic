@@ -3,7 +3,7 @@
     <h2 id="evolucoes-do-paciente" class="sr-only">Evoluções</h2>
     @if ($records->isEmpty())
         <p class="py-6 text-center text-sm text-slate-500">
-            Nenhuma evolução registrada. Elas são acrescentadas na página de um atendimento finalizado.
+            Nenhuma evolução registrada. Elas são acrescentadas na página do atendimento.
         </p>
     @else
         <ol class="space-y-4">

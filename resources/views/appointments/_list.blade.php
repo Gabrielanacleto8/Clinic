@@ -43,18 +43,10 @@
 
             <div class="flex flex-wrap items-center gap-1.5">
                 @if ($appointment->isOpen())
-                    @if ($appointment->treatment)
-                        @can('view', $appointment->treatment)
-                            <a href="{{ route('patients.treatments.show', [$patient, $appointment->treatment]) }}" class="btn btn-primary {{ $small }}">Continuar atendimento</a>
-                        @endcan
-                    @else
-                        @can('startTreatment', $appointment)
-                            {{-- Agendamento de dia futuro ainda não pode virar atendimento. --}}
-                            @if (ClinicTime::format($appointment->scheduled_at, 'Y-m-d') <= ClinicTime::today())
-                                <a href="{{ route('patients.treatments.create', [$patient, 'agendamento' => $appointment->id]) }}" class="btn btn-primary {{ $small }}">Iniciar atendimento</a>
-                            @endif
-                        @endcan
-                    @endif
+                    {{-- Agendamento de dia futuro ainda não recebe o registro do atendimento. --}}
+                    @can('recordTreatment', $appointment)
+                        <a href="{{ route('patients.treatments.create', [$patient, 'agendamento' => $appointment->id]) }}" class="btn btn-primary {{ $small }}">Registrar atendimento</a>
+                    @endcan
 
                     @can('changeStatus', $appointment)
                         @if ($appointment->status === AppointmentStatus::Scheduled)

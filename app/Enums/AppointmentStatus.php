@@ -12,7 +12,7 @@ enum AppointmentStatus: string
 
     /**
      * Situações em que o paciente ainda é esperado: o horário segue reservado
-     * e o agendamento pode virar atendimento.
+     * e o atendimento ainda pode ser registrado.
      *
      * @return list<self>
      */
@@ -23,7 +23,7 @@ enum AppointmentStatus: string
 
     /**
      * Mudanças que um usuário pode fazer a partir desta situação. "Atendido"
-     * nunca aparece: só nasce da finalização do atendimento.
+     * nunca aparece: só nasce do registro do atendimento.
      *
      * @return list<self>
      */

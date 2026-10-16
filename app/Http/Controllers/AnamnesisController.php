@@ -52,7 +52,7 @@ class AnamnesisController extends Controller
     }
 
     /**
-     * Avisos de saúde do paciente escolhido no "Novo atendimento" do Início:
+     * Avisos de saúde do paciente escolhido no diálogo "Registrar atendimento":
      * os mesmos que o formulário do prontuário mostra antes de um procedimento.
      */
     public function alerts(Patient $patient): JsonResponse

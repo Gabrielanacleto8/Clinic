@@ -3,9 +3,10 @@
 namespace App\Models;
 
 use App\Enums\AttachmentType;
-use App\Enums\TreatmentStatus;
+use App\Support\ClinicTime;
 use Database\Factories\TreatmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,9 +16,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Registro de um atendimento: o procedimento feito, por quem, quando e com
- * quais produtos. Nasce como rascunho e, ao ser finalizado, vira histórico
- * permanente. Paciente, profissional, procedimento, autor e situação ficam
- * fora do mass assignment: são definidos pelo controller, nunca pelo formulário.
+ * quais produtos. É gravado por TreatmentRecorder já com a baixa de estoque e
+ * o financeiro, e desde então é histórico permanente: informação nova entra
+ * em TreatmentNote. Paciente, profissional, procedimento e autor ficam fora
+ * do mass assignment: são definidos pelo controller, nunca pelo formulário.
  */
 #[Fillable(['performed_at', 'treated_areas', 'assessment', 'description', 'post_care', 'complications', 'return_date'])]
 class Treatment extends Model
@@ -36,9 +38,7 @@ class Treatment extends Model
     protected function casts(): array
     {
         return [
-            'status' => TreatmentStatus::class,
             'performed_at' => 'immutable_datetime',
-            'finalized_at' => 'immutable_datetime',
             'return_date' => 'immutable_date',
             'assessment' => 'encrypted',
             'description' => 'encrypted',
@@ -47,14 +47,16 @@ class Treatment extends Model
         ];
     }
 
-    public function isDraft(): bool
+    /**
+     * Atendimentos feitos entre dois dias do calendário da clínica. Qualquer dos limites pode faltar.
+     *
+     * @param  Builder<Treatment>  $query
+     */
+    public function scopePerformedBetween(Builder $query, ?string $from, ?string $until): void
     {
-        return $this->status === TreatmentStatus::Draft;
-    }
-
-    public function isFinalized(): bool
-    {
-        return $this->status === TreatmentStatus::Finalized;
+        $query
+            ->when($from, fn (Builder $inner, string $day) => $inner->where('performed_at', '>=', ClinicTime::dayBounds($day)[0]))
+            ->when($until, fn (Builder $inner, string $day) => $inner->where('performed_at', '<=', ClinicTime::dayBounds($day)[1]));
     }
 
     /**
@@ -116,7 +118,7 @@ class Treatment extends Model
     }
 
     /**
-     * Lançamento financeiro gerado na finalização, quando houve cobrança.
+     * Lançamento financeiro gerado no registro, quando houve cobrança.
      *
      * @return HasOne<FinancialEntry, $this>
      */
@@ -126,7 +128,7 @@ class Treatment extends Model
     }
 
     /**
-     * Agendamento que deu origem a este atendimento, se houver.
+     * Agendamento que este atendimento encerrou, se houver.
      *
      * @return HasOne<Appointment, $this>
      */

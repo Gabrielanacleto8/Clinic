@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AppointmentStatus;
+use App\Support\ClinicTime;
 use Carbon\CarbonImmutable;
 use Database\Factories\AppointmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -61,20 +62,24 @@ class Appointment extends Model
     }
 
     /**
-     * Pronto para virar atendimento: a chegada do paciente foi confirmada e
-     * nenhum atendimento foi iniciado ainda.
+     * Pode receber o registro do atendimento: segue em aberto, ainda sem
+     * atendimento e não é de um dia futuro.
      */
-    public function isReadyForTreatment(): bool
+    public function isOpenForTreatment(): bool
     {
-        return $this->status === AppointmentStatus::Confirmed && $this->treatment_id === null;
+        return $this->isOpen()
+            && $this->treatment_id === null
+            && $this->scheduled_at->lessThanOrEqualTo(ClinicTime::dayBounds(ClinicTime::today())[1]);
     }
 
     /**
      * @param  Builder<Appointment>  $query
      */
-    public function scopeReadyForTreatment(Builder $query): void
+    public function scopeOpenForTreatment(Builder $query): void
     {
-        $query->where('status', AppointmentStatus::Confirmed)->whereNull('treatment_id');
+        $query->whereIn('status', AppointmentStatus::open())
+            ->whereNull('treatment_id')
+            ->where('scheduled_at', '<=', ClinicTime::dayBounds(ClinicTime::today())[1]);
     }
 
     /**

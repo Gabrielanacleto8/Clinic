@@ -34,11 +34,9 @@ class PatientHistoryTest extends TestCase
         $this->url = "/pacientes/{$this->patient->id}";
     }
 
-    private function treatment(bool $finalized = true, array $attributes = []): Treatment
+    private function treatment(array $attributes = []): Treatment
     {
-        $factory = $finalized ? Treatment::factory()->finalized() : Treatment::factory();
-
-        return $factory->create(['patient_id' => $this->patient->id, ...$attributes]);
+        return Treatment::factory()->create(['patient_id' => $this->patient->id, ...$attributes]);
     }
 
     /**
@@ -76,41 +74,44 @@ class PatientHistoryTest extends TestCase
         $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'financeiro'], array_keys($admin->viewData('tabs')));
     }
 
-    public function test_products_tab_lists_only_what_was_applied_in_finalized_treatments(): void
+    public function test_products_tab_lists_what_was_applied_in_the_patients_treatments(): void
     {
         $toxin = ProductBatch::factory()->create(['product_id' => Product::factory()->create(['name' => 'Toxina 100 U'])->id, 'batch_code' => 'C1234', 'expires_on' => '2027-06-30']);
-        $draftOnly = ProductBatch::factory()->create(['product_id' => Product::factory()->create(['name' => 'Só no Rascunho'])->id]);
+        $discardedOnly = ProductBatch::factory()->create(['product_id' => Product::factory()->create(['name' => 'Só no Descartado'])->id]);
         $foreign = ProductBatch::factory()->create(['product_id' => Product::factory()->create(['name' => 'De Outro Paciente'])->id]);
 
-        $this->treatment(attributes: ['procedure_id' => $this->procedure('Toxina botulínica')->id, 'performed_at' => '2026-10-01 15:00:00'])
+        $this->treatment(['procedure_id' => $this->procedure('Toxina botulínica')->id, 'performed_at' => '2026-10-01 15:00:00'])
             ->products()->create(['product_batch_id' => $toxin->id, 'quantity' => 30]);
-        $this->treatment(finalized: false)->products()->create(['product_batch_id' => $draftOnly->id, 'quantity' => 1]);
-        Treatment::factory()->finalized()->create()->products()->create(['product_batch_id' => $foreign->id, 'quantity' => 1]);
+        // Rascunho descartado no tempo em que o atendimento tinha rascunho: nunca foi aplicado.
+        $discarded = $this->treatment();
+        $discarded->products()->create(['product_batch_id' => $discardedOnly->id, 'quantity' => 1]);
+        $discarded->delete();
+        Treatment::factory()->create()->products()->create(['product_batch_id' => $foreign->id, 'quantity' => 1]);
 
         $this->actingAs(User::factory()->professional()->create())->get("{$this->url}?aba=produtos")
             ->assertOk()
             ->assertSee('Toxina 100 U')->assertSee('C1234')->assertSee('val. 30/06/2027')->assertSee('30 un')->assertSee('01/10/2026')->assertSee('Toxina botulínica')
-            ->assertDontSee('Só no Rascunho')->assertDontSee('De Outro Paciente');
+            ->assertDontSee('Só no Descartado')->assertDontSee('De Outro Paciente');
     }
 
     public function test_photos_tab_gathers_the_photos_of_every_treatment(): void
     {
-        $first = $this->treatment(attributes: ['procedure_id' => $this->procedure('Toxina botulínica')->id]);
-        $second = $this->treatment(finalized: false, attributes: ['procedure_id' => $this->procedure('Preenchimento labial')->id]);
-        $discarded = $this->treatment(finalized: false);
+        $first = $this->treatment(['procedure_id' => $this->procedure('Toxina botulínica')->id]);
+        $second = $this->treatment(['procedure_id' => $this->procedure('Preenchimento labial')->id]);
+        $discarded = $this->treatment();
 
         $shown = [$this->attachment($first, ['caption' => 'Antes frontal']), $this->attachment($second, ['stage' => 'after', 'caption' => 'Depois perfil'])];
         $removed = $this->attachment($first, ['caption' => 'Removida']);
         $removed->delete();
         $document = $this->attachment($first, ['type' => AttachmentType::Document, 'caption' => 'Termo em PDF', 'stage' => null, 'thumbnail_path' => null]);
-        $ofDiscarded = $this->attachment($discarded, ['caption' => 'De rascunho descartado']);
+        $ofDiscarded = $this->attachment($discarded, ['caption' => 'De registro descartado']);
         $discarded->delete();
         $foreign = $this->attachment(Treatment::factory()->create(), ['caption' => 'De outro paciente']);
 
         $response = $this->actingAs(User::factory()->professional()->create())->get("{$this->url}?aba=fotos");
 
         $response->assertOk()->assertSee('Antes · Antes frontal')->assertSee('Depois · Depois perfil')->assertSee('Preenchimento labial')
-            ->assertDontSee('Removida')->assertDontSee('Termo em PDF')->assertDontSee('De rascunho descartado')->assertDontSee('De outro paciente');
+            ->assertDontSee('Removida')->assertDontSee('Termo em PDF')->assertDontSee('De registro descartado')->assertDontSee('De outro paciente');
 
         foreach ($shown as $photo) {
             $response->assertSee("atendimentos/{$photo->treatment_id}/fotos/{$photo->id}?miniatura=1", false);
@@ -120,11 +121,11 @@ class PatientHistoryTest extends TestCase
     public function test_notes_tab_lists_the_evolutions_newest_first(): void
     {
         $author = User::factory()->professional()->create(['name' => 'Dra. Helena']);
-        $treatment = $this->treatment(attributes: ['procedure_id' => $this->procedure('Toxina botulínica')->id]);
+        $treatment = $this->treatment(['procedure_id' => $this->procedure('Toxina botulínica')->id]);
 
         $treatment->notes()->create(['body' => 'Primeira evolução: edema leve.', 'user_id' => $author->id]);
         $treatment->notes()->create(['body' => 'Segunda evolução: edema resolvido.', 'user_id' => $author->id]);
-        Treatment::factory()->finalized()->create()->notes()->create(['body' => 'De outro paciente.', 'user_id' => $author->id]);
+        Treatment::factory()->create()->notes()->create(['body' => 'De outro paciente.', 'user_id' => $author->id]);
 
         $this->actingAs($author)->get("{$this->url}?aba=evolucoes")
             ->assertOk()

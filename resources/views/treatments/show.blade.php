@@ -10,45 +10,16 @@
     $canDetach = auth()->user()->can('detach', $treatment);
 @endphp
 <x-layouts.app :title="$treatment->procedure->name.' · '.$patient->name">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-            <a href="{{ route('patients.show', $patient) }}" class="text-sm text-slate-600 hover:underline">← {{ $patient->name }}</a>
-            <h1 class="mt-1 flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight">
-                {{ $treatment->procedure->name }}
-                <span class="badge {{ $treatment->status->badgeClasses() }}">{{ $treatment->status->label() }}</span>
-            </h1>
-            <p class="mt-1 text-sm text-slate-600">
-                {{ ClinicTime::format($treatment->performed_at, 'd/m/Y') }} às {{ ClinicTime::format($treatment->performed_at, 'H:i') }}
-                · {{ $treatment->professional->name }}
-            </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-            @can('delete', $treatment)
-                <form method="POST" action="{{ route('patients.treatments.destroy', [$patient, $treatment]) }}"
-                      data-confirm="Descartar este atendimento em andamento? Ele sai do prontuário e nada é baixado do estoque.">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger">Descartar</button>
-                </form>
-            @endcan
-            @can('update', $treatment)
-                <a href="{{ route('patients.treatments.edit', [$patient, $treatment]) }}" class="btn btn-secondary">Editar</a>
-            @endcan
-            @can('finalize', $treatment)
-                <a href="{{ route('patients.treatments.finalization.create', [$patient, $treatment]) }}" class="btn btn-primary">Finalizar atendimento</a>
-            @endcan
-        </div>
-    </div>
+    <a href="{{ route('patients.show', $patient) }}" class="text-sm text-slate-600 hover:underline">← {{ $patient->name }}</a>
+    <h1 class="mt-1 text-xl font-semibold tracking-tight">{{ $treatment->procedure->name }}</h1>
+    <p class="mt-1 text-sm text-slate-600">
+        {{ ClinicTime::format($treatment->performed_at, 'd/m/Y') }} às {{ ClinicTime::format($treatment->performed_at, 'H:i') }}
+        · {{ $treatment->professional->name }}
+    </p>
 
-    @if ($treatment->isDraft())
-        <p class="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="note">
-            Atendimento em andamento. O estoque e o financeiro só são atualizados quando ele for finalizado.
-        </p>
-    @else
-        <p class="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" role="note">
-            Finalizado em {{ ClinicTime::format($treatment->finalized_at) }}. O registro não pode mais ser alterado: novas informações entram como evolução.
-        </p>
-    @endif
+    <p class="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" role="note">
+        Registrado em {{ ClinicTime::format($treatment->created_at) }}. O registro não pode mais ser alterado: novas informações entram como evolução.
+    </p>
 
     <x-health-alerts :anamnesis="$patient->anamnesis" class="mt-6" />
 
@@ -91,9 +62,7 @@
     </div>
 
     <section class="card mt-6 relative overflow-x-auto">
-        <h2 class="px-6 pt-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">
-            Produtos {{ $treatment->isFinalized() ? 'utilizados' : 'a utilizar' }}
-        </h2>
+        <h2 class="px-6 pt-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">Produtos utilizados</h2>
         @if ($treatment->products->isEmpty())
             <p class="px-6 pt-4 pb-6 text-sm text-slate-600">Nenhum produto registrado.</p>
         @else
@@ -247,39 +216,33 @@
         @endif
     </section>
 
-    @if ($treatment->isFinalized())
-        <section class="card mt-6 p-6" aria-labelledby="evolucoes">
-            <h2 id="evolucoes" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Evoluções e adendos</h2>
+    <section class="card mt-6 p-6" aria-labelledby="evolucoes">
+        <h2 id="evolucoes" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Evoluções e adendos</h2>
 
-            @if ($treatment->notes->isEmpty())
-                <p class="mt-4 text-sm text-slate-600">Nenhuma evolução registrada.</p>
-            @else
-                <ol class="mt-4 space-y-4">
-                    @foreach ($treatment->notes as $note)
-                        <li class="rounded-lg border border-slate-200 px-4 py-3">
-                            <p class="text-xs text-slate-500">{{ ClinicTime::format($note->created_at) }} · {{ $note->author?->name ?? 'Usuário removido' }}</p>
-                            <p class="mt-1 text-sm whitespace-pre-line">{{ $note->body }}</p>
-                        </li>
-                    @endforeach
-                </ol>
-            @endif
+        @if ($treatment->notes->isEmpty())
+            <p class="mt-4 text-sm text-slate-600">Nenhuma evolução registrada.</p>
+        @else
+            <ol class="mt-4 space-y-4">
+                @foreach ($treatment->notes as $note)
+                    <li class="rounded-lg border border-slate-200 px-4 py-3">
+                        <p class="text-xs text-slate-500">{{ ClinicTime::format($note->created_at) }} · {{ $note->author?->name ?? 'Usuário removido' }}</p>
+                        <p class="mt-1 text-sm whitespace-pre-line">{{ $note->body }}</p>
+                    </li>
+                @endforeach
+            </ol>
+        @endif
 
-            @can('addNote', $treatment)
-                <form method="POST" action="{{ route('patients.treatments.notes.store', [$patient, $treatment]) }}" class="mt-6 border-t border-slate-200 pt-6" novalidate>
-                    @csrf
-                    <x-form.textarea name="body" label="Nova evolução" required rows="3" maxlength="5000"
-                                     hint="Como o paciente evoluiu, correções ao registro ou informações do retorno. Depois de salva, não pode ser editada." />
-                    <div class="mt-4 flex justify-end">
-                        <button type="submit" class="btn btn-primary">Registrar evolução</button>
-                    </div>
-                </form>
-            @endcan
-        </section>
-    @endif
-
-    <p class="mt-6 text-xs text-slate-500">
-        Registrado em {{ ClinicTime::format($treatment->created_at) }} · Última atualização em {{ ClinicTime::format($treatment->updated_at) }}
-    </p>
+        @can('addNote', $treatment)
+            <form method="POST" action="{{ route('patients.treatments.notes.store', [$patient, $treatment]) }}" class="mt-6 border-t border-slate-200 pt-6" novalidate>
+                @csrf
+                <x-form.textarea name="body" label="Nova evolução" required rows="3" maxlength="5000"
+                                 hint="Como o paciente evoluiu, correções ao registro ou informações do retorno. Depois de salva, não pode ser editada." />
+                <div class="mt-4 flex justify-end">
+                    <button type="submit" class="btn btn-primary">Registrar evolução</button>
+                </div>
+            </form>
+        @endcan
+    </section>
 
     @if ($canAttach)
         <x-dialog id="document-upload" title="Adicionar documento">

@@ -51,8 +51,19 @@ final class LocalizedDecimal
             return '';
         }
 
-        $formatted = number_format((float) $value, 3, ',', '.');
+        return self::withoutTrailingZeros(number_format((float) $value, 3, ',', '.'));
+    }
 
+    /**
+     * Quantidade para preencher um campo de formulário (sem separador de milhar).
+     */
+    public static function quantityInput(int|float|string|null $value): ?string
+    {
+        return $value === null ? null : self::withoutTrailingZeros(number_format((float) $value, 3, ',', ''));
+    }
+
+    private static function withoutTrailingZeros(string $formatted): string
+    {
         return rtrim(rtrim($formatted, '0'), ',');
     }
 }

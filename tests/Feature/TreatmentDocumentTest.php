@@ -149,19 +149,27 @@ class TreatmentDocumentTest extends TestCase
         $this->assertNotSoftDeleted($document);
     }
 
-    public function test_only_who_is_responsible_for_a_draft_can_add_or_remove_documents(): void
+    public function test_any_professional_adds_documents_but_only_admin_removes_them(): void
     {
         $document = $this->uploadOne();
 
-        foreach ([User::factory()->create(), User::factory()->professional()->create()] as $user) {
-            $this->actingAs($user);
-            $this->post("{$this->url}/documentos", ['document' => $this->pdf(), 'title' => 'Outro'])->assertForbidden();
-            $this->delete("{$this->url}/documentos/{$document->id}")->assertForbidden();
+        $this->actingAs(User::factory()->create());
+        $this->post("{$this->url}/documentos", ['document' => $this->pdf(), 'title' => 'Outro'])->assertForbidden();
+        $this->delete("{$this->url}/documentos/{$document->id}")->assertForbidden();
+
+        // O registro é histórico permanente: nem quem enviou remove.
+        foreach ([$this->author, User::factory()->professional()->create()] as $professional) {
+            $this->actingAs($professional)->delete("{$this->url}/documentos/{$document->id}")->assertForbidden();
         }
 
         $this->assertSame(1, TreatmentAttachment::count());
+        $this->assertNotSoftDeleted($document);
 
-        $this->actingAs($this->author)->delete("{$this->url}/documentos/{$document->id}")->assertRedirect($this->url);
+        // Um colega acrescenta, por exemplo, o termo assinado no retorno.
+        $this->post("{$this->url}/documentos", ['document' => $this->pdf(), 'title' => 'Termo do retorno'])->assertSessionHasNoErrors();
+        $this->assertSame(2, TreatmentAttachment::count());
+
+        $this->actingAs(User::factory()->admin()->create())->delete("{$this->url}/documentos/{$document->id}")->assertRedirect($this->url);
 
         // Remoção lógica: some das telas, o arquivo é mantido.
         $this->assertSoftDeleted($document);

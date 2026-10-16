@@ -81,8 +81,8 @@ class HomeTest extends TestCase
         Patient::factory()->create()->delete();
 
         $patient = Patient::first();
-        Treatment::factory()->finalized()->count(2)->create(['patient_id' => $patient->id, 'performed_at' => '2026-10-05 15:00:00']);
-        Treatment::factory()->finalized()->create(['patient_id' => $patient->id, 'performed_at' => '2026-09-20 15:00:00']);   // mês passado
+        Treatment::factory()->count(2)->create(['patient_id' => $patient->id, 'performed_at' => '2026-10-05 15:00:00']);
+        Treatment::factory()->create(['patient_id' => $patient->id, 'performed_at' => '2026-09-20 15:00:00']);   // mês passado
         Treatment::factory()->create(['patient_id' => $patient->id]);                                                             // rascunho
 
         FinancialEntry::factory()->withInstallment('500', '2026-10-10')->withInstallment('250', '2026-11-10', number: 2)->create(['issued_on' => '2026-10-02']);
@@ -100,7 +100,7 @@ class HomeTest extends TestCase
         $totals = $response->viewData('totals');
 
         $this->assertSame(3, $totals['patients']);                 // arquivado não conta
-        $this->assertSame(2, $totals['finalized_treatments']);     // só finalizados deste mês
+        $this->assertSame(2, $totals['treatments']);     // só os feitos neste mês
         $this->assertEquals(750.0, $totals['revenue']);            // receitas lançadas em outubro, todas as parcelas
         $this->assertSame(1, $totals['low_stock']);
         $this->assertSame(2, $totals['expiring_batches']);         // o que vence logo e o vencido; o zerado não
@@ -143,29 +143,27 @@ class HomeTest extends TestCase
         );
     }
 
-    public function test_only_clinical_staff_can_start_or_continue_a_treatment_from_home(): void
+    public function test_only_clinical_staff_can_register_a_treatment_from_home(): void
     {
         $appointment = $this->appointmentFor('Paciente Agendado', '2026-10-08 15:00');
-        $startUrl = route('patients.treatments.create', [$appointment->patient_id, 'agendamento' => $appointment->id]);
+        $registerUrl = route('patients.treatments.create', [$appointment->patient_id, 'agendamento' => $appointment->id]);
 
         $this->actingAs(User::factory()->create())->get('/')
             ->assertSee('Remarcar')->assertSee('Faltou')->assertSee('Confirmar presença')
-            ->assertDontSee('Iniciar atendimento')->assertDontSee($startUrl, false);
+            ->assertDontSee('Registrar atendimento')->assertDontSee($registerUrl, false);
 
-        // Sem a chegada confirmada, nem o profissional inicia o atendimento.
+        // O profissional registra direto do agendamento, com ou sem a presença confirmada.
         $this->actingAs(User::factory()->professional()->create())->get('/')
-            ->assertSee('Confirmar presença')->assertDontSee('Iniciar atendimento')->assertDontSee($startUrl, false);
+            ->assertSee('Confirmar presença')->assertSee('Registrar atendimento')->assertSee(e($registerUrl), false);
 
         $this->patch("/agendamentos/{$appointment->id}/situacao", ['status' => 'confirmed'])->assertSessionHasNoErrors();
 
-        $this->get('/')->assertSee('Iniciar atendimento')->assertSee(e($startUrl), false);
-
-        $this->actingAs(User::factory()->create())->get('/')->assertDontSee('Iniciar atendimento')->assertDontSee($startUrl, false);
+        $this->get('/')->assertSee(e($registerUrl), false);
     }
 
     public function test_closed_appointments_show_the_right_actions(): void
     {
-        $treatment = Treatment::factory()->finalized()->create();
+        $treatment = Treatment::factory()->create();
         $this->appointmentFor('Já Atendido', '2026-10-08 09:00', [
             'patient_id' => $treatment->patient_id, 'status' => AppointmentStatus::Completed, 'treatment_id' => $treatment->id,
         ]);
@@ -196,7 +194,7 @@ class HomeTest extends TestCase
         $this->get('/')->assertOk();
 
         // 16 agendamentos e 6 produtos em tela, com número fixo de consultas. Quatro
-        // delas são as listas do diálogo "Novo atendimento" (ver StartTreatmentFromHomeTest).
+        // delas são as listas do diálogo "Registrar atendimento" (ver TreatmentDialogTest).
         $this->assertLessThanOrEqual(20, count(DB::getQueryLog()));
     }
 

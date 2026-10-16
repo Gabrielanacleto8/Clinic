@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\TreatmentStatus;
 use App\Models\Patient;
 use App\Models\Procedure;
 use App\Models\Treatment;
@@ -25,21 +24,11 @@ class TreatmentFactory extends Factory
             'created_by' => fn (array $attributes) => $attributes['professional_id'],
             'performed_at' => fake()->dateTimeBetween('-1 year', '-1 day'),
             'procedure_id' => Procedure::factory(),
-            'status' => TreatmentStatus::Draft,
             'treated_areas' => fake()->randomElement(['Glabela e frontal', 'Lábios', 'Malar', 'Face completa', null]),
             'description' => fake()->sentence(12),
             'post_care' => 'Evitar exposição solar e atividade física por 24 horas.',
             'complications' => null,
             'return_date' => null,
         ];
-    }
-
-    public function finalized(): static
-    {
-        return $this->state([
-            'status' => TreatmentStatus::Finalized,
-            // Resolvido por último, já com a data de atendimento que o teste informar.
-            'finalized_at' => fn (array $attributes) => $attributes['performed_at'],
-        ]);
     }
 }

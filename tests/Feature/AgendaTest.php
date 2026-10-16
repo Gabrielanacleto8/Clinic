@@ -159,15 +159,15 @@ class AgendaTest extends TestCase
         }
 
         foreach (['11:00', '12:00', '14:00'] as $time) {
-            $started = $this->appointmentFor("Hoje {$time}", "2026-10-08 {$time}");
-            $started->treatment_id = Treatment::factory()->create(['patient_id' => $started->patient_id])->id;
-            $started->save();
+            $attended = $this->appointmentFor("Hoje {$time}", "2026-10-08 {$time}", ['status' => AppointmentStatus::Completed]);
+            $attended->treatment_id = Treatment::factory()->create(['patient_id' => $attended->patient_id])->id;
+            $attended->save();
         }
 
         $this->actingAs(User::factory()->professional()->create());
         DB::enableQueryLog();
 
-        $this->get('/agenda')->assertOk()->assertSee('Continuar atendimento');
+        $this->get('/agenda')->assertOk()->assertSee('Ver atendimento')->assertSee('Registrar atendimento');
 
         // Uma consulta para o mês, uma por relação carregada e uma para os
         // atendimentos do dia, mais sessão e permissões.
@@ -232,7 +232,7 @@ class AgendaTest extends TestCase
         );
     }
 
-    public function test_confirmed_appointments_keep_the_slot_and_can_start_a_treatment(): void
+    public function test_confirmed_appointments_keep_the_slot_and_can_receive_the_treatment(): void
     {
         $professional = User::factory()->professional()->create();
         $appointment = $this->appointmentFor('Confirmado', '2026-10-08 15:00', ['professional_id' => $professional->id, 'status' => AppointmentStatus::Confirmed]);
@@ -245,9 +245,9 @@ class AgendaTest extends TestCase
             'patient_id' => $other->id, 'professional_id' => $professional->id, 'scheduled_at' => '2026-10-08T15:10', 'duration_minutes' => 30,
         ])->assertSessionHasErrors(['scheduled_at' => AppointmentScheduler::CONFLICT_MESSAGE]);
 
-        // E pode ser remarcado e iniciado como qualquer agendamento em aberto.
+        // E pode ser remarcado e receber o atendimento como qualquer agendamento em aberto.
         $this->get("/agendamentos/{$appointment->id}/editar")->assertOk();
-        $this->get('/agenda')->assertSee('Iniciar atendimento');
+        $this->get('/agenda')->assertSee('Registrar atendimento');
         $this->get("/pacientes/{$appointment->patient_id}/atendimentos/novo?agendamento={$appointment->id}")->assertOk()->assertSee('Atendimento do agendamento');
     }
 }

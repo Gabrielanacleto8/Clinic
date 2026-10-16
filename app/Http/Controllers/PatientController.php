@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Enums\AttachmentType;
 use App\Enums\AuditAction;
 use App\Enums\Permission;
-use App\Enums\TreatmentStatus;
 use App\Http\Requests\PatientRequest;
 use App\Models\FinancialInstallment;
 use App\Models\Patient;
@@ -153,13 +152,11 @@ class PatientController extends Controller
                 'records' => $patient->treatments()->with(['professional:id,name', 'procedure:id,name'])->withCount('photos')
                     ->latest('performed_at')->paginate(10)->withQueryString(),
             ],
-            // Só o que foi de fato aplicado: produtos de atendimentos finalizados.
             'produtos' => [
                 'records' => TreatmentProduct::query()
                     ->select('treatment_products.*')
                     ->join('treatments', 'treatments.id', '=', 'treatment_products.treatment_id')
                     ->where($ofPatient)
-                    ->where('treatments.status', TreatmentStatus::Finalized)
                     ->with(['batch.product:id,name,unit', 'treatment:id,patient_id,procedure_id,performed_at', 'treatment.procedure:id,name'])
                     ->orderByDesc('treatments.performed_at')
                     ->orderBy('treatment_products.id')

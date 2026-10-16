@@ -36,8 +36,11 @@ enum AuditAction: string
 
     case AnamnesisUpdated = 'anamnesis.updated';
 
+    case TreatmentsListed = 'treatment.listed';
     case TreatmentViewed = 'treatment.viewed';
     case TreatmentCreated = 'treatment.created';
+    // Do tempo em que o atendimento tinha rascunho. Não são mais gravadas:
+    // ficam para a auditoria já registrada continuar legível.
     case TreatmentUpdated = 'treatment.updated';
     case TreatmentDiscarded = 'treatment.discarded';
     case TreatmentFinalized = 'treatment.finalized';

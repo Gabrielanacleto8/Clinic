@@ -3,8 +3,6 @@
 namespace Tests\Feature;
 
 use App\Enums\AuditAction;
-use App\Enums\TreatmentStatus;
-use App\Models\Appointment;
 use App\Models\AuditLog;
 use App\Models\FinancialEntry;
 use App\Models\Patient;
@@ -61,6 +59,7 @@ class TreatmentTest extends TestCase
                 ['product_batch_id' => $this->toxin->id, 'quantity' => '30'],
                 ['product_batch_id' => '', 'quantity' => ''],
             ],
+            'amount' => '0',
             ...$overrides,
         ];
     }
@@ -72,38 +71,35 @@ class TreatmentTest extends TestCase
 
         $this->get("{$base}/{$treatment->id}")->assertRedirect('/login');
         $this->post($base, $this->payload())->assertRedirect('/login');
-        $this->post("{$base}/{$treatment->id}/finalizar", ['amount' => '0'])->assertRedirect('/login');
 
         $this->actingAs(User::factory()->create());
 
         $this->get("{$base}/novo")->assertForbidden();
         $this->post($base, $this->payload())->assertForbidden();
         $this->get("{$base}/{$treatment->id}")->assertForbidden();
-        $this->get("{$base}/{$treatment->id}/editar")->assertForbidden();
-        $this->put("{$base}/{$treatment->id}", $this->payload())->assertForbidden();
-        $this->delete("{$base}/{$treatment->id}")->assertForbidden();
-        $this->get("{$base}/{$treatment->id}/finalizar")->assertForbidden();
-        $this->post("{$base}/{$treatment->id}/finalizar", ['amount' => '0'])->assertForbidden();
         $this->post("{$base}/{$treatment->id}/evolucoes", ['body' => 'Tentativa'])->assertForbidden();
 
         $this->assertSame(1, Treatment::count());
-        $this->assertTrue($treatment->refresh()->isDraft());
+        $this->assertSame(0, StockMovement::count());
     }
 
-    public function test_professional_registers_a_treatment_as_a_draft_that_touches_neither_stock_nor_finance(): void
+    public function test_professional_registers_a_treatment_in_a_single_step(): void
     {
         $user = User::factory()->professional()->create();
         $patient = Patient::factory()->create();
 
         $this->actingAs($user);
-        $this->get("/pacientes/{$patient->id}/atendimentos/novo")->assertOk()->assertSee('Toxina botulínica 100 U')->assertSee('lote C1234');
+        $this->get("/pacientes/{$patient->id}/atendimentos/novo")
+            ->assertOk()
+            ->assertSee('Toxina botulínica 100 U')
+            ->assertSee('lote C1234')
+            ->assertSee('name="amount"', false)
+            ->assertSee('Registrar atendimento');
 
         $this->post("/pacientes/{$patient->id}/atendimentos", $this->payload())->assertSessionHasNoErrors();
 
         $treatment = Treatment::with('products')->firstOrFail();
 
-        $this->assertSame(TreatmentStatus::Draft, $treatment->status);
-        $this->assertNull($treatment->finalized_at);
         $this->assertSame($patient->id, $treatment->patient_id);
         $this->assertSame($user->id, $treatment->professional_id);
         $this->assertSame($user->id, $treatment->created_by);
@@ -118,24 +114,47 @@ class TreatmentTest extends TestCase
         $this->assertSame($this->toxin->id, $treatment->products[0]->product_batch_id);
         $this->assertSame('30.000', $treatment->products[0]->quantity);
 
-        // Rascunho não baixa estoque nem gera lançamento.
-        $this->assertSame('300.000', $this->toxin->refresh()->quantity);
-        $this->assertSame(0, StockMovement::count());
+        // O estoque é baixado no próprio registro. Valor 0 não gera lançamento.
+        $this->assertSame('270.000', $this->toxin->refresh()->quantity);
+        $this->assertSame($treatment->id, StockMovement::sole()->treatment_id);
         $this->assertSame(0, FinancialEntry::count());
 
-        $this->assertDatabaseHas('audit_logs', ['action' => AuditAction::TreatmentCreated->value, 'user_id' => $user->id, 'auditable_id' => $treatment->id]);
+        $log = AuditLog::where('action', AuditAction::TreatmentCreated->value)->sole();
+        $this->assertSame([$user->id, $treatment->id], [$log->user_id, $log->auditable_id]);
+        $this->assertEquals(['patient_id' => $patient->id, 'products' => 1, 'charged' => false], $log->metadata);
 
         $this->get("/pacientes/{$patient->id}/atendimentos/{$treatment->id}")
             ->assertOk()
-            ->assertSee('Em andamento')
+            ->assertSee('Registrado em 08/10/2026')
             ->assertSee('Toxina botulínica')
             ->assertSee('01/10/2026')
             ->assertSee('14:30')
             ->assertSee('C1234')
             ->assertSee('30 un')
-            ->assertSee('Finalizar atendimento');
+            ->assertSee('Evoluções e adendos');
 
-        $this->get("/pacientes/{$patient->id}")->assertSee('Toxina botulínica')->assertSee('Glabela e frontal')->assertSee('Em andamento');
+        $this->get("/pacientes/{$patient->id}")->assertSee('Toxina botulínica')->assertSee('Glabela e frontal');
+    }
+
+    public function test_a_registered_treatment_cannot_be_edited_or_removed_by_anyone(): void
+    {
+        $author = User::factory()->professional()->create();
+        $treatment = Treatment::factory()->create(['professional_id' => $author->id, 'created_by' => $author->id, 'description' => 'Original']);
+        $url = "/pacientes/{$treatment->patient_id}/atendimentos/{$treatment->id}";
+
+        // Não existe rota de edição nem de exclusão, nem para o autor nem para o administrador.
+        foreach ([$author, User::factory()->admin()->create()] as $user) {
+            $this->actingAs($user);
+            $this->get("{$url}/editar")->assertNotFound();
+            $this->put($url, $this->payload(['description' => 'Adulterado']))->assertMethodNotAllowed();
+            $this->delete($url)->assertMethodNotAllowed();
+            $this->get($url)->assertOk()->assertDontSee('Editar')->assertDontSee('Descartar');
+        }
+
+        $treatment->refresh();
+
+        $this->assertSame('Original', $treatment->description);
+        $this->assertNotSoftDeleted($treatment);
     }
 
     public function test_clinical_text_is_encrypted_at_rest_and_hidden_from_serialization(): void
@@ -167,7 +186,7 @@ class TreatmentTest extends TestCase
 
         $this->actingAs($user)
             ->post("/pacientes/{$patient->id}/atendimentos", $this->payload([
-                'professional_id' => $other->id, 'created_by' => $other->id, 'patient_id' => 999, 'status' => 'finalized', 'finalized_at' => '2026-10-01 00:00:00',
+                'professional_id' => $other->id, 'created_by' => $other->id, 'patient_id' => 999,
             ]))
             ->assertSessionHasNoErrors();
 
@@ -176,9 +195,6 @@ class TreatmentTest extends TestCase
         $this->assertSame($user->id, $treatment->professional_id);
         $this->assertSame($user->id, $treatment->created_by);
         $this->assertSame($patient->id, $treatment->patient_id);
-        // A situação nunca vem do formulário.
-        $this->assertTrue($treatment->isDraft());
-        $this->assertNull($treatment->finalized_at);
     }
 
     public function test_admin_can_register_on_behalf_of_an_active_professional_only(): void
@@ -233,6 +249,7 @@ class TreatmentTest extends TestCase
         $this->post($url, $this->payload(['products' => array_fill(0, 11, ['product_batch_id' => '', 'quantity' => ''])]))->assertSessionHasErrors('products');
 
         $this->assertSame(0, Treatment::count());
+        $this->assertSame(0, StockMovement::count());
     }
 
     public function test_treatment_date_cannot_be_in_the_future_and_return_cannot_precede_it(): void
@@ -262,116 +279,55 @@ class TreatmentTest extends TestCase
         $this->assertSame('0.500', DB::table('treatment_products')->value('quantity'));
     }
 
-    public function test_typical_products_are_suggested_when_none_is_informed(): void
+    public function test_the_form_carries_what_each_procedure_fills_in_by_itself(): void
     {
-        $procedure = $this->procedure('Preenchimento labial');
+        $procedure = $this->procedure('Preenchimento labial', ['price' => 1850.5]);
         $filler = Product::factory()->create(['name' => 'Ácido hialurônico']);
         $needle = Product::factory()->create(['name' => 'Agulha 30G']);
         $absent = Product::factory()->create(['name' => 'Sem estoque']);
 
         $procedure->products()->sync([$filler->id => ['quantity' => 1], $needle->id => ['quantity' => 2.5], $absent->id => ['quantity' => 1]]);
 
-        // O sistema escolhe o lote utilizável que vence primeiro.
+        // O sistema sugere o lote utilizável que vence primeiro.
         ProductBatch::factory()->create(['product_id' => $filler->id, 'batch_code' => 'VENCIDO', 'expires_on' => '2026-10-01', 'quantity' => 5]);
         ProductBatch::factory()->create(['product_id' => $filler->id, 'batch_code' => 'ZERADO', 'expires_on' => '2026-11-01', 'quantity' => 0]);
         ProductBatch::factory()->create(['product_id' => $filler->id, 'batch_code' => 'DEPOIS', 'expires_on' => '2027-12-01', 'quantity' => 5]);
         $first = ProductBatch::factory()->create(['product_id' => $filler->id, 'batch_code' => 'PRIMEIRO', 'expires_on' => '2027-01-15', 'quantity' => 5]);
         $only = ProductBatch::factory()->create(['product_id' => $needle->id, 'batch_code' => 'UNICO', 'expires_on' => null, 'quantity' => 50]);
+        $plain = $this->procedure('Toxina botulínica', ['price' => 1200]);
 
         $patient = Patient::factory()->create();
 
-        $this->actingAs(User::factory()->professional()->create());
+        $response = $this->actingAs(User::factory()->professional()->create())->get("/pacientes/{$patient->id}/atendimentos/novo")
+            ->assertOk()
+            ->assertSee('data-procedure-defaults=', false)
+            ->assertSee('data-treatment-amount', false);
 
-        $this->post("/pacientes/{$patient->id}/atendimentos", $this->payload(['procedure_id' => $procedure->id, 'products' => []]))
-            ->assertSessionHas('success', 'Atendimento salvo. Os produtos padrão do procedimento foram sugeridos: confira antes de finalizar.');
+        $defaults = $response->viewData('procedureDefaults');
 
+        $this->assertSame('1850,50', $defaults[$procedure->id]['amount']);
         $this->assertEqualsCanonicalizing(
-            [[$first->id, '1.000'], [$only->id, '2.500']],
-            Treatment::firstOrFail()->products->map(fn ($used) => [$used->product_batch_id, $used->quantity])->all(),
+            [['product_batch_id' => $first->id, 'quantity' => '1'], ['product_batch_id' => $only->id, 'quantity' => '2,5']],
+            $defaults[$procedure->id]['products'],
         );
-
-        // Com produtos informados, nada é sugerido por cima.
-        $this->post("/pacientes/{$patient->id}/atendimentos", $this->payload(['procedure_id' => $procedure->id]));
-
-        $this->assertSame([$this->toxin->id], Treatment::latest('id')->firstOrFail()->products->pluck('product_batch_id')->all());
+        // Procedimento sem produtos típicos sugere só o valor.
+        $this->assertSame(['amount' => '1200,00', 'products' => []], $defaults[$plain->id]);
     }
 
-    public function test_only_the_responsible_professional_or_an_admin_can_edit_a_draft(): void
+    public function test_products_are_never_added_behind_the_users_back(): void
     {
-        $author = User::factory()->professional()->create();
-        $treatment = Treatment::factory()->create(['professional_id' => $author->id, 'created_by' => $author->id]);
-        $url = "/pacientes/{$treatment->patient_id}/atendimentos/{$treatment->id}";
-
-        // Outro profissional lê, mas não altera nem finaliza.
-        $this->actingAs(User::factory()->professional()->create());
-        $this->get($url)->assertOk()->assertDontSee('Editar')->assertDontSee('Finalizar atendimento')->assertDontSee('Descartar');
-        $this->get("{$url}/editar")->assertForbidden();
-        $this->put($url, $this->payload(['treated_areas' => 'Alterado por terceiro']))->assertForbidden();
-        $this->get("{$url}/finalizar")->assertForbidden();
-
-        $this->actingAs($author);
-        $this->get("{$url}/editar")->assertOk();
-        $this->put($url, $this->payload(['procedure_id' => $this->procedure('Preenchimento labial')->id]))->assertSessionHasNoErrors();
-        $this->assertSame('Preenchimento labial', $treatment->refresh()->procedure->name);
-
-        $this->actingAs(User::factory()->admin()->create());
-        $this->put($url, $this->payload(['treated_areas' => 'Corrigido pelo admin']))->assertSessionHasNoErrors();
-
-        $treatment->refresh();
-
-        $this->assertSame('Corrigido pelo admin', $treatment->treated_areas);
-        // Admin editando sem informar o profissional não rouba a autoria.
-        $this->assertSame($author->id, $treatment->professional_id);
-    }
-
-    public function test_update_audit_records_field_names_but_never_values(): void
-    {
-        $user = User::factory()->professional()->create();
+        $procedure = $this->procedure('Preenchimento labial');
+        $procedure->products()->sync([$this->toxin->product_id => ['quantity' => 5]]);
         $patient = Patient::factory()->create();
-        $url = "/pacientes/{$patient->id}/atendimentos";
-        $other = $this->batch('Toxina botulínica 100 U', 'OUTRO-LOTE', 100, '2027-08-31');
 
-        $this->actingAs($user);
-        $this->post($url, $this->payload());
-        $treatment = Treatment::firstOrFail();
+        // A sugestão é só do formulário: registrado sem produtos, nada é baixado.
+        $this->actingAs(User::factory()->professional()->create())
+            ->post("/pacientes/{$patient->id}/atendimentos", $this->payload(['procedure_id' => $procedure->id, 'products' => []]))
+            ->assertSessionHasNoErrors();
 
-        // Sem mudanças: nada é registrado.
-        $this->put("{$url}/{$treatment->id}", $this->payload())->assertSessionHasNoErrors();
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::TreatmentUpdated->value]);
-
-        $this->put("{$url}/{$treatment->id}", $this->payload([
-            'complications' => 'Edema sigiloso',
-            'products' => [['product_batch_id' => $other->id, 'quantity' => '30']],
-        ]))->assertSessionHasNoErrors();
-
-        $log = AuditLog::where('action', AuditAction::TreatmentUpdated->value)->sole();
-
-        $this->assertEqualsCanonicalizing(['complications', 'products'], $log->metadata['fields']);
-        $this->assertStringNotContainsString('sigiloso', (string) json_encode($log->metadata));
-        $this->assertSame([$other->id], $treatment->products()->pluck('product_batch_id')->all());
-    }
-
-    public function test_a_draft_can_be_discarded_by_its_owner_and_frees_the_appointment(): void
-    {
-        $author = User::factory()->professional()->create();
-        $treatment = Treatment::factory()->create(['professional_id' => $author->id, 'created_by' => $author->id]);
-        $appointment = Appointment::factory()->at('2026-10-08 12:00')->create(['patient_id' => $treatment->patient_id, 'treatment_id' => $treatment->id]);
-        $url = "/pacientes/{$treatment->patient_id}/atendimentos/{$treatment->id}";
-
-        $this->actingAs(User::factory()->professional()->create())->delete($url)->assertForbidden();
-        $this->assertNotSoftDeleted($treatment);
-
-        $this->actingAs($author)->delete($url)->assertRedirect(route('patients.show', $treatment->patient_id));
-
-        // Descartar não apaga: o registro continua guardado.
-        $this->assertSoftDeleted($treatment);
-        $this->get($url)->assertNotFound();
-        $this->assertDatabaseHas('audit_logs', ['action' => AuditAction::TreatmentDiscarded->value, 'auditable_id' => $treatment->id]);
-
-        // O agendamento volta a poder iniciar um atendimento.
-        $appointment->refresh();
-        $this->assertNull($appointment->treatment_id);
-        $this->assertTrue($appointment->isOpen());
+        $this->assertCount(0, Treatment::firstOrFail()->products);
+        $this->assertSame('300.000', $this->toxin->refresh()->quantity);
+        $this->assertSame(0, StockMovement::count());
     }
 
     public function test_a_treatment_is_only_reachable_through_its_own_patient(): void
@@ -382,11 +338,10 @@ class TreatmentTest extends TestCase
         $this->actingAs(User::factory()->admin()->create());
 
         $this->get("/pacientes/{$otherPatient->id}/atendimentos/{$treatment->id}")->assertNotFound();
-        $this->put("/pacientes/{$otherPatient->id}/atendimentos/{$treatment->id}", $this->payload())->assertNotFound();
-        $this->post("/pacientes/{$otherPatient->id}/atendimentos/{$treatment->id}/finalizar", ['amount' => '0'])->assertNotFound();
+        $this->post("/pacientes/{$otherPatient->id}/atendimentos/{$treatment->id}/evolucoes", ['body' => 'Do paciente errado'])->assertNotFound();
         $this->get("/pacientes/{$treatment->patient_id}/atendimentos/{$treatment->id}")->assertOk();
 
-        $this->assertTrue($treatment->refresh()->isDraft());
+        $this->assertSame(0, $treatment->notes()->count());
     }
 
     public function test_treatments_of_an_archived_patient_are_unreachable(): void

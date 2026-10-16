@@ -3,12 +3,12 @@
 namespace Tests\Feature;
 
 use App\Enums\AuditAction;
-use App\Enums\TreatmentStatus;
 use App\Models\Appointment;
 use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\StockMovement;
 use App\Models\Treatment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -16,7 +16,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-class StartTreatmentFromHomeTest extends TestCase
+/**
+ * Diálogo "Registrar atendimento" do Início e da lista de atendimentos, em que
+ * o paciente é escolhido no próprio formulário.
+ */
+class TreatmentDialogTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -48,11 +52,12 @@ class StartTreatmentFromHomeTest extends TestCase
             'procedure_id' => $this->procedure('Toxina botulínica')->id,
             'treated_areas' => 'Glabela',
             'description' => 'Aplicados 20 U na glabela.',
+            'amount' => '0',
             ...$overrides,
         ];
     }
 
-    public function test_clinical_staff_get_the_treatment_form_in_a_dialog_on_home(): void
+    public function test_clinical_staff_get_the_treatment_form_in_a_dialog_on_home_and_on_the_list(): void
     {
         $batch = ProductBatch::factory()->create([
             'product_id' => Product::factory()->create(['name' => 'Toxina botulínica 100 U'])->id,
@@ -62,19 +67,24 @@ class StartTreatmentFromHomeTest extends TestCase
         ]);
         $this->procedure('Toxina botulínica');
 
-        $this->actingAs($this->professional)->get('/')
-            ->assertOk()
-            ->assertSee('data-dialog-open="new-treatment"', false)
-            ->assertSee('<dialog id="new-treatment"', false)
-            ->assertSee('<form method="POST" action="'.route('treatments.store').'"', false)
-            ->assertSee('data-patient-picker', false)
-            ->assertSee('name="performed_at"', false)
-            ->assertSee('name="description"', false)
-            ->assertSee('<option value="'.$batch->id.'"', false)
-            ->assertSee('Toxina botulínica')
-            // Só o administrador escolhe o profissional responsável.
-            ->assertDontSee('name="professional_id"', false)
-            ->assertDontSee('data-dialog-autoshow', false);
+        foreach (['/', '/atendimentos'] as $page) {
+            $this->actingAs($this->professional)->get($page)
+                ->assertOk()
+                ->assertSee('data-dialog-open="new-treatment"', false)
+                ->assertSee('<dialog id="new-treatment"', false)
+                ->assertSee('<form method="POST" action="'.route('treatments.store').'"', false)
+                ->assertSee('data-confirm="Registrar o atendimento?', false)
+                ->assertSee('data-patient-picker', false)
+                ->assertSee('name="performed_at"', false)
+                ->assertSee('name="description"', false)
+                ->assertSee('name="amount"', false)
+                ->assertSee('name="payment_method"', false)
+                ->assertSee('<option value="'.$batch->id.'"', false)
+                ->assertSee('Toxina botulínica')
+                // Só o administrador escolhe o profissional responsável.
+                ->assertDontSee('name="professional_id"', false)
+                ->assertDontSee('data-dialog-autoshow', false);
+        }
 
         $this->actingAs(User::factory()->admin()->create())->get('/')
             ->assertSee('<dialog id="new-treatment"', false)
@@ -87,16 +97,19 @@ class StartTreatmentFromHomeTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Novo agendamento')
-            ->assertDontSee('Novo atendimento')
+            ->assertDontSee('Registrar atendimento')
             ->assertDontSee('new-treatment', false);
         $this->assertNull($response->viewData('treatmentForm'));
     }
 
-    public function test_saving_the_dialog_registers_a_draft_for_the_chosen_patient(): void
+    public function test_the_dialog_registers_the_treatment_for_the_chosen_patient(): void
     {
         $this->actingAs($this->professional);
 
-        $response = $this->from('/')->post('/atendimentos', $this->payload())->assertSessionHasNoErrors();
+        $batch = ProductBatch::factory()->create(['product_id' => Product::factory()->create()->id, 'quantity' => 10, 'expires_on' => '2027-06-30']);
+
+        $response = $this->from('/')->post('/atendimentos', $this->payload(['products' => [['product_batch_id' => $batch->id, 'quantity' => '2,5']]]))
+            ->assertSessionHasNoErrors();
 
         $treatment = Treatment::sole();
 
@@ -105,9 +118,11 @@ class StartTreatmentFromHomeTest extends TestCase
         $this->assertSame($this->patient->id, $treatment->patient_id);
         $this->assertSame($this->professional->id, $treatment->professional_id);
         $this->assertSame($this->professional->id, $treatment->created_by);
-        $this->assertSame(TreatmentStatus::Draft, $treatment->status);
         $this->assertSame('2026-10-08 15:40:00', $treatment->performed_at->format('Y-m-d H:i:s'));
         $this->assertSame('Aplicados 20 U na glabela.', $treatment->description);
+        // Registrado pelo diálogo, o estoque é baixado como em qualquer registro.
+        $this->assertSame('7.500', $batch->refresh()->quantity);
+        $this->assertSame($treatment->id, StockMovement::sole()->treatment_id);
 
         $this->assertDatabaseHas('audit_logs', [
             'action' => AuditAction::TreatmentCreated->value, 'user_id' => $this->professional->id, 'auditable_id' => $treatment->id,
@@ -138,7 +153,7 @@ class StartTreatmentFromHomeTest extends TestCase
         $this->assertSame(0, Treatment::count());
     }
 
-    public function test_a_treatment_from_home_cannot_be_tied_to_an_appointment(): void
+    public function test_a_treatment_from_the_dialog_cannot_be_tied_to_an_appointment(): void
     {
         $appointment = Appointment::factory()->at('2026-10-08 12:30')->create(['patient_id' => $this->patient->id]);
 

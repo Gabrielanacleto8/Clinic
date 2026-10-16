@@ -223,7 +223,7 @@ if (photoInput) {
     });
 }
 
-// Seletor de paciente (agendamento e novo atendimento): busca no servidor conforme a digitação.
+// Seletor de paciente (agendamento e registro de atendimento): busca no servidor conforme a digitação.
 // Os resultados entram na página só via textContent, nunca como HTML.
 const picker = document.querySelector('[data-patient-picker]');
 
@@ -366,7 +366,7 @@ if (picker) {
     input.addEventListener('blur', close);
 }
 
-// Novo atendimento pelo Início: ao escolher o paciente, mostra os avisos de
+// Diálogo "Registrar atendimento": ao escolher o paciente, mostra os avisos de
 // saúde dele (alergias, gestação), como o formulário do prontuário já faz.
 const healthAlerts = document.querySelector('[data-health-alerts]');
 
@@ -435,6 +435,56 @@ document.addEventListener('change', (event) => {
         target.value = duration;
     }
 });
+
+// Registro de atendimento: escolher o procedimento preenche o valor do
+// catálogo e os produtos que ele normalmente usa. Só substitui o que está em
+// branco ou ainda é a sugestão do procedimento anterior: o que o usuário
+// digitou fica como está.
+const procedureSelect = document.querySelector('[data-procedure-defaults]');
+
+if (procedureSelect) {
+    const defaults = JSON.parse(procedureSelect.dataset.procedureDefaults);
+    const form = procedureSelect.form;
+    const amount = form.querySelector('[data-treatment-amount]');
+    const rows = [...form.querySelectorAll('[data-treatment-product]')].map((row) => ({
+        batch: row.querySelector('select'),
+        quantity: row.querySelector('input'),
+    }));
+
+    const suggestionFor = (procedureId) => defaults[procedureId] ?? { amount: null, products: [] };
+
+    // As linhas preenchidas são exatamente os produtos sugeridos (ou nenhuma, se nada foi sugerido).
+    const productsAre = (suggested) => {
+        const filled = rows.filter((row) => row.batch.value !== '' || row.quantity.value !== '');
+
+        return (
+            filled.length === suggested.length &&
+            filled.every(
+                (row, index) =>
+                    row.batch.value === String(suggested[index].product_batch_id) && row.quantity.value === suggested[index].quantity,
+            )
+        );
+    };
+
+    let previous = suggestionFor(procedureSelect.value);
+
+    procedureSelect.addEventListener('change', () => {
+        const next = suggestionFor(procedureSelect.value);
+
+        if (amount.value === '' || amount.value === previous.amount) {
+            amount.value = next.amount ?? '';
+        }
+
+        if (productsAre(previous.products) && next.products.length <= rows.length) {
+            rows.forEach((row, index) => {
+                row.batch.value = next.products[index]?.product_batch_id ?? '';
+                row.quantity.value = next.products[index]?.quantity ?? '';
+            });
+        }
+
+        previous = next;
+    });
+}
 
 // Janelas modais (<dialog>). O botão que abre pode preencher campos do
 // formulário, como o lote da linha clicada: data-dialog-values='{"campo": valor}'.

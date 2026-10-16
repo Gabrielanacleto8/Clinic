@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Gate;
 class TreatmentNoteController extends Controller
 {
     /**
-     * Acrescenta uma evolução ou adendo a um atendimento finalizado.
+     * Acrescenta uma evolução ou adendo a um atendimento.
      */
     public function store(Request $request, Patient $patient, Treatment $treatment, AuditLogger $audit): RedirectResponse
     {

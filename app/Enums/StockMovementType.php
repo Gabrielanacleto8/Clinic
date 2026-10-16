@@ -12,7 +12,7 @@ enum StockMovementType: string
 
     /**
      * Tipos que um usuário lança à mão sobre um lote existente. A entrada tem
-     * formulário próprio e o consumo só nasce da finalização de um atendimento.
+     * formulário próprio e o consumo só nasce do registro de um atendimento.
      *
      * @return list<self>
      */

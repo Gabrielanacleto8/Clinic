@@ -1,118 +1,86 @@
 @php
-    use App\Enums\AppointmentStatus;
-    use App\Enums\TreatmentStatus;
     use App\Support\ClinicTime;
 
-    // No celular os botões ficam mais altos, para o toque.
-    $small = 'px-3 py-2 text-xs sm:py-1.5';
-    $heading = 'flex items-center gap-2 px-4 pt-5 pb-3 text-sm font-semibold tracking-wide text-slate-500 uppercase sm:px-6';
-    $row = 'flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-6';
+    $total = $treatments->total();
+    $filtered = array_filter($filters) !== [];
 @endphp
 <x-layouts.app title="Atendimentos">
-    <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-xl font-semibold tracking-tight">Atendimentos</h1>
-            <p class="mt-1 text-sm text-slate-600">Quem está em atendimento e quem espera a vez.</p>
+            <p class="mt-1 text-sm text-slate-600">{{ $total }} {{ $total === 1 ? 'registro' : 'registros' }}</p>
         </div>
-        <a href="{{ route('agenda.index') }}" class="btn btn-secondary">Abrir a agenda</a>
+        @if ($treatmentForm)
+            <button type="button" class="btn btn-primary" data-dialog-open="{{ $treatmentForm['scope'] }}">Registrar atendimento</button>
+        @endif
     </div>
 
-    <section class="card mt-6" aria-labelledby="em-atendimento">
-        <h2 id="em-atendimento" class="{{ $heading }}">
-            Em atendimento
-            <span class="badge {{ TreatmentStatus::Draft->badgeClasses() }}">{{ $inProgress->count() }}</span>
-        </h2>
-        @if ($inProgress->isEmpty())
-            <p class="px-4 py-10 text-center text-sm text-slate-500 sm:px-6">Nenhum paciente em atendimento.</p>
-        @else
-            <ul class="divide-y divide-slate-100">
-                @foreach ($inProgress as $treatment)
-                    @php
-                        $patient = $treatment->patient;
-                        $startedToday = ClinicTime::format($treatment->performed_at, 'Y-m-d') === $today;
-                    @endphp
-                    <li class="{{ $row }}">
-                        <div class="w-20 shrink-0 tabular-nums">
-                            <p class="text-base font-semibold">{{ ClinicTime::format($treatment->performed_at, 'H:i') }}</p>
-                            {{-- Atendimento de outro dia que ficou sem finalizar. --}}
-                            <p @class(['text-xs', 'text-slate-500' => $startedToday, 'font-medium text-amber-700' => ! $startedToday])>
-                                {{ $startedToday ? 'início' : 'desde '.ClinicTime::format($treatment->performed_at, 'd/m') }}
-                            </p>
-                        </div>
-
-                        <div class="min-w-0 flex-1 basis-56">
-                            <p class="font-medium">
-                                @can('view', $patient)
-                                    <a href="{{ route('patients.show', $patient) }}" class="text-teal-800 hover:underline">{{ $patient->name }}</a>
-                                @else
-                                    {{ $patient->name }}
-                                @endcan
-                            </p>
-                            <p class="mt-0.5 text-sm text-slate-600">
-                                {{-- O procedimento do atendimento é dado do prontuário. --}}
-                                @can('view', $treatment)
-                                    {{ $treatment->procedure->name }} ·
-                                @endcan
-                                {{ $treatment->professional->name }}
-                            </p>
-                        </div>
-
-                        @can('view', $treatment)
-                            <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="btn btn-primary {{ $small }}">
-                                {{ auth()->user()->can('update', $treatment) ? 'Continuar atendimento' : 'Ver atendimento' }}
-                            </a>
-                        @endcan
-                    </li>
+    <form method="GET" action="{{ route('treatments.index') }}" class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-12" role="search">
+        <div class="sm:col-span-3">
+            <label for="q" class="sr-only">Buscar por paciente</label>
+            <input id="q" name="q" type="search" value="{{ $filters['q'] }}" maxlength="100" class="input" placeholder="Paciente (nome ou CPF completo)">
+        </div>
+        <div class="sm:col-span-3">
+            <label for="procedimento" class="sr-only">Procedimento</label>
+            <select id="procedimento" name="procedimento" class="input">
+                <option value="">Todos os procedimentos</option>
+                @foreach ($procedures as $id => $name)
+                    <option value="{{ $id }}" @selected($filters['procedimento'] === (string) $id)>{{ $name }}</option>
                 @endforeach
-            </ul>
-        @endif
-    </section>
+            </select>
+        </div>
+        @include('stock._period_fields', ['span' => 'sm:col-span-2'])
+        <button type="submit" class="btn btn-secondary sm:col-span-2">Filtrar</button>
+        @foreach (['q', 'procedimento', 'de', 'ate'] as $field)
+            @error($field)
+                <p class="text-sm text-red-700 sm:col-span-12">{{ $message }}</p>
+            @enderror
+        @endforeach
+    </form>
 
-    <section class="card mt-6" aria-labelledby="em-espera">
-        <h2 id="em-espera" class="{{ $heading }}">
-            Em espera
-            <span class="badge {{ AppointmentStatus::Confirmed->badgeClasses() }}">{{ $waiting->count() }}</span>
-        </h2>
-        @if ($waiting->isEmpty())
-            <p class="px-4 py-10 text-center text-sm text-slate-500 sm:px-6">
-                Nenhum paciente em espera. O paciente entra na espera quando a presença é confirmada na agenda.
-            </p>
-        @else
-            <ul class="divide-y divide-slate-100">
-                @foreach ($waiting as $appointment)
-                    @php $patient = $appointment->patient; @endphp
-                    <li class="{{ $row }}">
-                        <div class="w-20 shrink-0 tabular-nums">
-                            <p class="text-base font-semibold">{{ ClinicTime::format($appointment->scheduled_at, 'H:i') }}</p>
-                            <p class="text-xs text-slate-500">agendado</p>
-                        </div>
+    <div class="card mt-4 relative overflow-x-auto">
+        <table class="table-stack w-full min-w-3xl text-left text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
+                <tr>
+                    <th scope="col" class="px-4 py-3 font-medium">Data</th>
+                    <th scope="col" class="px-4 py-3 font-medium">Paciente</th>
+                    <th scope="col" class="px-4 py-3 font-medium">Procedimento</th>
+                    <th scope="col" class="px-4 py-3 font-medium">Profissional</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse ($treatments as $treatment)
+                    <tr class="hover:bg-slate-50">
+                        <td data-label="Data" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ ClinicTime::format($treatment->performed_at) }}</td>
+                        <td data-label="Paciente" class="px-4 py-3">
+                            <a href="{{ route('patients.show', $treatment->patient) }}" class="text-teal-800 hover:underline">{{ $treatment->patient->name }}</a>
+                        </td>
+                        <td data-label="Procedimento" class="px-4 py-3 font-medium">
+                            <a href="{{ route('patients.treatments.show', [$treatment->patient, $treatment]) }}" class="text-teal-800 hover:underline">{{ $treatment->procedure->name }}</a>
+                            @if ($treatment->treated_areas)
+                                <span class="block text-xs font-normal text-slate-500">{{ $treatment->treated_areas }}</span>
+                            @endif
+                        </td>
+                        <td data-label="Profissional" class="px-4 py-3 text-slate-600">{{ $treatment->professional->name }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="4" class="px-4 py-10 text-center text-slate-500">
+                            {{ $filtered ? 'Nenhum atendimento encontrado com estes filtros.' : 'Nenhum atendimento registrado ainda.' }}
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
-                        <div class="min-w-0 flex-1 basis-56">
-                            <p class="font-medium">
-                                @can('view', $patient)
-                                    <a href="{{ route('patients.show', $patient) }}" class="text-teal-800 hover:underline">{{ $patient->name }}</a>
-                                @else
-                                    {{ $patient->name }}
-                                @endcan
-                            </p>
-                            <p class="mt-0.5 text-sm text-slate-600">
-                                {{ $appointment->procedure?->name ?? 'Procedimento a definir' }} · {{ $appointment->professional->name }}
-                            </p>
-                        </div>
+    <p class="mt-3 text-xs text-slate-500">O histórico é permanente: um atendimento registrado não é alterado nem excluído. Informação nova entra como evolução.</p>
 
-                        @can('startTreatment', $appointment)
-                            <a href="{{ route('patients.treatments.create', [$patient, 'agendamento' => $appointment->id]) }}" class="btn btn-primary {{ $small }}">Iniciar atendimento</a>
-                        @endcan
-                    </li>
-                @endforeach
-            </ul>
-        @endif
+    <div class="mt-4">
+        {{ $treatments->links() }}
+    </div>
 
-        @if ($expectedCount > 0)
-            <p class="border-t border-slate-100 px-4 py-3 text-sm text-slate-600 sm:px-6">
-                {{ $expectedCount === 1 ? 'Mais 1 paciente agendado para hoje ainda sem presença confirmada.' : "Mais {$expectedCount} pacientes agendados para hoje ainda sem presença confirmada." }}
-                <a href="{{ route('agenda.index') }}" class="text-teal-800 hover:underline">Confirmar na agenda</a>
-            </p>
-        @endif
-    </section>
+    @if ($treatmentForm)
+        @include('treatments._dialog')
+    @endif
 </x-layouts.app>

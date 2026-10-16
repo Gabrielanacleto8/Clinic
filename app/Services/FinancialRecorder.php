@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Único ponto que cria lançamentos financeiros: grava o lançamento e as
- * parcelas na mesma transação. Usado pelo lançamento manual e pela
- * finalização de atendimentos.
+ * parcelas na mesma transação. Usado pelo lançamento manual e pelo
+ * registro de atendimentos.
  */
 class FinancialRecorder
 {

@@ -75,7 +75,7 @@ class StockTabsTest extends TestCase
         $ledger->lose($batch, '2', 'Frasco quebrado', $this->admin);
         $ledger->adjustTo($batch, '90', 'Conferência mensal', $this->admin);
 
-        $treatment = Treatment::factory()->finalized()->create([
+        $treatment = Treatment::factory()->create([
             'patient_id' => Patient::factory()->create(['name' => 'Paciente Sigiloso'])->id,
             'professional_id' => User::factory()->professional()->create(['name' => 'Dra. Helena'])->id,
         ]);
@@ -488,7 +488,7 @@ class StockTabsTest extends TestCase
         foreach (range(1, 16) as $index) {
             $batch = $this->batch("Produto {$index}", "L{$index}", 0);
             $ledger->enter($batch, '10', null, $this->admin, ['invoice_number' => "NF-{$index}"]);
-            $ledger->consume($batch, '1', Treatment::factory()->finalized()->create(), $this->admin);
+            $ledger->consume($batch, '1', Treatment::factory()->create(), $this->admin);
         }
 
         $this->actingAs($this->admin);
