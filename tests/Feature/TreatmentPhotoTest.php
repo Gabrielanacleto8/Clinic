@@ -6,8 +6,8 @@ use App\Enums\AuditAction;
 use App\Enums\PhotoStage;
 use App\Models\AuditLog;
 use App\Models\Patient;
+use App\Models\PatientAttachment;
 use App\Models\Treatment;
-use App\Models\TreatmentAttachment;
 use App\Models\User;
 use App\Services\AttachmentVault;
 use App\Support\UploadLimits;
@@ -28,6 +28,11 @@ class TreatmentPhotoTest extends TestCase
 
     private string $url;
 
+    /**
+     * Ver e remover foto é sempre pela rota do paciente, venha de onde vier a foto.
+     */
+    private string $photosUrl;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -37,6 +42,7 @@ class TreatmentPhotoTest extends TestCase
         $this->author = User::factory()->professional()->create();
         $this->treatment = Treatment::factory()->create(['professional_id' => $this->author->id, 'created_by' => $this->author->id]);
         $this->url = "/pacientes/{$this->treatment->patient_id}/atendimentos/{$this->treatment->id}";
+        $this->photosUrl = "/pacientes/{$this->treatment->patient_id}/fotos";
     }
 
     /**
@@ -48,13 +54,13 @@ class TreatmentPhotoTest extends TestCase
         return ['photos' => $photos, 'stage' => PhotoStage::Before->value, 'caption' => 'Perfil direito', ...$overrides];
     }
 
-    private function uploadOne(): TreatmentAttachment
+    private function uploadOne(): PatientAttachment
     {
         $this->actingAs($this->author)
             ->post("{$this->url}/fotos", $this->payload([UploadedFile::fake()->image('foto.jpg', 800, 600)]))
             ->assertSessionHasNoErrors();
 
-        return TreatmentAttachment::firstOrFail();
+        return PatientAttachment::firstOrFail();
     }
 
     public function test_professional_can_upload_photos(): void
@@ -67,7 +73,7 @@ class TreatmentPhotoTest extends TestCase
             ->assertRedirect($this->url)
             ->assertSessionHasNoErrors();
 
-        $photos = TreatmentAttachment::orderBy('id')->get();
+        $photos = PatientAttachment::orderBy('id')->get();
 
         $this->assertCount(2, $photos);
         $this->assertSame(PhotoStage::Before, $photos[0]->stage);
@@ -89,7 +95,7 @@ class TreatmentPhotoTest extends TestCase
         $this->actingAs($this->author)
             ->post("{$this->url}/fotos", $this->payload([UploadedFile::fake()->image('foto.png', 300, 300)]));
 
-        $photo = TreatmentAttachment::firstOrFail();
+        $photo = PatientAttachment::firstOrFail();
         $raw = Storage::disk('patient_photos')->get($photo->path);
 
         // No disco não há nada reconhecível como imagem.
@@ -108,7 +114,7 @@ class TreatmentPhotoTest extends TestCase
             ->post("{$this->url}/fotos", $this->payload([UploadedFile::fake()->image('../../../public/shell.php.jpg', 100, 100)]))
             ->assertSessionHasNoErrors();
 
-        $photo = TreatmentAttachment::firstOrFail();
+        $photo = PatientAttachment::firstOrFail();
         $pattern = '/^'.$this->treatment->patient_id.'\/[0-9A-Z]{26}\.enc$/';
 
         $this->assertMatchesRegularExpression($pattern, $photo->path);
@@ -126,7 +132,7 @@ class TreatmentPhotoTest extends TestCase
             ->post("{$this->url}/fotos", $this->payload([$polyglot]))
             ->assertSessionHasNoErrors();
 
-        $stored = app(AttachmentVault::class)->read(TreatmentAttachment::firstOrFail()->path);
+        $stored = app(AttachmentVault::class)->read(PatientAttachment::firstOrFail()->path);
 
         $this->assertStringStartsWith(self::JPEG_MAGIC, $stored);
         $this->assertStringNotContainsString('<?php', $stored);
@@ -140,7 +146,7 @@ class TreatmentPhotoTest extends TestCase
         $this->actingAs($this->author)
             ->post("{$this->url}/fotos", $this->payload([UploadedFile::fake()->image('grande.jpg', 2000, 1000)]));
 
-        $photo = TreatmentAttachment::firstOrFail();
+        $photo = PatientAttachment::firstOrFail();
 
         $this->assertSame([500, 250], [$photo->width, $photo->height]);
         $this->assertSame([100, 50], array_slice(getimagesizefromstring(app(AttachmentVault::class)->read($photo->thumbnail_path)), 0, 2));
@@ -162,7 +168,7 @@ class TreatmentPhotoTest extends TestCase
 
         foreach ($rejected as $label => $file) {
             $this->post("{$this->url}/fotos", $this->payload([$file]))->assertSessionHasErrors('photos.0');
-            $this->assertSame(0, TreatmentAttachment::count(), "Aceitou: {$label}");
+            $this->assertSame(0, PatientAttachment::count(), "Aceitou: {$label}");
         }
 
         $this->assertSame([], Storage::disk('patient_photos')->allFiles());
@@ -183,7 +189,7 @@ class TreatmentPhotoTest extends TestCase
         $this->post("{$this->url}/fotos", $this->payload([$this->realUpload('corrompida.jpg', $truncated.str_repeat('x', 500))]))
             ->assertSessionHasErrors('photos');
 
-        $this->assertSame(0, TreatmentAttachment::count());
+        $this->assertSame(0, PatientAttachment::count());
         $this->assertSame([], Storage::disk('patient_photos')->allFiles());
     }
 
@@ -202,7 +208,7 @@ class TreatmentPhotoTest extends TestCase
         $this->post("{$this->url}/fotos", $this->payload([UploadedFile::fake()->image('ok.jpg', 20, 20)], ['stage' => 'durante']))
             ->assertSessionHasErrors('stage');
 
-        $this->assertSame(0, TreatmentAttachment::count());
+        $this->assertSame(0, PatientAttachment::count());
     }
 
     public function test_file_refused_by_the_php_upload_limit_gets_a_clear_message(): void
@@ -233,7 +239,7 @@ class TreatmentPhotoTest extends TestCase
             ->post("{$this->url}/fotos", $this->payload([UploadedFile::fake()->image('bomba.jpg', 200, 200)]))
             ->assertSessionHasErrors(['photos' => 'A imagem tem dimensões grandes demais.']);
 
-        $this->assertSame(0, TreatmentAttachment::count());
+        $this->assertSame(0, PatientAttachment::count());
     }
 
     public function test_a_failing_photo_leaves_nothing_behind(): void
@@ -248,7 +254,7 @@ class TreatmentPhotoTest extends TestCase
             ]))
             ->assertSessionHasErrors('photos');
 
-        $this->assertSame(0, TreatmentAttachment::count());
+        $this->assertSame(0, PatientAttachment::count());
         $this->assertSame([], Storage::disk('patient_photos')->allFiles());
         $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::PhotoUploaded->value]);
     }
@@ -256,7 +262,7 @@ class TreatmentPhotoTest extends TestCase
     public function test_photo_is_served_only_to_clinical_staff_and_viewing_is_audited(): void
     {
         $photo = $this->uploadOne();
-        $photoUrl = "{$this->url}/fotos/{$photo->id}";
+        $photoUrl = "{$this->photosUrl}/{$photo->id}";
 
         auth()->logout();
         $this->get($photoUrl)->assertRedirect('/login');
@@ -281,28 +287,28 @@ class TreatmentPhotoTest extends TestCase
     {
         $photo = $this->uploadOne();
 
-        $full = $this->get("{$this->url}/fotos/{$photo->id}")->getContent();
+        $full = $this->get("{$this->photosUrl}/{$photo->id}")->getContent();
         $before = AuditLog::where('action', AuditAction::PhotoViewed->value)->count();
 
-        $thumbnail = $this->get("{$this->url}/fotos/{$photo->id}?miniatura=1")->assertOk()->getContent();
+        $thumbnail = $this->get("{$this->photosUrl}/{$photo->id}?miniatura=1")->assertOk()->getContent();
 
         $this->assertLessThan(strlen($full), strlen($thumbnail));
         $this->assertSame([480, 360], array_slice(getimagesizefromstring($thumbnail), 0, 2));
         $this->assertSame($before, AuditLog::where('action', AuditAction::PhotoViewed->value)->count());
     }
 
-    public function test_a_photo_is_only_reachable_through_its_own_treatment_and_patient(): void
+    public function test_a_photo_is_only_reachable_through_its_own_patient(): void
     {
         $photo = $this->uploadOne();
-        $otherTreatment = Treatment::factory()->create();
-        $otherOfSamePatient = Treatment::factory()->create(['patient_id' => $this->treatment->patient_id]);
+        $other = Treatment::factory()->create();
 
         $this->actingAs(User::factory()->admin()->create());
 
-        $this->get("/pacientes/{$otherTreatment->patient_id}/atendimentos/{$otherTreatment->id}/fotos/{$photo->id}")->assertNotFound();
-        $this->get("/pacientes/{$otherTreatment->patient_id}/atendimentos/{$this->treatment->id}/fotos/{$photo->id}")->assertNotFound();
-        $this->get("/pacientes/{$this->treatment->patient_id}/atendimentos/{$otherOfSamePatient->id}/fotos/{$photo->id}")->assertNotFound();
-        $this->delete("/pacientes/{$otherTreatment->patient_id}/atendimentos/{$otherTreatment->id}/fotos/{$photo->id}")->assertNotFound();
+        $this->get("/pacientes/{$other->patient_id}/fotos/{$photo->id}")->assertNotFound();
+        $this->get("/pacientes/{$other->patient_id}/fotos/{$photo->id}?miniatura=1")->assertNotFound();
+        $this->delete("/pacientes/{$other->patient_id}/fotos/{$photo->id}")->assertNotFound();
+        // A rota antiga, por atendimento, não existe mais.
+        $this->get("{$this->url}/fotos/{$photo->id}")->assertNotFound();
 
         $this->assertNotSoftDeleted($photo);
     }
@@ -315,20 +321,20 @@ class TreatmentPhotoTest extends TestCase
         // Recepção: nada.
         $this->actingAs(User::factory()->create());
         $this->post("{$this->url}/fotos", $file())->assertForbidden();
-        $this->delete("{$this->url}/fotos/{$photo->id}")->assertForbidden();
+        $this->delete("{$this->photosUrl}/{$photo->id}")->assertForbidden();
 
         // O registro é histórico permanente: nem quem enviou remove.
         foreach ([$this->author, User::factory()->professional()->create()] as $professional) {
-            $this->actingAs($professional)->delete("{$this->url}/fotos/{$photo->id}")->assertForbidden();
+            $this->actingAs($professional)->delete("{$this->photosUrl}/{$photo->id}")->assertForbidden();
         }
 
-        $this->assertSame(1, TreatmentAttachment::count());
+        $this->assertSame(1, PatientAttachment::count());
         $this->assertNotSoftDeleted($photo);
 
         // Um colega acrescenta, por exemplo, a foto do retorno.
         $this->get($this->url)->assertOk()->assertSee('Adicionar fotos')->assertDontSee('Remover');
         $this->post("{$this->url}/fotos", $file())->assertSessionHasNoErrors();
-        $this->assertSame(2, TreatmentAttachment::count());
+        $this->assertSame(2, PatientAttachment::count());
 
         $this->actingAs(User::factory()->admin()->create())->get($this->url)->assertSee('Remover');
     }
@@ -337,11 +343,12 @@ class TreatmentPhotoTest extends TestCase
     {
         $photo = $this->uploadOne();
 
-        $this->actingAs(User::factory()->admin()->create())->delete("{$this->url}/fotos/{$photo->id}")->assertRedirect($this->url);
+        // Removida pela página do atendimento, volta para ela.
+        $this->actingAs(User::factory()->admin()->create())->from($this->url)->delete("{$this->photosUrl}/{$photo->id}")->assertRedirect($this->url);
 
         $this->assertSoftDeleted($photo);
         Storage::disk('patient_photos')->assertExists($photo->path);
-        $this->get("{$this->url}/fotos/{$photo->id}")->assertNotFound();
+        $this->get("{$this->photosUrl}/{$photo->id}")->assertNotFound();
         $this->get($this->url)->assertOk()->assertDontSee("fotos/{$photo->id}");
         $this->assertDatabaseHas('audit_logs', ['action' => AuditAction::PhotoDeleted->value, 'auditable_id' => $photo->id]);
     }
@@ -352,11 +359,11 @@ class TreatmentPhotoTest extends TestCase
         $admin = User::factory()->admin()->create();
 
         $this->treatment->delete();
-        $this->actingAs($admin)->get("{$this->url}/fotos/{$photo->id}")->assertNotFound();
+        $this->actingAs($admin)->get("{$this->photosUrl}/{$photo->id}")->assertNotFound();
 
         $this->treatment->restore();
         Patient::findOrFail($this->treatment->patient_id)->delete();
-        $this->actingAs($admin)->get("{$this->url}/fotos/{$photo->id}")->assertNotFound();
+        $this->actingAs($admin)->get("{$this->photosUrl}/{$photo->id}")->assertNotFound();
     }
 
     public function test_photo_disk_is_private_and_has_no_direct_route(): void

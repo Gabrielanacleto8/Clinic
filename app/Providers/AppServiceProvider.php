@@ -2,11 +2,27 @@
 
 namespace App\Providers;
 
+use App\Models\Appointment;
+use App\Models\AuditLog;
+use App\Models\FinancialEntry;
+use App\Models\FinancialInstallment;
+use App\Models\Patient;
+use App\Models\PatientAnamnesis;
+use App\Models\PatientAttachment;
+use App\Models\Procedure;
+use App\Models\Product;
+use App\Models\ProductBatch;
+use App\Models\StockMovement;
+use App\Models\StockUnit;
+use App\Models\Treatment;
+use App\Models\TreatmentNote;
+use App\Models\TreatmentProduct;
 use App\Models\User;
 use App\Services\RolePermissions;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +49,28 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $isProduction = $this->app->isProduction();
+
+        // A auditoria guarda o tipo do registro por este apelido, e não pelo nome
+        // da classe: renomear um modelo não pode deixar o histórico órfão. Modelo
+        // novo entra aqui antes de ser auditado, senão getMorphClass() falha.
+        Relation::enforceMorphMap([
+            'appointment' => Appointment::class,
+            'audit_log' => AuditLog::class,
+            'financial_entry' => FinancialEntry::class,
+            'financial_installment' => FinancialInstallment::class,
+            'patient' => Patient::class,
+            'patient_anamnesis' => PatientAnamnesis::class,
+            'patient_attachment' => PatientAttachment::class,
+            'procedure' => Procedure::class,
+            'product' => Product::class,
+            'product_batch' => ProductBatch::class,
+            'stock_movement' => StockMovement::class,
+            'stock_unit' => StockUnit::class,
+            'treatment' => Treatment::class,
+            'treatment_note' => TreatmentNote::class,
+            'treatment_product' => TreatmentProduct::class,
+            'user' => User::class,
+        ]);
 
         // Fora de produção, falha cedo em lazy loading (N+1), atributos
         // inexistentes e mass assignment silenciosamente descartado.

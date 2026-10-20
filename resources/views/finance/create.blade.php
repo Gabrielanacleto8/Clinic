@@ -46,7 +46,12 @@
                                    @checked(old('first_installment_paid'))>
                             {{ $isIncome ? 'Primeira parcela já recebida' : 'Primeira parcela já paga' }}
                         </label>
-                        <p class="mt-1 text-xs text-slate-500">À vista, marca o valor inteiro como pago na data do lançamento.</p>
+                        <p class="mt-1 text-xs text-slate-500">
+                            À vista, marca o valor inteiro como pago na data do lançamento.
+                            @if ($isIncome)
+                                No cartão de crédito, todas as parcelas ficam como recebidas.
+                            @endif
+                        </p>
                     </div>
                 </div>
             </section>

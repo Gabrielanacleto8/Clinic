@@ -201,6 +201,8 @@ class StockTabsTest extends TestCase
             ->assertSee('data-dialog-open="stock-entry"', false)
             ->assertSee('Produto Ativo · PA-01 (un)')
             ->assertDontSee('Produto Aposentado')
+            ->assertSee('Motivo')
+            ->assertDontSee('Observação')
             ->assertDontSee('data-dialog-autoshow', false);
 
         $this->followingRedirects()->from('/estoque/entradas')

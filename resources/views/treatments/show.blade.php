@@ -4,7 +4,6 @@
     use App\Support\LocalizedDecimal;
 
     $photosByStage = $treatment->photos->groupBy(fn ($photo) => $photo->stage->value);
-    $maxPhotos = config('clinic.photos.max_per_upload');
     $entry = $treatment->relationLoaded('financialEntry') ? $treatment->financialEntry : null;
     $canAttach = auth()->user()->can('attach', $treatment);
     $canDetach = auth()->user()->can('detach', $treatment);
@@ -23,95 +22,11 @@
 
     <x-health-alerts :anamnesis="$patient->anamnesis" class="mt-6" />
 
-    <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section class="card p-6 lg:col-span-2">
-            <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Procedimento</h2>
-            <dl class="mt-4 space-y-4">
-                <div>
-                    <dt class="text-xs text-slate-500">Áreas tratadas</dt>
-                    <dd class="mt-0.5 text-sm">{{ $treatment->treated_areas ?: '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-slate-500">Avaliação</dt>
-                    <dd class="mt-0.5 text-sm whitespace-pre-line">{{ $treatment->assessment ?: '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-slate-500">Descrição</dt>
-                    <dd class="mt-0.5 text-sm whitespace-pre-line">{{ $treatment->description }}</dd>
-                </div>
-            </dl>
-        </section>
+    @include('treatments._clinical')
 
-        <section class="card p-6">
-            <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Pós-procedimento</h2>
-            <dl class="mt-4 space-y-4">
-                <div>
-                    <dt class="text-xs text-slate-500">Orientações</dt>
-                    <dd class="mt-0.5 text-sm whitespace-pre-line">{{ $treatment->post_care ?: '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-slate-500">Intercorrências</dt>
-                    <dd class="mt-0.5 text-sm whitespace-pre-line">{{ $treatment->complications ?: 'Nenhuma registrada' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-slate-500">Retorno previsto</dt>
-                    <dd class="mt-0.5 text-sm">{{ $treatment->return_date?->format('d/m/Y') ?? '—' }}</dd>
-                </div>
-            </dl>
-        </section>
-    </div>
+    @include('treatments._products')
 
-    <section class="card mt-6 relative overflow-x-auto">
-        <h2 class="px-6 pt-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">Produtos utilizados</h2>
-        @if ($treatment->products->isEmpty())
-            <p class="px-6 pt-4 pb-6 text-sm text-slate-600">Nenhum produto registrado.</p>
-        @else
-            <table class="table-stack mt-4 w-full min-w-lg text-left text-sm">
-                <thead class="border-y border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
-                    <tr>
-                        <th scope="col" class="px-6 py-3 font-medium">Produto</th>
-                        <th scope="col" class="px-4 py-3 font-medium">Lote</th>
-                        <th scope="col" class="px-4 py-3 font-medium">Validade</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium">Quantidade</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @foreach ($treatment->products as $used)
-                        <tr>
-                            <td class="px-6 py-3 font-medium">{{ $used->batch->product->name }}</td>
-                            <td data-label="Lote" class="px-4 py-3 text-slate-600 tabular-nums">{{ $used->batch->batch_code }}</td>
-                            <td data-label="Validade" class="px-4 py-3 text-slate-600 tabular-nums">{{ $used->batch->expires_on?->format('d/m/Y') ?? '—' }}</td>
-                            <td data-label="Quantidade" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                {{ LocalizedDecimal::quantity($used->quantity) }} {{ $used->batch->product->unit->symbol() }}
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        @endif
-    </section>
-
-    @if ($entry)
-        <section class="card mt-6 relative overflow-x-auto" aria-labelledby="financeiro">
-            <h2 id="financeiro" class="px-6 pt-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">Financeiro</h2>
-            <p class="px-6 pt-1 text-sm text-slate-600">
-                {{ LocalizedDecimal::money($entry->installments->sum('amount')) }} · {{ $entry->payment_method->label() }}
-            </p>
-            <table class="table-stack mt-4 w-full min-w-md text-left text-sm">
-                <tbody class="divide-y divide-slate-100 border-t border-slate-200">
-                    @foreach ($entry->installments as $installment)
-                        @php $badge = $installment->statusBadge(); @endphp
-                        <tr>
-                            <td data-label="Parcela" class="px-6 py-3 text-slate-600">{{ $entry->installments->count() > 1 ? 'Parcela '.$installment->number.'/'.$entry->installments->count() : 'À vista' }}</td>
-                            <td data-label="Vencimento" class="px-4 py-3 text-slate-600 tabular-nums">vence em {{ $installment->due_date->format('d/m/Y') }}</td>
-                            <td data-label="Valor" class="px-4 py-3 text-right tabular-nums">{{ LocalizedDecimal::money($installment->amount) }}</td>
-                            <td data-label="Situação" class="px-6 py-3 text-right"><span class="badge {{ $badge['classes'] }}">{{ $badge['label'] }}</span></td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </section>
-    @endif
+    @include('treatments._finance')
 
     <section class="card mt-6 p-6" aria-labelledby="fotos">
         <h2 id="fotos" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Fotos do procedimento</h2>
@@ -128,16 +43,16 @@
                 @foreach ($photosByStage[$stage->value] as $photo)
                     @php $label = $stage->label().($photo->caption ? ' · '.$photo->caption : ''); @endphp
                     <li>
-                        <a href="{{ route('patients.treatments.photos.show', [$patient, $treatment, $photo]) }}" target="_blank" rel="noopener"
+                        <a href="{{ route('patients.photos.show', [$patient, $photo]) }}" target="_blank" rel="noopener"
                            class="block overflow-hidden rounded-lg border border-slate-200 bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700">
-                            <img src="{{ route('patients.treatments.photos.show', [$patient, $treatment, $photo, 'miniatura' => 1]) }}"
+                            <img src="{{ route('patients.photos.show', [$patient, $photo, 'miniatura' => 1]) }}"
                                  alt="Foto: {{ $label }}" loading="lazy" width="{{ $photo->width }}" height="{{ $photo->height }}"
                                  class="aspect-square w-full object-cover">
                         </a>
                         <div class="mt-1.5 flex items-start justify-between gap-2">
                             <p class="min-w-0 text-xs break-words text-slate-600">{{ $photo->caption ?: 'Sem legenda' }}</p>
                             @if ($canDetach)
-                                <form method="POST" action="{{ route('patients.treatments.photos.destroy', [$patient, $treatment, $photo]) }}"
+                                <form method="POST" action="{{ route('patients.photos.destroy', [$patient, $photo]) }}"
                                       data-confirm="Remover esta foto do atendimento?">
                                     @csrf
                                     @method('DELETE')
@@ -151,34 +66,7 @@
         @endforeach
 
         @if ($canAttach)
-            <form method="POST" action="{{ route('patients.treatments.photos.store', [$patient, $treatment]) }}" enctype="multipart/form-data"
-                  class="mt-6 border-t border-slate-200 pt-6" novalidate data-photo-form>
-                @csrf
-                <h3 class="text-sm font-semibold">Adicionar fotos</h3>
-                <p class="mt-1 text-sm text-slate-600">
-                    Até {{ $maxPhotos }} fotos por envio, em JPEG, PNG ou WebP. Localização e dados do aparelho são removidos antes de gravar.
-                </p>
-
-                <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
-                    <div class="md:col-span-6">
-                        <label for="photos" class="label">Fotos <span class="text-red-600" aria-hidden="true">*</span></label>
-                        <input id="photos" name="photos[]" type="file" multiple required accept="image/jpeg,image/png,image/webp"
-                               data-photo-input data-max-files="{{ $maxPhotos }}" data-max-dimension="{{ config('clinic.photos.max_dimension') }}"
-                               data-max-bytes="{{ App\Support\UploadLimits::photoBytes() }}" data-max-request-bytes="{{ App\Support\UploadLimits::requestBytes() }}"
-                               @class(['input file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium', 'input-error' => $errors->has('photos') || $errors->has('photos.*')])>
-                        <p class="mt-1 text-xs text-slate-500" data-photo-status aria-live="polite"></p>
-                        @foreach (collect($errors->get('photos'))->merge(collect($errors->get('photos.*'))->flatten())->unique() as $message)
-                            <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
-                        @endforeach
-                    </div>
-                    <x-form.select class="md:col-span-2" name="stage" label="Momento" :options="PhotoStage::options()" :selected="PhotoStage::Before->value" required />
-                    <x-form.input class="md:col-span-4" name="caption" label="Legenda" maxlength="150" autocomplete="off" placeholder="Ex.: Perfil direito" />
-                </div>
-
-                <div class="mt-4 flex justify-end">
-                    <button type="submit" class="btn btn-primary" data-photo-submit>Enviar fotos</button>
-                </div>
-            </form>
+            <x-photos.upload-form :action="route('patients.treatments.photos.store', [$patient, $treatment])" title="Adicionar fotos" />
         @endif
     </section>
 
@@ -219,18 +107,7 @@
     <section class="card mt-6 p-6" aria-labelledby="evolucoes">
         <h2 id="evolucoes" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Evoluções e adendos</h2>
 
-        @if ($treatment->notes->isEmpty())
-            <p class="mt-4 text-sm text-slate-600">Nenhuma evolução registrada.</p>
-        @else
-            <ol class="mt-4 space-y-4">
-                @foreach ($treatment->notes as $note)
-                    <li class="rounded-lg border border-slate-200 px-4 py-3">
-                        <p class="text-xs text-slate-500">{{ ClinicTime::format($note->created_at) }} · {{ $note->author?->name ?? 'Usuário removido' }}</p>
-                        <p class="mt-1 text-sm whitespace-pre-line">{{ $note->body }}</p>
-                    </li>
-                @endforeach
-            </ol>
-        @endif
+        @include('treatments._notes_list')
 
         @can('addNote', $treatment)
             <form method="POST" action="{{ route('patients.treatments.notes.store', [$patient, $treatment]) }}" class="mt-6 border-t border-slate-200 pt-6" novalidate>

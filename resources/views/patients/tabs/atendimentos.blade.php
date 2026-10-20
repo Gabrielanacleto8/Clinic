@@ -1,13 +1,7 @@
 <section class="mt-4" aria-labelledby="atendimentos">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 id="atendimentos" class="text-lg font-semibold tracking-tight">Atendimentos</h2>
-            <p class="mt-0.5 text-sm text-slate-600">{{ $records->total() }} {{ $records->total() === 1 ? 'registro' : 'registros' }}</p>
-        </div>
-        @can('create', App\Models\Treatment::class)
-            <a href="{{ route('patients.treatments.create', $patient) }}" class="btn btn-primary">Registrar atendimento</a>
-        @endcan
-    </div>
+    {{-- A ficha só consulta: atendimento se registra pela agenda ou pela lista de atendimentos. --}}
+    <h2 id="atendimentos" class="text-lg font-semibold tracking-tight">Atendimentos</h2>
+    <p class="mt-0.5 text-sm text-slate-600">{{ $records->total() }} {{ $records->total() === 1 ? 'registro' : 'registros' }}</p>
 
     <div class="card mt-4 relative overflow-x-auto">
         <table class="table-stack w-full min-w-2xl text-left text-sm">

@@ -1,13 +1,9 @@
-<x-layouts.app title="Usuários">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h1 class="text-xl font-semibold tracking-tight">Usuários</h1>
-            <p class="mt-1 text-sm text-slate-600">Quem pode acessar o sistema e com qual perfil.</p>
-        </div>
+<x-users.page active="usuarios" subtitle="Quem pode acessar o sistema e com qual perfil.">
+    <x-slot:actions>
         <a href="{{ route('users.create') }}" class="btn btn-primary">Novo usuário</a>
-    </div>
+    </x-slot:actions>
 
-    <div class="card mt-6 relative overflow-x-auto">
+    <div class="card mt-4 relative overflow-x-auto">
         <table class="table-stack w-full min-w-2xl text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>
@@ -50,4 +46,4 @@
     <div class="mt-4">
         {{ $users->links() }}
     </div>
-</x-layouts.app>
+</x-users.page>

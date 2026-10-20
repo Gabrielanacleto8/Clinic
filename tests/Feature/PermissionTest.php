@@ -50,20 +50,22 @@ class PermissionTest extends TestCase
 
     public function test_only_admins_can_see_or_change_permissions(): void
     {
-        $this->get('/permissoes')->assertRedirect('/login');
+        $this->get('/usuarios/permissoes')->assertRedirect('/login');
 
         foreach ([User::factory()->create(), User::factory()->professional()->create()] as $user) {
             $this->actingAs($user);
-            $this->get('/permissoes')->assertForbidden();
-            $this->put('/permissoes', $this->payload([UserRole::Receptionist->value => Permission::cases()]))->assertForbidden();
-            $this->get('/')->assertDontSee(route('permissions.edit'), false);
+            $this->get('/usuarios/permissoes')->assertForbidden();
+            $this->put('/usuarios/permissoes', $this->payload([UserRole::Receptionist->value => Permission::cases()]))->assertForbidden();
+            $this->get('/')->assertDontSee(route('users.permissions.edit'), false);
         }
 
         $this->assertFalse(User::factory()->create()->hasPermission(Permission::FinanceView));
 
         $this->actingAs(User::factory()->admin()->create());
-        $this->get('/permissoes')->assertOk()->assertSee('Ver a agenda');
-        $this->get('/')->assertSee(route('permissions.edit'), false);
+        $this->get('/usuarios/permissoes')->assertOk()->assertSee('Ver a agenda')->assertSee('aria-label="Seções de usuários"', false);
+        // A tela é uma aba de usuários, não um item do menu.
+        $this->get('/usuarios')->assertSee(route('users.permissions.edit'), false);
+        $this->get('/')->assertDontSee(route('users.permissions.edit'), false);
     }
 
     public function test_admin_can_grant_and_revoke_access_and_it_takes_effect_immediately(): void
@@ -75,14 +77,14 @@ class PermissionTest extends TestCase
         $this->actingAs($reception)->get("/pacientes/{$patient->id}/ficha-de-saude")->assertForbidden();
 
         // Concede o prontuário à recepção.
-        $this->actingAs($admin)->put('/permissoes', $this->payload([
+        $this->actingAs($admin)->put('/usuarios/permissoes', $this->payload([
             UserRole::Receptionist->value => [...Permission::defaultsFor(UserRole::Receptionist), Permission::RecordsView, Permission::RecordsManage],
-        ]))->assertRedirect(route('permissions.edit'))->assertSessionHasNoErrors();
+        ]))->assertRedirect(route('users.permissions.edit'))->assertSessionHasNoErrors();
 
         $this->actingAs($reception)->get("/pacientes/{$patient->id}/ficha-de-saude")->assertOk();
 
         // Retira a agenda da recepção.
-        $this->actingAs($admin)->put('/permissoes', $this->payload([
+        $this->actingAs($admin)->put('/usuarios/permissoes', $this->payload([
             UserRole::Receptionist->value => [Permission::PatientsView],
         ]))->assertSessionHasNoErrors();
 
@@ -95,7 +97,7 @@ class PermissionTest extends TestCase
 
     public function test_dependent_permissions_are_granted_together(): void
     {
-        $this->actingAs(User::factory()->admin()->create())->put('/permissoes', $this->payload([
+        $this->actingAs(User::factory()->admin()->create())->put('/usuarios/permissoes', $this->payload([
             UserRole::Receptionist->value => [Permission::RecordsManage, Permission::PatientsArchive],
         ]))->assertSessionHasNoErrors();
 
@@ -109,7 +111,7 @@ class PermissionTest extends TestCase
     {
         // Sem nenhuma caixa marcada o navegador não envia o perfil.
         $this->actingAs(User::factory()->admin()->create())
-            ->put('/permissoes', ['permissions' => [UserRole::Professional->value => [Permission::AgendaView->value]]])
+            ->put('/usuarios/permissoes', ['permissions' => [UserRole::Professional->value => [Permission::AgendaView->value]]])
             ->assertSessionHasNoErrors();
 
         $this->assertSame([], app(RolePermissions::class)->for(UserRole::Receptionist));
@@ -121,7 +123,7 @@ class PermissionTest extends TestCase
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
-            ->put('/permissoes', ['permissions' => ['admin' => [Permission::AgendaView->value]]])
+            ->put('/usuarios/permissoes', ['permissions' => ['admin' => [Permission::AgendaView->value]]])
             ->assertSessionHasErrors('permissions');
 
         $this->assertTrue($admin->hasPermission(Permission::FinanceManage));
@@ -132,10 +134,10 @@ class PermissionTest extends TestCase
     {
         $this->actingAs(User::factory()->admin()->create());
 
-        $this->put('/permissoes', ['permissions' => ['receptionist' => ['users.manage']]])->assertSessionHasErrors('permissions.receptionist.0');
-        $this->put('/permissoes', ['permissions' => ['receptionist' => ['manage-permissions']]])->assertSessionHasErrors('permissions.receptionist.0');
-        $this->put('/permissoes', ['permissions' => ['superuser' => [Permission::AgendaView->value]]])->assertSessionHasErrors('permissions');
-        $this->put('/permissoes', ['permissions' => 'tudo'])->assertSessionHasErrors('permissions');
+        $this->put('/usuarios/permissoes', ['permissions' => ['receptionist' => ['users.manage']]])->assertSessionHasErrors('permissions.receptionist.0');
+        $this->put('/usuarios/permissoes', ['permissions' => ['receptionist' => ['manage-permissions']]])->assertSessionHasErrors('permissions.receptionist.0');
+        $this->put('/usuarios/permissoes', ['permissions' => ['superuser' => [Permission::AgendaView->value]]])->assertSessionHasErrors('permissions');
+        $this->put('/usuarios/permissoes', ['permissions' => 'tudo'])->assertSessionHasErrors('permissions');
 
         $this->assertEqualsCanonicalizing(Permission::defaultsFor(UserRole::Receptionist), app(RolePermissions::class)->for(UserRole::Receptionist));
     }
@@ -145,10 +147,10 @@ class PermissionTest extends TestCase
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin);
-        $this->put('/permissoes', $this->payload())->assertSessionHasNoErrors();
+        $this->put('/usuarios/permissoes', $this->payload())->assertSessionHasNoErrors();
         $this->assertSame(0, AuditLog::where('action', AuditAction::PermissionsUpdated->value)->count());
 
-        $this->put('/permissoes', $this->payload([
+        $this->put('/usuarios/permissoes', $this->payload([
             UserRole::Receptionist->value => [Permission::PatientsView, Permission::AgendaView, Permission::FinanceView],
         ]));
 
@@ -181,7 +183,7 @@ class PermissionTest extends TestCase
         $admin = User::factory()->admin()->create();
         $reception = User::factory()->create();
 
-        $this->actingAs($admin)->put('/permissoes', $this->payload([UserRole::Receptionist->value => [Permission::AgendaView]]));
+        $this->actingAs($admin)->put('/usuarios/permissoes', $this->payload([UserRole::Receptionist->value => [Permission::AgendaView]]));
 
         $html = $this->actingAs($reception)->get('/')->assertOk()->getContent();
 

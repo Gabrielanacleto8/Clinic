@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Patient;
 use App\Models\Procedure;
 use App\Models\ProductBatch;
+use App\Models\StockUnit;
 use App\Models\Treatment;
 use App\Models\User;
 use App\Support\LocalizedDecimal;
@@ -23,14 +24,14 @@ class TreatmentFormOptions
     public const CONFIRMATION = 'Registrar o atendimento? O estoque será baixado e o lançamento financeiro será gerado.';
 
     /**
-     * @return array{professionals: Collection<int, User>, procedures: Collection<int, Procedure>, batches: Collection<int, ProductBatch>, procedureDefaults: array<int, array{amount: string|null, products: list<array{product_batch_id: int, quantity: string}>}>}
+     * @return array{professionals: Collection<int, User>, procedures: Collection<int, Procedure>, batches: Collection<int, ProductBatch>, units: Collection<int, StockUnit>, procedureDefaults: array<int, array{amount: string|null, products: list<array{product_batch_id: int, quantity: string}>}>}
      */
     public function for(User $user): array
     {
         $procedures = Procedure::query()->selectable()->orderBy('name')->get(['id', 'name', 'price']);
         // Lotes que podem ser usados. Dentro de cada produto, o que vence primeiro aparece primeiro.
         $batches = ProductBatch::query()
-            ->with('product:id,name,unit')
+            ->with('product:id,name,unit,unit_content,hours_after_opening,multi_patient_use,is_active')
             ->availableForUse()
             ->orderBy('product_id')
             ->firstToExpire()
@@ -41,8 +42,43 @@ class TreatmentFormOptions
             'professionals' => $user->isAdmin() ? User::query()->attending()->orderBy('name')->get(['id', 'name']) : new Collection,
             'procedures' => $procedures,
             'batches' => $batches,
+            'units' => $this->openUnits($batches),
             'procedureDefaults' => $this->procedureDefaults($procedures, $batches),
         ];
+    }
+
+    /**
+     * Unidades abertas e ainda usáveis dos lotes fracionados, da aberta há
+     * mais tempo à mais recente. Também deixa em cada lote "open_quantity",
+     * para o formulário mostrar quantas unidades seguem lacradas.
+     *
+     * @param  Collection<int, ProductBatch>  $batches
+     * @return Collection<int, StockUnit>
+     */
+    private function openUnits(Collection $batches): Collection
+    {
+        $fractioned = $batches->filter(fn (ProductBatch $batch) => $batch->product->isFractioned())->keyBy('id');
+
+        if ($fractioned->isEmpty()) {
+            return new Collection;
+        }
+
+        $units = StockUnit::query()
+            ->withBalance()
+            ->withConsumption()
+            ->whereIn('product_batch_id', $fractioned->keys())
+            ->orderBy('opened_at')
+            ->orderBy('id')
+            ->get(['id', 'product_batch_id', 'quantity', 'opened_at']);
+
+        foreach ($fractioned as $batch) {
+            $batch->setAttribute('open_quantity', $units->where('product_batch_id', $batch->id)->sum('quantity'));
+        }
+
+        return $units
+            ->each(fn (StockUnit $unit) => $unit->setRelation('batch', $fractioned[$unit->product_batch_id]))
+            ->filter(fn (StockUnit $unit) => $unit->isUsable())
+            ->values();
     }
 
     /**

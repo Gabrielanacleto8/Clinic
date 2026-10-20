@@ -5,8 +5,10 @@ namespace App\Http\Requests;
 use App\Models\Product;
 use App\Support\ClinicTime;
 use App\Support\LocalizedDecimal;
+use App\Support\Quantity;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Entrada manual de estoque: o que chegou, em que lote e com que dados de compra.
@@ -51,6 +53,30 @@ class StockEntryRequest extends FormRequest
     }
 
     /**
+     * @return list<callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->hasAny(['product_id', 'quantity'])) {
+                    return;
+                }
+
+                // Produto fracionado entra em unidades físicas inteiras, na unidade de medida.
+                $product = Product::query()->find((int) $this->input('product_id'), ['id', 'unit', 'unit_content']);
+                $content = $product?->isFractioned() ? Quantity::toThousandths($product->unit_content) : 0;
+
+                if ($content > 0 && Quantity::toThousandths($this->input('quantity')) % $content !== 0) {
+                    $validator->errors()->add('quantity', 'Este produto é fracionado: informe unidades inteiras de '
+                        .LocalizedDecimal::quantity($product->unit_content).' '.$product->unit->symbol().' (ex.: 3 unidades = '
+                        .LocalizedDecimal::quantity(3 * (float) $product->unit_content).' '.$product->unit->symbol().').');
+                }
+            },
+        ];
+    }
+
+    /**
      * @return array<string, string>
      */
     public function attributes(): array
@@ -64,7 +90,7 @@ class StockEntryRequest extends FormRequest
             'unit_cost' => 'custo unitário',
             'supplier' => 'fornecedor',
             'invoice_number' => 'nota fiscal',
-            'reason' => 'observação',
+            'reason' => 'motivo',
         ];
     }
 

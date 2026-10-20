@@ -7,11 +7,13 @@ use App\Models\FinancialEntry;
 use App\Models\FinancialInstallment;
 use App\Services\AuditLogger;
 use App\Support\ClinicTime;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class InstallmentPaymentController extends Controller
 {
@@ -33,14 +35,28 @@ class InstallmentPaymentController extends Controller
             'paid_at.before_or_equal' => 'A data do pagamento não pode estar no futuro.',
         ], ['installment_id' => 'parcela', 'paid_at' => 'data do pagamento']);
 
-        DB::transaction(function () use ($validated): void {
-            $installment = FinancialInstallment::query()->whereKey($validated['installment_id'])->lockForUpdate()->firstOrFail();
-            $installment->update(['paid_at' => $validated['paid_at']]);
+        $installment = FinancialInstallment::query()->findOrFail($validated['installment_id']);
 
-            $this->audit->log(AuditAction::InstallmentPaid, $installment, ['financial_entry_id' => $installment->financial_entry_id]);
+        $count = DB::transaction(function () use ($installment, $validated): int {
+            // Receita no crédito: recebida uma parcela, todas as em aberto do lançamento são recebidas.
+            $settled = $this->siblingsSettledTogether($installment)->whereNull('paid_at')->get();
+
+            // Outra pessoa registrou este pagamento enquanto a tela estava aberta.
+            if ($settled->doesntContain('id', $installment->id)) {
+                throw ValidationException::withMessages(['installment_id' => 'Esta parcela não está mais em aberto.']);
+            }
+
+            foreach ($settled as $each) {
+                $each->update(['paid_at' => $validated['paid_at']]);
+
+                $this->audit->log(AuditAction::InstallmentPaid, $each, ['financial_entry_id' => $each->financial_entry_id]);
+            }
+
+            return $settled->count();
         });
 
-        return redirect()->back(fallback: route('finance.index'))->with('success', 'Pagamento registrado.');
+        return redirect()->back(fallback: route('finance.index'))
+            ->with('success', $count > 1 ? "Pagamento registrado nas {$count} parcelas do cartão de crédito." : 'Pagamento registrado.');
     }
 
     /**
@@ -52,12 +68,46 @@ class InstallmentPaymentController extends Controller
 
         abort_unless($installment->isPaid(), 404);
 
-        DB::transaction(function () use ($installment): void {
-            $installment->update(['paid_at' => null]);
+        $count = DB::transaction(function () use ($installment): int {
+            // Receita no crédito: as parcelas foram recebidas juntas e são reabertas juntas.
+            $reopened = $this->siblingsSettledTogether($installment)->whereNotNull('paid_at')->get();
 
-            $this->audit->log(AuditAction::InstallmentReopened, $installment, ['financial_entry_id' => $installment->financial_entry_id]);
+            // Outra pessoa já desfez este pagamento enquanto a tela estava aberta.
+            if ($reopened->doesntContain('id', $installment->id)) {
+                throw ValidationException::withMessages(['installment_id' => 'Esta parcela já está em aberto.']);
+            }
+
+            foreach ($reopened as $each) {
+                $each->update(['paid_at' => null]);
+
+                $this->audit->log(AuditAction::InstallmentReopened, $each, ['financial_entry_id' => $each->financial_entry_id]);
+            }
+
+            return $reopened->count();
         });
 
-        return redirect()->back(fallback: route('finance.index'))->with('success', 'Pagamento desfeito. A parcela voltou a ficar em aberto.');
+        return redirect()->back(fallback: route('finance.index'))->with('success', $count > 1
+            ? "Pagamento desfeito. As {$count} parcelas do cartão de crédito voltaram a ficar em aberto."
+            : 'Pagamento desfeito. A parcela voltou a ficar em aberto.');
+    }
+
+    /**
+     * Parcelas que mudam junto com esta: todas as do lançamento, na receita no
+     * cartão de crédito; só ela mesma, nos demais casos. Chamado dentro da
+     * transação: a trava fica na linha do lançamento, ponto único que
+     * serializa pagamentos e estornos simultâneos das parcelas dele, e as
+     * parcelas são lidas já com o valor atual.
+     *
+     * @return Builder<FinancialInstallment>
+     */
+    private function siblingsSettledTogether(FinancialInstallment $installment): Builder
+    {
+        $entry = FinancialEntry::query()->select(['id', 'type', 'payment_method'])->lockForUpdate()->findOrFail($installment->financial_entry_id);
+
+        $query = $entry->payment_method->settlesAllInstallments($entry->type)
+            ? FinancialInstallment::query()->where('financial_entry_id', $entry->id)->orderBy('number')
+            : FinancialInstallment::query()->whereKey($installment->getKey());
+
+        return $query->lockForUpdate();
     }
 }

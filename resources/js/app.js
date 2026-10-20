@@ -108,12 +108,11 @@ if (collapseButton) {
     });
 }
 
-// Fotos de procedimento: antes do envio, reduz cada imagem no próprio
+// Fotos: antes do envio, reduz cada imagem no próprio
 // navegador. O upload fica rápido e cabe nos limites do servidor. É só uma
 // otimização: o servidor valida e recodifica tudo de novo, de qualquer forma.
-const photoInput = document.querySelector('[data-photo-input]');
-
-if (photoInput) {
+// Vale para todo campo de foto da página (fotos do prontuário e foto de identificação).
+document.querySelectorAll('[data-photo-input]').forEach((photoInput) => {
     const form = photoInput.closest('form');
     const status = form.querySelector('[data-photo-status]');
     const submit = form.querySelector('[data-photo-submit]');
@@ -221,7 +220,7 @@ if (photoInput) {
         submit.disabled = true;
         submit.textContent = 'Enviando…';
     });
-}
+});
 
 // Seletor de paciente (agendamento e registro de atendimento): busca no servidor conforme a digitação.
 // Os resultados entram na página só via textContent, nunca como HTML.
@@ -447,9 +446,35 @@ if (procedureSelect) {
     const form = procedureSelect.form;
     const amount = form.querySelector('[data-treatment-amount]');
     const rows = [...form.querySelectorAll('[data-treatment-product]')].map((row) => ({
-        batch: row.querySelector('select'),
-        quantity: row.querySelector('input'),
+        batch: row.querySelector('[data-treatment-batch]'),
+        unit: row.querySelector('[data-treatment-unit]'),
+        unitField: row.querySelector('[data-treatment-unit-field]'),
+        quantity: row.querySelector('[data-treatment-quantity]'),
     }));
+
+    // Unidade física: só para lote de produto fracionado, e só as unidades
+    // abertas daquele lote. Sem JavaScript, o servidor confere a escolha.
+    const syncUnits = (row) => {
+        const fractioned = row.batch.selectedOptions[0]?.hasAttribute('data-fractioned') ?? false;
+
+        row.unitField.hidden = !fractioned;
+
+        [...row.unit.options].forEach((option) => {
+            if (option.value !== '') {
+                option.hidden = option.dataset.batch !== row.batch.value;
+                option.disabled = option.hidden;
+            }
+        });
+
+        if (row.unit.selectedOptions[0]?.disabled || !fractioned) {
+            row.unit.value = '';
+        }
+    };
+
+    rows.forEach((row) => {
+        syncUnits(row);
+        row.batch.addEventListener('change', () => syncUnits(row));
+    });
 
     const suggestionFor = (procedureId) => defaults[procedureId] ?? { amount: null, products: [] };
 
@@ -479,10 +504,62 @@ if (procedureSelect) {
             rows.forEach((row, index) => {
                 row.batch.value = next.products[index]?.product_batch_id ?? '';
                 row.quantity.value = next.products[index]?.quantity ?? '';
+                syncUnits(row);
             });
         }
 
         previous = next;
+    });
+}
+
+// Lista de atendimentos: clicar na linha (ou no procedimento) abre o resumo
+// em uma janela, buscado no servidor só nessa hora. Ctrl/Cmd+clique e o botão
+// do meio continuam abrindo a página completa em outra aba.
+const summaryDialog = document.getElementById('treatment-summary');
+
+if (summaryDialog) {
+    const body = summaryDialog.querySelector('[data-treatment-summary-body]');
+    let current = null;
+
+    const message = (text) => {
+        const paragraph = document.createElement('p');
+        paragraph.className = 'text-sm text-slate-600';
+        paragraph.textContent = text;
+        body.replaceChildren(paragraph);
+    };
+
+    document.addEventListener('click', async (event) => {
+        const row = event.target.closest('[data-treatment-summary]');
+
+        if (!row || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+
+        // Outros links da linha (como o do paciente) seguem normalmente.
+        const link = event.target.closest('a');
+
+        if (link && !link.hasAttribute('data-treatment-summary-link')) return;
+
+        event.preventDefault();
+
+        const url = row.dataset.treatmentSummary;
+        current = url;
+        message('Carregando…');
+        summaryDialog.showModal();
+
+        try {
+            const response = await fetch(url, { headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' } });
+
+            if (!response.ok) throw new Error(String(response.status));
+
+            // HTML do próprio servidor, já escapado pelo Blade. O DOMParser não executa scripts.
+            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const content = page.querySelector('[data-treatment-summary-content]');
+
+            if (current === url && content) {
+                body.replaceChildren(document.importNode(content, true));
+            }
+        } catch {
+            if (current === url) message('Não foi possível carregar o atendimento. Tente de novo ou abra a página completa.');
+        }
     });
 }
 

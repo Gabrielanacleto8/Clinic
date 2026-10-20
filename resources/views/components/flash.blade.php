@@ -2,6 +2,10 @@
     @if (session($type))
         <div role="status" class="mb-6 rounded-lg border px-4 py-3 text-sm {{ $classes }}">
             {{ session($type) }}
+            {{-- Atalho opcional, com URL montada no servidor (ex.: o atendimento recém-registrado). --}}
+            @if ($type === 'success' && is_array(session('success_link')))
+                <a href="{{ session('success_link')['url'] }}" class="ml-1 font-medium underline">{{ session('success_link')['label'] }}</a>
+            @endif
         </div>
     @endif
 @endforeach

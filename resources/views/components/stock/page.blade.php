@@ -13,6 +13,7 @@
     $notices = array_filter([
         $alerts['low_stock'] > 0 ? [$plural($alerts['low_stock'], 'produto com estoque baixo', 'produtos com estoque baixo'), route('products.index', ['situacao' => 'baixo']), 'bg-red-100 text-red-800'] : null,
         $alerts['expired'] > 0 ? [$plural($alerts['expired'], 'lote vencido com saldo', 'lotes vencidos com saldo'), route('stock.batches.index', ['situacao' => 'vencidos']), 'bg-red-100 text-red-800'] : null,
+        $alerts['units_to_discard'] > 0 ? [$plural($alerts['units_to_discard'], 'unidade aberta a descartar', 'unidades abertas a descartar'), route('stock.batches.index', ['situacao' => 'descartar']), 'bg-red-100 text-red-800'] : null,
         $alerts['expiring'] > 0 ? [$plural($alerts['expiring'], 'lote perto do vencimento', 'lotes perto do vencimento'), route('stock.batches.index', ['situacao' => 'vencendo']), 'bg-amber-100 text-amber-800'] : null,
     ]);
 

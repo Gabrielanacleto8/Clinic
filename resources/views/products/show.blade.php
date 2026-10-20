@@ -49,6 +49,15 @@
         @endforeach
     </dl>
 
+    @if ($product->isFractioned())
+        <p class="mt-3 text-sm text-slate-600">
+            Fracionado: {{ LocalizedDecimal::quantity($product->unit_content) }} {{ $unit }} por unidade física
+            · {{ $product->hours_after_opening ? 'usar até '.$product->hours_after_opening.' h depois de aberta' : 'sem prazo depois de aberta além da validade do lote' }}
+            · {{ $product->multi_patient_use ? 'sobra pode ir para outro paciente' : 'uso em um só paciente' }}.
+            As unidades abertas ficam na página de cada lote.
+        </p>
+    @endif
+
     @if ($product->manufacturer || $product->supplier)
         <p class="mt-3 text-sm text-slate-600">
             @if ($product->manufacturer) Fabricante: {{ $product->manufacturer }} @endif

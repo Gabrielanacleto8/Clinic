@@ -50,13 +50,14 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
                 @forelse ($treatments as $treatment)
-                    <tr class="hover:bg-slate-50">
+                    {{-- Clique na linha abre o resumo em uma janela (app.js); o link do procedimento é o caminho pelo teclado. --}}
+                    <tr class="cursor-pointer hover:bg-slate-50" data-treatment-summary="{{ route('patients.treatments.summary', [$treatment->patient, $treatment]) }}">
                         <td data-label="Data" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ ClinicTime::format($treatment->performed_at) }}</td>
                         <td data-label="Paciente" class="px-4 py-3">
                             <a href="{{ route('patients.show', $treatment->patient) }}" class="text-teal-800 hover:underline">{{ $treatment->patient->name }}</a>
                         </td>
                         <td data-label="Procedimento" class="px-4 py-3 font-medium">
-                            <a href="{{ route('patients.treatments.show', [$treatment->patient, $treatment]) }}" class="text-teal-800 hover:underline">{{ $treatment->procedure->name }}</a>
+                            <a href="{{ route('patients.treatments.show', [$treatment->patient, $treatment]) }}" class="text-teal-800 hover:underline" data-treatment-summary-link>{{ $treatment->procedure->name }}</a>
                             @if ($treatment->treated_areas)
                                 <span class="block text-xs font-normal text-slate-500">{{ $treatment->treated_areas }}</span>
                             @endif
@@ -80,7 +81,11 @@
         {{ $treatments->links() }}
     </div>
 
+    <x-dialog id="treatment-summary" title="Atendimento" size="lg">
+        <div data-treatment-summary-body aria-live="polite"></div>
+    </x-dialog>
+
     @if ($treatmentForm)
-        @include('treatments._dialog')
+        @include('treatments._dialog', ['origin' => App\Enums\TreatmentOrigin::Treatments])
     @endif
 </x-layouts.app>

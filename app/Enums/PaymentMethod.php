@@ -24,6 +24,16 @@ enum PaymentMethod: string
     }
 
     /**
+     * Receita parcelada no cartão de crédito chega inteira: a maquininha
+     * repassa o valor total à clínica. Recebida uma parcela, estão todas.
+     * Na despesa no cartão, a clínica paga a fatura mês a mês.
+     */
+    public function settlesAllInstallments(FinancialEntryType $type): bool
+    {
+        return $this === self::CreditCard && $type === FinancialEntryType::Income;
+    }
+
+    /**
      * @return array<string, string>
      */
     public static function options(): array

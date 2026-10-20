@@ -4,10 +4,12 @@ namespace App\Http\Requests;
 
 use App\Enums\PaymentMethod;
 use App\Enums\Permission;
+use App\Enums\TreatmentOrigin;
 use App\Enums\UserRole;
 use App\Models\Appointment;
 use App\Models\Procedure;
 use App\Models\ProductBatch;
+use App\Models\StockUnit;
 use App\Models\Treatment;
 use App\Models\User;
 use App\Services\RolePermissions;
@@ -87,12 +89,14 @@ class TreatmentRequest extends FormRequest
             ],
 
             'appointment_id' => $this->appointmentRules(),
+            // Módulo para onde voltar depois de registrar.
+            'origem' => ['nullable', Rule::enum(TreatmentOrigin::class)],
 
             'products' => ['nullable', 'array', 'max:'.self::MAX_PRODUCTS],
             'products.*.product_batch_id' => [
                 'nullable',
                 'integer',
-                'distinct',
+                // Repetição é conferida em after(): duas unidades do mesmo lote podem entrar juntas.
                 // Lote vencido ou de produto inativo não pode ser escolhido.
                 Rule::exists(ProductBatch::class, 'id')->where(
                     fn ($query) => $query
@@ -100,6 +104,8 @@ class TreatmentRequest extends FormRequest
                         ->whereIn('product_id', fn ($products) => $products->select('id')->from('products')->where('is_active', true)),
                 ),
             ],
+            // Só para produto fracionado: a unidade aberta usada. Em branco, abre uma unidade nova do lote.
+            'products.*.stock_unit_id' => ['nullable', 'integer', Rule::exists(StockUnit::class, 'id')],
             'products.*.quantity' => ['nullable', 'required_with:products.*.product_batch_id', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'],
 
             'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999.99'],
@@ -142,6 +148,7 @@ class TreatmentRequest extends FormRequest
     public function after(): array
     {
         return [
+            $this->checkProductRows(...),
             function (Validator $validator): void {
                 if ($validator->errors()->has('performed_at')) {
                     return;
@@ -167,9 +174,40 @@ class TreatmentRequest extends FormRequest
     }
 
     /**
+     * Cada unidade, e cada lote sem unidade, entra uma vez só; a unidade
+     * informada tem de ser do lote da mesma linha.
+     */
+    private function checkProductRows(Validator $validator): void
+    {
+        $rows = collect($this->input('products'))
+            ->filter(fn ($row, $index) => is_array($row) && filled($row['product_batch_id'] ?? null) && ! $validator->errors()->has("products.$index.product_batch_id"));
+
+        $unitIds = $rows->pluck('stock_unit_id')->filter(fn ($id) => is_numeric($id))->all();
+        $unitBatches = $unitIds === [] ? collect() : StockUnit::query()->whereKey($unitIds)->pluck('product_batch_id', 'id');
+
+        foreach ($rows as $index => $row) {
+            $unitId = $row['stock_unit_id'] ?? null;
+
+            if (filled($unitId) && $unitBatches->has($unitId) && (int) $unitBatches[$unitId] !== (int) $row['product_batch_id']) {
+                $validator->errors()->add("products.$index.stock_unit_id", 'Esta unidade não é do lote escolhido.');
+            }
+        }
+
+        $keys = $rows->map(fn (array $row) => filled($row['stock_unit_id'] ?? null) ? 'unidade-'.$row['stock_unit_id'] : 'lote-'.$row['product_batch_id']);
+
+        foreach ($keys as $index => $key) {
+            if ($keys->filter(fn ($other) => $other === $key)->count() > 1) {
+                str_starts_with($key, 'unidade-')
+                    ? $validator->errors()->add("products.$index.stock_unit_id", 'Esta unidade está repetida na lista.')
+                    : $validator->errors()->add("products.$index.product_batch_id", 'Este lote está repetido na lista.');
+            }
+        }
+    }
+
+    /**
      * Linhas de produto preenchidas, já sem as linhas em branco do formulário.
      *
-     * @return list<array{product_batch_id: int, quantity: string}>
+     * @return list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>
      */
     public function products(): array
     {
@@ -177,6 +215,7 @@ class TreatmentRequest extends FormRequest
             ->filter(fn (array $row) => filled($row['product_batch_id'] ?? null))
             ->map(fn (array $row) => [
                 'product_batch_id' => (int) $row['product_batch_id'],
+                'stock_unit_id' => filled($row['stock_unit_id'] ?? null) ? (int) $row['stock_unit_id'] : null,
                 'quantity' => number_format((float) $row['quantity'], 3, '.', ''),
             ])
             ->values()
@@ -220,6 +259,7 @@ class TreatmentRequest extends FormRequest
             'professional_id' => 'profissional',
             'products' => 'produtos',
             'products.*.product_batch_id' => 'produto',
+            'products.*.stock_unit_id' => 'unidade',
             'products.*.quantity' => 'quantidade',
             'amount' => 'valor do atendimento',
             'payment_method' => 'forma de pagamento',
@@ -237,7 +277,7 @@ class TreatmentRequest extends FormRequest
             'performed_at.date_format' => 'Informe uma data e hora de atendimento válidas.',
             'return_date.date_format' => 'Informe uma data de retorno válida.',
             'products.*.product_batch_id.exists' => 'Este lote não existe, está vencido ou é de um produto inativo.',
-            'products.*.product_batch_id.distinct' => 'Este lote está repetido na lista.',
+            'products.*.stock_unit_id.exists' => 'Esta unidade não existe mais. Recarregue a página.',
             'products.*.quantity.required_with' => 'Informe a quantidade utilizada deste produto.',
             'amount.numeric' => 'Informe o valor em reais, como 850,00. Use 0 para atendimento sem cobrança.',
         ];

@@ -45,7 +45,7 @@
                 @if ($appointment->isOpen())
                     {{-- Agendamento de dia futuro ainda não recebe o registro do atendimento. --}}
                     @can('recordTreatment', $appointment)
-                        <a href="{{ route('patients.treatments.create', [$patient, 'agendamento' => $appointment->id]) }}" class="btn btn-primary {{ $small }}">Registrar atendimento</a>
+                        <a href="{{ route('patients.treatments.create', [$patient, 'agendamento' => $appointment->id, 'origem' => ($origin ?? App\Enums\TreatmentOrigin::Agenda)->value]) }}" class="btn btn-primary {{ $small }}">Registrar atendimento</a>
                     @endcan
 
                     @can('changeStatus', $appointment)

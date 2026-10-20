@@ -1,4 +1,4 @@
-@props(['title' => null, 'wide' => false])
+@props(['title' => null, 'wide' => false, 'section' => null])
 @php
     $user = auth()->user();
 
@@ -15,8 +15,8 @@
             ['label' => 'Financeiro', 'route' => 'finance.index', 'active' => 'finance.*', 'icon' => 'dollar', 'can' => ['viewAny', App\Models\FinancialEntry::class]],
         ],
         'Administração' => [
+            // As permissões ficam numa aba dentro de usuários.
             ['label' => 'Usuários', 'route' => 'users.index', 'active' => 'users.*', 'icon' => 'shield', 'can' => ['viewAny', App\Models\User::class]],
-            ['label' => 'Permissões', 'route' => 'permissions.edit', 'active' => 'permissions.*', 'icon' => 'lock', 'can' => ['manage-permissions']],
         ],
     ];
 
@@ -90,7 +90,8 @@
                         </summary>
                         <ul class="mt-0.5 space-y-0.5 lg:rail:mt-0">
                             @foreach ($items as $item)
-                                @php $active = request()->routeIs($item['active']); @endphp
+                                {{-- "section" marca o módulo de origem quando a tela pertence a outro (ex.: registrar atendimento a partir da agenda). --}}
+                                @php $active = $section !== null ? $item['route'] === $section : request()->routeIs($item['active']); @endphp
                                 <li>
                                     <a href="{{ route($item['route']) }}" class="{{ $link($active) }}" title="{{ $item['label'] }}" @if ($active) aria-current="page" @endif>
                                         <x-icon :name="$item['icon']" class="text-teal-600" />

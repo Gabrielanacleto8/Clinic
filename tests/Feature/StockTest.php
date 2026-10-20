@@ -173,6 +173,8 @@ class StockTest extends TestCase
         $this->assertSame($this->admin->id, $movements[0]->user_id);
         // Os dados da compra são de cada entrada, não do lote.
         $this->assertNull($movements[1]->invoice_number);
+        // O motivo da entrada é opcional.
+        $this->assertNull($movements[1]->reason);
 
         $this->get("/estoque/{$product->id}")
             ->assertSee('C4821A')->assertSee('30/06/2027')->assertSee('30/06/2026')->assertSee('401 U')->assertSee('+300 U')

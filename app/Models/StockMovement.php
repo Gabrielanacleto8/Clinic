@@ -75,6 +75,24 @@ class StockMovement extends Model
     }
 
     /**
+     * Unidade física de onde saiu, no produto fracionado.
+     *
+     * @return BelongsTo<StockUnit, $this>
+     */
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(StockUnit::class, 'stock_unit_id');
+    }
+
+    /**
+     * Valor do que saiu, pelo custo médio do lote no momento da baixa.
+     */
+    public function value(): ?string
+    {
+        return $this->unit_cost === null ? null : number_format(abs((float) $this->quantity) * (float) $this->unit_cost, 2, '.', '');
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo

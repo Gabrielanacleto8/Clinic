@@ -13,13 +13,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
+/**
+ * Aba Permissões do módulo de usuários: o que cada perfil acessa.
+ */
 class PermissionController extends Controller
 {
     public function edit(RolePermissions $rolePermissions): View
     {
         Gate::authorize('manage-permissions');
 
-        return view('permissions.edit', [
+        return view('users.permissions', [
             'modules' => collect(Permission::cases())->groupBy(fn (Permission $permission) => $permission->module()),
             'roles' => UserRole::configurable(),
             'rolePermissions' => $rolePermissions,
@@ -38,6 +41,6 @@ class PermissionController extends Controller
             }
         });
 
-        return redirect()->route('permissions.edit')->with('success', 'Permissões atualizadas.');
+        return redirect()->route('users.permissions.edit')->with('success', 'Permissões atualizadas.');
     }
 }

@@ -25,6 +25,12 @@
         @endforeach
     </form>
 
+    @if ($lostValue > 0)
+        <p class="mt-4 text-sm text-slate-700">
+            Perdas e descartes nestes filtros: <strong class="text-red-700">{{ App\Support\LocalizedDecimal::money($lostValue) }}</strong>, pelo custo médio de cada lote.
+        </p>
+    @endif
+
     <div class="card mt-4 relative overflow-x-auto">
         @if ($movements->isEmpty())
             <p class="px-4 py-10 text-center text-sm text-slate-500">Nenhuma movimentação encontrada.</p>

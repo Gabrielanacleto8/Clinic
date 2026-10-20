@@ -132,7 +132,8 @@ class TreatmentRecordingTest extends TestCase
         $this->assertSame('2026-10-08', $entry->issued_on->format('Y-m-d'));
         $this->assertSame(['400.00', '400.00', '400.00'], $entry->installments->pluck('amount')->all());
         $this->assertSame(['2026-10-08', '2026-11-08', '2026-12-08'], $entry->installments->map(fn ($i) => $i->due_date->format('Y-m-d'))->all());
-        $this->assertSame([true, false, false], $entry->installments->map(fn ($i) => $i->isPaid())->all());
+        // Cartão de crédito: as três parcelas ficam recebidas na data do atendimento.
+        $this->assertSame(['2026-10-08', '2026-10-08', '2026-10-08'], $entry->installments->map(fn ($i) => $i->paid_at?->format('Y-m-d'))->all());
 
         $log = DB::table('audit_logs')->where('action', AuditAction::TreatmentCreated->value)->sole();
         $this->assertSame([$treatment->id, $this->author->id], [$log->auditable_id, $log->user_id]);
@@ -277,6 +278,8 @@ class TreatmentRecordingTest extends TestCase
         $photo = fn () => ['photos' => [UploadedFile::fake()->image('retorno.jpg', 60, 60)], 'stage' => 'after'];
         $treatment = $this->record();
         $photosUrl = "{$this->url}/{$treatment->id}/fotos";
+        // Remover é pela rota de fotos do paciente.
+        $photoUrl = fn ($attachment) => "/pacientes/{$treatment->patient_id}/fotos/{$attachment->id}";
 
         $this->actingAs(User::factory()->create())->post($photosUrl, $photo())->assertForbidden();
 
@@ -284,11 +287,11 @@ class TreatmentRecordingTest extends TestCase
         $this->actingAs($colleague)->post($photosUrl, $photo())->assertSessionHasNoErrors();
         $attachment = $treatment->photos()->sole();
 
-        $this->delete("{$photosUrl}/{$attachment->id}")->assertForbidden();
-        $this->actingAs($this->author)->delete("{$photosUrl}/{$attachment->id}")->assertForbidden();
+        $this->delete($photoUrl($attachment))->assertForbidden();
+        $this->actingAs($this->author)->delete($photoUrl($attachment))->assertForbidden();
         $this->assertNotSoftDeleted($attachment);
 
-        $this->actingAs(User::factory()->admin()->create())->delete("{$photosUrl}/{$attachment->id}")->assertSessionHasNoErrors();
+        $this->actingAs(User::factory()->admin()->create())->delete($photoUrl($attachment))->assertSessionHasNoErrors();
         $this->assertSoftDeleted($attachment);
     }
 
@@ -300,7 +303,7 @@ class TreatmentRecordingTest extends TestCase
         $this->get($treatmentUrl)->assertOk()->assertDontSee('Parcela 1/3')->assertDontSee('R$ 1.200,00');
 
         $this->actingAs(User::factory()->admin()->create())->get($treatmentUrl)
-            ->assertSee('R$ 1.200,00')->assertSee('Cartão de crédito')->assertSee('Parcela 1/3')->assertSee('Pago')->assertSee('Pendente');
+            ->assertSee('R$ 1.200,00')->assertSee('Cartão de crédito')->assertSee('Parcela 1/3')->assertSee('Pago')->assertDontSee('Pendente');
     }
 
     public function test_stock_history_points_back_to_the_treatment(): void

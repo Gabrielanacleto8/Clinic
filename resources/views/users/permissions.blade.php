@@ -1,10 +1,5 @@
-<x-layouts.app title="Permissões">
-    <h1 class="text-xl font-semibold tracking-tight">Permissões</h1>
-    <p class="mt-1 text-sm text-slate-600">
-        Defina o que cada perfil acessa. O administrador tem sempre acesso total, incluindo usuários e esta tela.
-    </p>
-
-    <form method="POST" action="{{ route('permissions.update') }}" class="mt-6 space-y-6"
+<x-users.page active="permissoes" subtitle="Defina o que cada perfil acessa. O administrador tem sempre acesso total, incluindo usuários e esta tela.">
+    <form method="POST" action="{{ route('users.permissions.update') }}" class="mt-4 space-y-6"
           data-confirm="Aplicar as novas permissões? Elas passam a valer imediatamente para todos os usuários desses perfis.">
         @csrf
         @method('PUT')
@@ -57,4 +52,4 @@
             <button type="submit" class="btn btn-primary">Salvar permissões</button>
         </div>
     </form>
-</x-layouts.app>
+</x-users.page>

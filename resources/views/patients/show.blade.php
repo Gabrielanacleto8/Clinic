@@ -12,11 +12,21 @@
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <a href="{{ route('patients.index') }}" class="text-sm text-slate-600 hover:underline">← Pacientes</a>
-            <h1 class="mt-1 text-xl font-semibold tracking-tight">{{ $patient->name }}</h1>
-            <p class="mt-1 text-sm text-slate-600">
-                {{ $patient->age() }} {{ $patient->age() === 1 ? 'ano' : 'anos' }}
-                @if ($patient->sex) · {{ $patient->sex->label() }} @endif
-            </p>
+            <div class="mt-2 flex items-center gap-4">
+                <x-patients.avatar :patient="$patient" size="lg" />
+                <div>
+                    <h1 class="text-xl font-semibold tracking-tight">{{ $patient->name }}</h1>
+                    <p class="mt-1 text-sm text-slate-600">
+                        {{ $patient->age() }} {{ $patient->age() === 1 ? 'ano' : 'anos' }}
+                        @if ($patient->sex) · {{ $patient->sex->label() }} @endif
+                    </p>
+                    @can('update', $patient)
+                        <button type="button" class="mt-1 cursor-pointer text-sm font-medium text-teal-800 hover:underline" data-dialog-open="patient-avatar">
+                            {{ $patient->avatar_path ? 'Trocar foto' : 'Adicionar foto' }}
+                        </button>
+                    @endcan
+                </div>
+            </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             @can('create', App\Models\Appointment::class)
@@ -90,6 +100,10 @@
 
         @include('patients.tabs.'.$tab)
     @endif
+
+    @can('update', $patient)
+        @include('patients._avatar_dialog')
+    @endcan
 
     <p class="mt-6 text-xs text-slate-500">
         Cadastrado em {{ $stamp($patient->created_at) }}

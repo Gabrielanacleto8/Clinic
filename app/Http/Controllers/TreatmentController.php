@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AuditAction;
 use App\Enums\Permission;
+use App\Enums\TreatmentOrigin;
 use App\Http\Requests\TreatmentRequest;
 use App\Http\Requests\TreatmentWithPatientRequest;
 use App\Models\Appointment;
@@ -70,6 +71,9 @@ class TreatmentController extends Controller
         $treatment = new Treatment;
         $appointment = $this->appointmentToAttend($request, $patient);
 
+        // Origem vem da URL (ou do formulário que voltou com erro): só um valor do enum vale.
+        $origin = $request->old('origem', $request->query('origem'));
+
         // Vindo da agenda, o registro já abre com o que foi combinado no agendamento.
         if ($appointment) {
             $treatment->procedure_id = $appointment->procedure_id;
@@ -80,6 +84,7 @@ class TreatmentController extends Controller
             'patient' => $patient->load('anamnesis'),
             'treatment' => $treatment,
             'appointment' => $appointment,
+            'origin' => is_string($origin) ? TreatmentOrigin::tryFrom($origin) : null,
             ...$options->for($request->user()),
         ]);
     }
@@ -103,8 +108,20 @@ class TreatmentController extends Controller
             $request->user(),
         );
 
-        return redirect()->route('patients.treatments.show', [$patient, $treatment])
-            ->with('success', 'Atendimento registrado. Estoque e financeiro foram atualizados.');
+        $message = 'Atendimento registrado. Estoque e financeiro foram atualizados.';
+        $origin = TreatmentOrigin::tryFrom((string) $request->validated('origem'));
+
+        // Sem origem (link direto), abre o registro. Com origem, o usuário fica no
+        // módulo em que estava, com um atalho para o registro na mensagem.
+        if ($origin === null) {
+            return redirect()->route('patients.treatments.show', [$patient, $treatment])->with('success', $message);
+        }
+
+        $appointment = $request->filled('appointment_id') ? Appointment::find((int) $request->validated('appointment_id')) : null;
+
+        return redirect()->to($origin->url($appointment))
+            ->with('success', $message)
+            ->with('success_link', ['url' => route('patients.treatments.show', [$patient, $treatment]), 'label' => 'Ver o atendimento']);
     }
 
     /**
@@ -138,6 +155,34 @@ class TreatmentController extends Controller
         }
 
         return view('treatments.show', [
+            'patient' => $patient->load('anamnesis'),
+            'treatment' => $treatment,
+        ]);
+    }
+
+    /**
+     * Resumo para a janela da lista de atendimentos: o registro, os produtos,
+     * a cobrança e as evoluções. Fotos e documentos ficam na página completa.
+     * É leitura de prontuário e é auditada como a página completa.
+     */
+    public function summary(Request $request, Patient $patient, Treatment $treatment): View
+    {
+        Gate::authorize('view', $treatment);
+
+        $this->audit->log(AuditAction::TreatmentViewed, $treatment, ['patient_id' => $patient->getKey(), 'view' => 'summary']);
+
+        $treatment->load([
+            'professional:id,name',
+            'procedure:id,name',
+            'products.batch.product:id,name,unit',
+            'notes.author:id,name',
+        ])->loadCount(['photos', 'documents']);
+
+        if ($request->user()->hasPermission(Permission::FinanceView)) {
+            $treatment->load('financialEntry.installments');
+        }
+
+        return view('treatments._summary', [
             'patient' => $patient->load('anamnesis'),
             'treatment' => $treatment,
         ]);

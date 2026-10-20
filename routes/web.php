@@ -9,7 +9,9 @@ use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\FinancialEntryController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InstallmentPaymentController;
+use App\Http\Controllers\PatientAvatarController;
 use App\Http\Controllers\PatientController;
+use App\Http\Controllers\PatientPhotoController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProcedureController;
 use App\Http\Controllers\ProductBatchController;
@@ -18,6 +20,7 @@ use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\StockInventoryController;
 use App\Http\Controllers\StockInvoiceController;
 use App\Http\Controllers\StockMovementController;
+use App\Http\Controllers\StockUnitController;
 use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\TreatmentDocumentController;
 use App\Http\Controllers\TreatmentNoteController;
@@ -72,18 +75,30 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         // Prontuário. scopeBindings garante o encadeamento: o atendimento tem
         // de ser daquele paciente e a foto daquele atendimento, ou dá 404.
         Route::prefix('pacientes/{patient}')->name('patients.')->scopeBindings()->group(function () {
+            // Foto de identificação (avatar): segue o acesso ao cadastro, não ao prontuário.
+            Route::get('avatar', [PatientAvatarController::class, 'show'])->name('avatar.show');
+            Route::post('avatar', [PatientAvatarController::class, 'update'])->name('avatar.update');
+            Route::delete('avatar', [PatientAvatarController::class, 'destroy'])->name('avatar.destroy');
+
             Route::get('ficha-de-saude', [AnamnesisController::class, 'edit'])->name('anamnesis.edit');
             Route::put('ficha-de-saude', [AnamnesisController::class, 'update'])->name('anamnesis.update');
             Route::get('alertas-de-saude', [AnamnesisController::class, 'alerts'])->middleware('throttle:60,1')->name('health-alerts');
+
+            // Fotos: o envio pela ficha é de fotos avulsas; o de atendimento fica em
+            // atendimentos/{treatment}/fotos. Ler e remover é sempre por aqui, para qualquer foto do paciente.
+            Route::post('fotos', [PatientPhotoController::class, 'store'])->name('photos.store');
+            Route::get('fotos/{photo}', [PatientPhotoController::class, 'show'])->name('photos.show');
+            Route::delete('fotos/{photo}', [PatientPhotoController::class, 'destroy'])->name('photos.destroy');
 
             Route::resource('atendimentos', TreatmentController::class)
                 ->parameters(['atendimentos' => 'treatment'])
                 ->names('treatments')
                 ->only(['create', 'store', 'show']);
 
+            // Resumo do atendimento para a janela da lista de atendimentos.
+            Route::get('atendimentos/{treatment}/resumo', [TreatmentController::class, 'summary'])->name('treatments.summary');
+
             Route::post('atendimentos/{treatment}/fotos', [TreatmentPhotoController::class, 'store'])->name('treatments.photos.store');
-            Route::get('atendimentos/{treatment}/fotos/{photo}', [TreatmentPhotoController::class, 'show'])->name('treatments.photos.show');
-            Route::delete('atendimentos/{treatment}/fotos/{photo}', [TreatmentPhotoController::class, 'destroy'])->name('treatments.photos.destroy');
 
             Route::post('atendimentos/{treatment}/documentos', [TreatmentDocumentController::class, 'store'])->name('treatments.documents.store');
             Route::get('atendimentos/{treatment}/documentos/{document}', [TreatmentDocumentController::class, 'show'])->name('treatments.documents.show');
@@ -103,6 +118,10 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::get('estoque/movimentacoes', [StockMovementController::class, 'index'])->name('stock.movements.index');
         Route::get('estoque/lotes', [ProductBatchController::class, 'index'])->name('stock.batches.index');
         Route::get('estoque/lotes/{batch}', [ProductBatchController::class, 'show'])->name('stock.batches.show');
+        // Unidades físicas de produto fracionado.
+        Route::post('estoque/lotes/{batch}/unidades', [StockUnitController::class, 'store'])->name('stock.units.store');
+        Route::get('estoque/unidades/{unit}', [StockUnitController::class, 'show'])->name('stock.units.show');
+        Route::post('estoque/unidades/{unit}/descarte', [StockUnitController::class, 'discard'])->name('stock.units.discard');
         Route::post('estoque/nota-fiscal', [StockInvoiceController::class, 'store'])->name('stock.invoice.store');
         Route::get('estoque/nota-fiscal', [StockInvoiceController::class, 'edit'])->name('stock.invoice.edit');
         Route::put('estoque/nota-fiscal', [StockInvoiceController::class, 'update'])->name('stock.invoice.update');
@@ -124,8 +143,9 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::post('financeiro/pagamentos', [InstallmentPaymentController::class, 'store'])->name('finance.payments.store');
         Route::delete('financeiro/pagamentos/{installment}', [InstallmentPaymentController::class, 'destroy'])->name('finance.payments.destroy');
 
-        Route::get('permissoes', [PermissionController::class, 'edit'])->name('permissions.edit');
-        Route::put('permissoes', [PermissionController::class, 'update'])->name('permissions.update');
+        // Aba de permissões dentro de usuários. Antes do resource, para "permissoes" não ser lido como um id.
+        Route::get('usuarios/permissoes', [PermissionController::class, 'edit'])->name('users.permissions.edit');
+        Route::put('usuarios/permissoes', [PermissionController::class, 'update'])->name('users.permissions.update');
 
         Route::resource('usuarios', UserController::class)
             ->parameters(['usuarios' => 'user'])

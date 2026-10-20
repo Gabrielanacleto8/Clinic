@@ -124,8 +124,17 @@ class FinanceTest extends TestCase
 
         $this->assertSame(['33.34', '33.33', '33.33'], $installments->pluck('amount')->all());
         $this->assertSame(['2026-01-31', '2026-02-28', '2026-03-31'], $installments->map(fn ($i) => $i->due_date->format('Y-m-d'))->all());
-        // Só a primeira nasce paga.
-        $this->assertSame([true, false, false], $installments->map(fn ($i) => $i->isPaid())->all());
+        // Receita no cartão de crédito: a maquininha repassa o total, então todas nascem recebidas.
+        $this->assertSame([true, true, true], $installments->map(fn ($i) => $i->isPaid())->all());
+
+        // Em outra forma de pagamento, só a primeira nasce paga.
+        $this->post('/financeiro/lancamentos', $this->payload([
+            'type' => 'income', 'category' => FinancialCategory::OtherIncome->value, 'description' => 'Venda no boleto',
+            'total' => '100', 'payment_method' => 'bank_slip', 'installments' => 3, 'first_due_date' => '2026-01-31', 'first_installment_paid' => '1',
+        ]))->assertSessionHasNoErrors();
+
+        $boleto = FinancialEntry::where('description', 'Venda no boleto')->sole()->installments()->orderBy('number')->get();
+        $this->assertSame([true, false, false], $boleto->map(fn ($i) => $i->isPaid())->all());
     }
 
     public function test_entry_data_is_validated(): void

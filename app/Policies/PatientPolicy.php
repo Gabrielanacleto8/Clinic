@@ -55,4 +55,20 @@ class PatientPolicy
     {
         return $user->hasPermission(Permission::RecordsManage);
     }
+
+    /**
+     * Enviar fotos avulsas pela ficha, por exemplo o acervo anterior ao sistema.
+     */
+    public function attachPhotos(User $user, Patient $patient): bool
+    {
+        return $user->hasPermission(Permission::RecordsManage);
+    }
+
+    /**
+     * Remover fotos: só o administrador.
+     */
+    public function detachPhotos(User $user, Patient $patient): bool
+    {
+        return $user->isAdmin();
+    }
 }

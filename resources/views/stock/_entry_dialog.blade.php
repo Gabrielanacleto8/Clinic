@@ -37,7 +37,7 @@
             <x-form.input :scope="$scope" id="entry-invoice" name="invoice_number" label="Nota fiscal" maxlength="60" autocomplete="off" />
 
             <x-form.input :scope="$scope" class="sm:col-span-2" id="entry-supplier" name="supplier" label="Fornecedor" maxlength="150" autocomplete="off" :value="$product?->supplier" />
-            <x-form.input :scope="$scope" class="sm:col-span-2" id="entry-reason" name="reason" label="Observação" maxlength="255" autocomplete="off" />
+            <x-form.input :scope="$scope" class="sm:col-span-2" id="entry-reason" name="reason" label="Motivo" maxlength="255" autocomplete="off" />
         </div>
 
         <div class="mt-5 flex justify-end gap-2">

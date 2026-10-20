@@ -39,6 +39,28 @@
             </label>
         </div>
     </div>
+
+    <fieldset class="mt-6 border-t border-slate-200 pt-5">
+        <legend class="text-sm font-semibold text-slate-700">Produto fracionado</legend>
+        <p class="mt-1 text-sm text-slate-600">
+            Para frasco, seringa ou ampola usados aos poucos. Cada unidade física é aberta e controlada à parte. Deixe em branco se o produto sai inteiro do lote.
+        </p>
+        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
+            <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('unit_content')" name="unit_content" label="Conteúdo de cada unidade" :value="LocalizedDecimal::quantity($product->unit_content)"
+                          inputmode="decimal" autocomplete="off" hint="Na unidade de medida. Ex.: 100 (U) por frasco." />
+            <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('hours_after_opening')" name="hours_after_opening" label="Prazo depois de aberto (horas)" :value="$product->hours_after_opening"
+                          type="number" min="1" max="8760" hint="Pela bula. Vazio: vale só a validade do lote." />
+            <div class="md:col-span-2 md:pt-7">
+                <label class="flex items-start gap-2 text-sm">
+                    <input type="hidden" name="multi_patient_use" value="0">
+                    <input type="checkbox" name="multi_patient_use" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700"
+                           @checked($inScope ? old('multi_patient_use', $product->multi_patient_use) : $product->multi_patient_use)>
+                    A sobra pode ser usada em outro paciente
+                </label>
+                <p class="mt-1 text-xs text-slate-500">Marque só se o fabricante e as normas sanitárias permitem. Sem isso, a sobra é descartada ao fim do atendimento.</p>
+            </div>
+        </div>
+    </fieldset>
     <p class="mt-4 text-xs text-slate-500">Quantidade, lote e validade são informados nas entradas de estoque.</p>
 </section>
 

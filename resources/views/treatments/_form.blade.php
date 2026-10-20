@@ -97,6 +97,10 @@
         Escolha o lote aplicado e a quantidade: é o que será baixado do estoque ao registrar.
         Ao escolher o procedimento, o sistema sugere os produtos que ele normalmente usa. Confira antes de registrar.
     </p>
+    <p class="mt-1 text-sm text-slate-600">
+        Produto fracionado (frasco, seringa, ampola) sai de uma unidade física: escolha a unidade já aberta ou "Abrir nova".
+        Se o fabricante não permite usar a sobra em outro paciente, ela é descartada ao registrar.
+    </p>
     @error('products')
         <p class="mt-2 text-sm text-red-700">{{ $message }}</p>
     @enderror
@@ -107,21 +111,24 @@
         <div class="mt-4 space-y-3">
             @for ($i = 0; $i < $rows; $i++)
                 @php $row = $filled[$i] ?? []; @endphp
-                <fieldset class="grid grid-cols-3 gap-3" data-treatment-product>
+                <fieldset class="grid grid-cols-2 gap-3 sm:grid-cols-4" data-treatment-product>
                     <legend class="sr-only">Produto {{ $i + 1 }}</legend>
                     <div class="col-span-2">
-                        <label for="products-{{ $i }}-batch" class="label @if ($i > 0) sr-only @endif">Produto e lote</label>
-                        <select id="products-{{ $i }}-batch" name="products[{{ $i }}][product_batch_id]"
+                        <label for="products-{{ $i }}-batch" class="label @if ($i > 0) sm:sr-only @endif">Produto e lote</label>
+                        <select id="products-{{ $i }}-batch" name="products[{{ $i }}][product_batch_id]" data-treatment-batch
                                 @class(['input', 'input-error' => $errors->has("products.$i.product_batch_id")])>
                             <option value="">—</option>
                             @foreach ($batchesByProduct as $productBatches)
                                 @php $product = $productBatches->first()->product; @endphp
                                 <optgroup label="{{ $product->name }}">
                                     @foreach ($productBatches as $batch)
-                                        <option value="{{ $batch->id }}" @selected((string) ($row['product_batch_id'] ?? '') === (string) $batch->id)>
+                                        <option value="{{ $batch->id }}"{{ $product->isFractioned() ? ' data-fractioned' : '' }} @selected((string) ($row['product_batch_id'] ?? '') === (string) $batch->id)>
                                             {{ $product->name }} · lote {{ $batch->batch_code }}
                                             · {{ $batch->expires_on ? 'val. '.$batch->expires_on->format('d/m/Y') : 'sem validade' }}
                                             · saldo {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $product->unit->symbol() }}
+                                            @if ($product->isFractioned())
+                                                · {{ (int) floor((float) $batch->sealedQuantity() / (float) $product->unit_content) }} lacrada(s)
+                                            @endif
                                         </option>
                                     @endforeach
                                 </optgroup>
@@ -131,9 +138,27 @@
                             <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
                         @enderror
                     </div>
+                    {{-- Só vale para produto fracionado; app.js mostra apenas as unidades do lote escolhido. --}}
+                    <div data-treatment-unit-field>
+                        <label for="products-{{ $i }}-unit" class="label @if ($i > 0) sm:sr-only @endif">Unidade</label>
+                        <select id="products-{{ $i }}-unit" name="products[{{ $i }}][stock_unit_id]" data-treatment-unit
+                                @class(['input', 'input-error' => $errors->has("products.$i.stock_unit_id")])>
+                            <option value="">Abrir nova</option>
+                            @foreach ($units as $unit)
+                                <option value="{{ $unit->id }}" data-batch="{{ $unit->product_batch_id }}" @selected((string) ($row['stock_unit_id'] ?? '') === (string) $unit->id)>
+                                    Nº {{ $unit->id }} · {{ $unit->batch->product->name }}, lote {{ $unit->batch->batch_code }}
+                                    · aberta {{ ClinicTime::format($unit->opened_at, 'd/m H:i') }}
+                                    · resta {{ LocalizedDecimal::quantity($unit->quantity) }} {{ $unit->batch->product->unit->symbol() }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error("products.$i.stock_unit_id")
+                            <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
+                        @enderror
+                    </div>
                     <div>
-                        <label for="products-{{ $i }}-quantity" class="label @if ($i > 0) sr-only @endif">Quantidade</label>
-                        <input id="products-{{ $i }}-quantity" name="products[{{ $i }}][quantity]" type="text" inputmode="decimal" autocomplete="off"
+                        <label for="products-{{ $i }}-quantity" class="label @if ($i > 0) sm:sr-only @endif">Quantidade</label>
+                        <input id="products-{{ $i }}-quantity" name="products[{{ $i }}][quantity]" type="text" inputmode="decimal" autocomplete="off" data-treatment-quantity
                                value="{{ $row['quantity'] ?? '' }}" @class(['input', 'input-error' => $errors->has("products.$i.quantity")])>
                         @error("products.$i.quantity")
                             <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
@@ -172,6 +197,7 @@
                        @checked(old('first_installment_paid', true))>
                 Pagamento (ou primeira parcela) já recebido
             </label>
+            <p class="mt-1 text-xs text-slate-500">No cartão de crédito, todas as parcelas ficam como recebidas: a maquininha repassa o valor inteiro.</p>
         </div>
     </div>
 </section>
@@ -184,7 +210,7 @@
     @if ($scope)
         <button type="button" class="btn btn-secondary" data-dialog-close>Cancelar</button>
     @else
-        <a href="{{ route('patients.show', $patient) }}" class="btn btn-secondary">Cancelar</a>
+        <a href="{{ $cancelUrl ?? route('patients.show', $patient) }}" class="btn btn-secondary">Cancelar</a>
     @endif
     <button type="submit" class="btn btn-primary">Registrar atendimento</button>
 </div>

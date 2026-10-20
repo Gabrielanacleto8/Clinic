@@ -18,6 +18,7 @@
                 <th scope="col" class="px-4 py-3 font-medium">Lote</th>
             @endif
             <th scope="col" class="px-4 py-3 text-right font-medium">Quantidade</th>
+            <th scope="col" class="px-4 py-3 text-right font-medium">Valor</th>
             <th scope="col" class="px-4 py-3 font-medium">Motivo ou origem</th>
             <th scope="col" class="px-4 py-3 font-medium">Usuário</th>
         </tr>
@@ -38,7 +39,12 @@
             @endphp
             <tr>
                 <td data-label="Data" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ ClinicTime::format($movement->created_at) }}</td>
-                <td data-label="Tipo" class="px-4 py-3"><span class="badge {{ $movement->type->badgeClasses() }}">{{ $movement->type->label() }}</span></td>
+                <td data-label="Tipo" class="px-4 py-3">
+                    <span class="badge {{ $movement->type->badgeClasses() }}">{{ $movement->type->label() }}</span>
+                    @if ($movement->stock_unit_id)
+                        <a href="{{ route('stock.units.show', $movement->stock_unit_id) }}" class="mt-1 block text-xs text-teal-800 hover:underline">unidade nº {{ $movement->stock_unit_id }}</a>
+                    @endif
+                </td>
                 @if (! $product)
                     <td data-label="Produto" class="px-4 py-3">
                         <a href="{{ route('products.show', $rowProduct) }}" class="font-medium text-teal-800 hover:underline">{{ $rowProduct->name }}</a>
@@ -52,6 +58,10 @@
                 <td data-label="Quantidade" @class(['px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums', 'text-emerald-700' => $positive, 'text-red-700' => ! $positive])>
                     {{ $positive ? '+' : '−' }}{{ LocalizedDecimal::quantity(abs((float) $movement->quantity)) }} {{ $rowProduct->unit->symbol() }}
                 </td>
+                {{-- Entrada: valor da compra. Saída, consumo e perda: custo médio do lote na baixa. --}}
+                <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap text-slate-600 tabular-nums">
+                    {{ $movement->value() !== null ? LocalizedDecimal::money($movement->value()) : '—' }}
+                </td>
                 <td data-label="Motivo ou origem" class="px-4 py-3 text-slate-600">
                     @if ($treatment)
                         {{-- Rastreabilidade do consumo: o atendimento e quem aplicou. O paciente só aparece no prontuário. --}}
@@ -60,8 +70,17 @@
                         @else
                             Atendimento nº {{ $treatment->id }}
                         @endcan
+                        {{-- O procedimento é informação clínica: só para quem vê o prontuário. --}}
+                        @if ($treatment->relationLoaded('procedure') && $treatment->procedure)
+                            @can('view', $treatment)
+                                · {{ $treatment->procedure->name }}
+                            @endcan
+                        @endif
                         @if ($treatment->professional)
                             · {{ $treatment->professional->name }}
+                        @endif
+                        @if ($movement->reason)
+                            <span class="block text-xs">{{ $movement->reason }}</span>
                         @endif
                     @else
                         {{ $origin !== '' ? $origin : '—' }}

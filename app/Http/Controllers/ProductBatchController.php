@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\StockMovementType;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\StockMovement;
@@ -17,6 +18,7 @@ class ProductBatchController extends Controller
         'com-saldo' => 'Com saldo',
         'vencendo' => 'Vencendo',
         'vencidos' => 'Vencidos com saldo',
+        'descartar' => 'Com unidade aberta a descartar',
         'esgotados' => 'Esgotados',
         'todos' => 'Todos',
     ];
@@ -41,6 +43,7 @@ class ProductBatchController extends Controller
             ->when($status === 'com-saldo', fn ($query) => $query->where('quantity', '>', 0))
             ->when($status === 'vencendo', fn ($query) => $query->expiringSoon())
             ->when($status === 'vencidos', fn ($query) => $query->expiredWithStock())
+            ->when($status === 'descartar', fn ($query) => $query->whereHas('units', fn ($units) => $units->awaitingDiscard()))
             ->when($status === 'esgotados', fn ($query) => $query->where('quantity', 0))
             ->firstToExpire()
             ->paginate(15)
@@ -61,11 +64,23 @@ class ProductBatchController extends Controller
     {
         Gate::authorize('view', $batch->product);
 
+        $totals = StockMovement::query()->where('product_batch_id', $batch->id)->groupBy('type')
+            ->selectRaw('type, sum(quantity) as total, sum(quantity * unit_cost) as value')->get()->keyBy(fn ($row) => $row->type->value);
+
+        // Produto fracionado: o que resta em cada unidade aberta.
+        $units = $batch->product->isFractioned()
+            ? $batch->units()->withBalance()->withConsumption()->orderBy('opened_at')->orderBy('id')->get()->each(fn ($unit) => $unit->setRelation('batch', $batch))
+            : collect();
+
+        $batch->setAttribute('open_quantity', $units->sum('quantity'));
+
         return view('stock.batch', [
             'batch' => $batch,
             'product' => $batch->product,
             // Soma por tipo de movimentação, para o resumo do lote.
-            'totals' => StockMovement::query()->where('product_batch_id', $batch->id)->groupBy('type')->selectRaw('type, sum(quantity) as total')->pluck('total', 'type'),
+            'totals' => $totals->map(fn ($row) => $row->total),
+            'lostValue' => abs((float) ($totals->get(StockMovementType::Loss->value)?->value ?? 0)),
+            'units' => $units,
             'movements' => StockMovement::query()
                 ->where('product_batch_id', $batch->id)
                 ->with(['user:id,name', 'treatment:id,patient_id,professional_id', 'treatment.professional:id,name'])

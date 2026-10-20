@@ -6,8 +6,8 @@ use App\Enums\AttachmentType;
 use App\Enums\AuditAction;
 use App\Http\Requests\StoreDocumentRequest;
 use App\Models\Patient;
+use App\Models\PatientAttachment;
 use App\Models\Treatment;
-use App\Models\TreatmentAttachment;
 use App\Services\AttachmentVault;
 use App\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
@@ -35,8 +35,9 @@ class TreatmentDocumentController extends Controller
         }
 
         DB::transaction(function () use ($request, $patient, $treatment, $contents): void {
-            $document = new TreatmentAttachment(['caption' => $request->validated('title')]);
+            $document = new PatientAttachment(['caption' => $request->validated('title')]);
             $document->type = AttachmentType::Document;
+            $document->patient_id = $patient->getKey();
             $document->treatment_id = $treatment->getKey();
             $document->path = $this->vault->store($patient->getKey(), $contents);
             $document->size = strlen($contents);
@@ -53,7 +54,7 @@ class TreatmentDocumentController extends Controller
      * O PDF é sempre entregue como download, nunca aberto dentro do sistema:
      * um PDF pode conter scripts, e assim ele não roda na origem da aplicação.
      */
-    public function show(Patient $patient, Treatment $treatment, TreatmentAttachment $document): Response
+    public function show(Patient $patient, Treatment $treatment, PatientAttachment $document): Response
     {
         Gate::authorize('view', $treatment);
 
@@ -68,7 +69,7 @@ class TreatmentDocumentController extends Controller
         ]);
     }
 
-    public function destroy(Patient $patient, Treatment $treatment, TreatmentAttachment $document): RedirectResponse
+    public function destroy(Patient $patient, Treatment $treatment, PatientAttachment $document): RedirectResponse
     {
         Gate::authorize('detach', $treatment);
 

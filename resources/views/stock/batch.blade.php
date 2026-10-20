@@ -1,11 +1,15 @@
 @php
     use App\Enums\StockMovementType;
+    use App\Support\ClinicTime;
     use App\Support\LocalizedDecimal;
 
     $unit = $product->unit->symbol();
     $sum = fn (StockMovementType $type) => LocalizedDecimal::quantity(abs((float) ($totals[$type->value] ?? 0))).' '.$unit;
     $batchOptions = [$batch->id => $batch->batch_code.' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit];
     $preset = json_encode(['product_batch_id' => $batch->id]);
+    $fractioned = $product->isFractioned();
+    $sealed = $fractioned ? $batch->sealedQuantity() : null;
+    $sealedUnits = $fractioned ? (int) floor((float) $sealed / (float) $product->unit_content) : 0;
 @endphp
 <x-layouts.app :title="'Lote '.$batch->batch_code">
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -21,6 +25,12 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
             @can('move', $product)
+                @if ($fractioned && $sealedUnits > 0 && ! $batch->isExpired() && $product->is_active)
+                    <form method="POST" action="{{ route('stock.units.store', $batch) }}" data-confirm="Abrir uma unidade lacrada deste lote?">
+                        @csrf
+                        <button type="submit" class="btn btn-primary">Abrir unidade</button>
+                    </form>
+                @endif
                 <button type="button" class="btn btn-secondary" data-dialog-open="stock-exit" data-dialog-values="{{ $preset }}">Saída</button>
                 <button type="button" class="btn btn-secondary" data-dialog-open="stock-loss" data-dialog-values="{{ $preset }}">Perda</button>
             @endcan
@@ -52,9 +62,61 @@
         </div>
     </dl>
 
+    @error('unit')
+        <p class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{{ $message }}</p>
+    @enderror
+
     <p class="mt-3 text-sm text-slate-600">
         Entradas: {{ $sum(StockMovementType::Entry) }} · Saídas: {{ $sum(StockMovementType::Exit) }} · Perdas: {{ $sum(StockMovementType::Loss) }}
+        @if ($lostValue > 0)
+            ({{ LocalizedDecimal::money($lostValue) }} desperdiçados)
+        @endif
     </p>
+
+    @if ($fractioned)
+        <section class="card mt-6 relative overflow-x-auto" aria-labelledby="unidades">
+            <div class="px-4 pt-5 pb-3">
+                <h2 id="unidades" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Unidades físicas</h2>
+                <p class="mt-1 text-sm text-slate-600">
+                    {{ $sealedUnits }} {{ $sealedUnits === 1 ? 'unidade lacrada' : 'unidades lacradas' }} de {{ LocalizedDecimal::quantity($product->unit_content) }} {{ $unit }}
+                    · {{ $units->count() }} {{ $units->count() === 1 ? 'aberta com saldo' : 'abertas com saldo' }}.
+                    {{ $product->multi_patient_use ? 'A sobra pode ir para outro paciente dentro do prazo.' : 'Uso em um só paciente: a sobra é descartada ao fim do atendimento.' }}
+                </p>
+            </div>
+            @if ($units->isNotEmpty())
+                <table class="table-stack w-full min-w-2xl text-left text-sm">
+                    <thead class="border-y border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 font-medium">Unidade</th>
+                            <th scope="col" class="px-4 py-3 font-medium">Aberta em</th>
+                            <th scope="col" class="px-4 py-3 font-medium">Usar até</th>
+                            <th scope="col" class="px-4 py-3 text-right font-medium">Resta</th>
+                            <th scope="col" class="px-4 py-3 font-medium">Situação</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($units as $openUnit)
+                            <tr>
+                                <td data-label="Unidade" class="px-4 py-3 font-medium">
+                                    <a href="{{ route('stock.units.show', $openUnit) }}" class="text-teal-800 hover:underline">{{ $openUnit->label() }}</a>
+                                </td>
+                                <td data-label="Aberta em" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ ClinicTime::format($openUnit->opened_at) }}</td>
+                                <td data-label="Usar até" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $openUnit->usableUntil() ? ClinicTime::format($openUnit->usableUntil()) : 'Validade do lote' }}</td>
+                                <td data-label="Resta" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::quantity($openUnit->quantity) }} {{ $unit }}</td>
+                                <td data-label="Situação" class="px-4 py-3">
+                                    @if ($openUnit->isUsable())
+                                        <span class="badge bg-emerald-100 text-emerald-800">Em uso</span>
+                                    @else
+                                        <span class="badge bg-red-100 text-red-800">Descartar</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </section>
+    @endif
 
     <section class="card mt-6 relative overflow-x-auto" aria-labelledby="rastreabilidade">
         <h2 id="rastreabilidade" class="px-4 pt-5 pb-3 text-sm font-semibold tracking-wide text-slate-500 uppercase">Rastreabilidade do lote</h2>

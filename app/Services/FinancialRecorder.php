@@ -21,6 +21,7 @@ class FinancialRecorder
 {
     /**
      * @param  bool  $firstInstallmentPaid  A primeira parcela (ou o valor à vista) já foi paga na data de competência.
+     *                                      Na receita no cartão de crédito, vale para todas as parcelas.
      */
     public function record(
         FinancialCategory $category,
@@ -50,9 +51,11 @@ class FinancialRecorder
                 'created_by' => $createdBy?->getKey(),
             ]);
 
+            $all = $paymentMethod->settlesAllInstallments($category->type());
+
             $rows = array_map(fn (array $installment) => [
                 ...$installment,
-                'paid_at' => $firstInstallmentPaid && $installment['number'] === 1 ? $issuedOn : null,
+                'paid_at' => $firstInstallmentPaid && ($all || $installment['number'] === 1) ? $issuedOn : null,
             ], InstallmentPlan::split($total, $installments, $firstDueDate));
 
             $entry->installments()->createMany($rows);

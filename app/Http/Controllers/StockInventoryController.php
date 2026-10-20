@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ProductCategory;
+use App\Exceptions\InsufficientStockException;
 use App\Http\Requests\StockInventoryRequest;
 use App\Models\Product;
 use App\Models\ProductBatch;
@@ -66,9 +67,16 @@ class StockInventoryController extends Controller
                 throw ValidationException::withMessages(['counted' => 'Um dos lotes informados não existe mais. Recarregue a página.']);
             }
 
-            return $batches
-                ->filter(fn (ProductBatch $batch) => $ledger->adjustTo($batch, $counts[$batch->id], (string) $request->validated('reason'), $request->user()) !== null)
-                ->count();
+            return $batches->filter(function (ProductBatch $batch) use ($ledger, $counts, $request): bool {
+                try {
+                    return $ledger->adjustTo($batch, $counts[$batch->id], (string) $request->validated('reason'), $request->user()) !== null;
+                } catch (InsufficientStockException) {
+                    // Produto fracionado: a contagem não pode ficar abaixo do que resta nas unidades abertas.
+                    throw ValidationException::withMessages([
+                        "counted.{$batch->id}" => 'A contagem é menor que o que resta nas unidades abertas deste lote. Descarte essas unidades antes.',
+                    ]);
+                }
+            })->count();
         });
 
         $matched = count($counts) - $adjusted;

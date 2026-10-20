@@ -6,10 +6,10 @@ use App\Enums\AttachmentType;
 use App\Enums\FinancialCategory;
 use App\Models\FinancialEntry;
 use App\Models\Patient;
+use App\Models\PatientAttachment;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\Treatment;
-use App\Models\TreatmentAttachment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,12 +41,14 @@ class PatientHistoryTest extends TestCase
 
     /**
      * Anexo gravado direto no banco. O arquivo em si não importa para a listagem.
+     * Sem atendimento, é uma foto avulsa do paciente, com data própria.
      */
-    private function attachment(Treatment $treatment, array $attributes = []): TreatmentAttachment
+    private function attachment(?Treatment $treatment, array $attributes = []): PatientAttachment
     {
-        $attachment = new TreatmentAttachment;
+        $attachment = new PatientAttachment;
         $attachment->forceFill([
-            'treatment_id' => $treatment->id, 'type' => AttachmentType::Photo, 'stage' => 'before', 'caption' => 'Frontal',
+            'patient_id' => $treatment?->patient_id ?? $this->patient->id, 'treatment_id' => $treatment?->id, 'taken_on' => $treatment ? null : '2026-01-15',
+            'type' => AttachmentType::Photo, 'stage' => 'before', 'caption' => 'Frontal',
             'path' => 'x/'.uniqid().'.enc', 'thumbnail_path' => 'x/'.uniqid().'.enc', 'width' => 100, 'height' => 100, 'size' => 10,
             ...$attributes,
         ])->save();
@@ -94,13 +96,18 @@ class PatientHistoryTest extends TestCase
             ->assertDontSee('Só no Descartado')->assertDontSee('De Outro Paciente');
     }
 
-    public function test_photos_tab_gathers_the_photos_of_every_treatment(): void
+    public function test_photos_tab_gathers_the_photos_of_every_treatment_and_the_loose_ones(): void
     {
-        $first = $this->treatment(['procedure_id' => $this->procedure('Toxina botulínica')->id]);
-        $second = $this->treatment(['procedure_id' => $this->procedure('Preenchimento labial')->id]);
+        // 23:30 de 10/03 na clínica, já 11/03 em UTC: a ordem segue o dia da clínica.
+        $first = $this->treatment(['procedure_id' => $this->procedure('Toxina botulínica')->id, 'performed_at' => '2026-03-11 02:30:00']);
+        $second = $this->treatment(['procedure_id' => $this->procedure('Preenchimento labial')->id, 'performed_at' => '2026-09-10 15:00:00']);
         $discarded = $this->treatment();
 
-        $shown = [$this->attachment($first, ['caption' => 'Antes frontal']), $this->attachment($second, ['stage' => 'after', 'caption' => 'Depois perfil'])];
+        $shown = [
+            $this->attachment($first, ['caption' => 'Antes frontal']),
+            $this->attachment($second, ['stage' => 'after', 'caption' => 'Depois perfil']),
+            $this->attachment(null, ['caption' => 'Retroativa', 'taken_on' => '2026-03-11']),
+        ];
         $removed = $this->attachment($first, ['caption' => 'Removida']);
         $removed->delete();
         $document = $this->attachment($first, ['type' => AttachmentType::Document, 'caption' => 'Termo em PDF', 'stage' => null, 'thumbnail_path' => null]);
@@ -111,11 +118,42 @@ class PatientHistoryTest extends TestCase
         $response = $this->actingAs(User::factory()->professional()->create())->get("{$this->url}?aba=fotos");
 
         $response->assertOk()->assertSee('Antes · Antes frontal')->assertSee('Depois · Depois perfil')->assertSee('Preenchimento labial')
+            ->assertSee('Antes · Retroativa')->assertSee('11/03/2026')->assertSee('10/03/2026')->assertSee('Foto avulsa')
+            // Da mais recente à mais antiga, pelo dia do atendimento no fuso da clínica ou pela data da foto.
+            ->assertSeeInOrder(['Depois perfil', 'Retroativa', 'Antes frontal'])
             ->assertDontSee('Removida')->assertDontSee('Termo em PDF')->assertDontSee('De registro descartado')->assertDontSee('De outro paciente');
 
         foreach ($shown as $photo) {
-            $response->assertSee("atendimentos/{$photo->treatment_id}/fotos/{$photo->id}?miniatura=1", false);
+            $response->assertSee("{$this->url}/fotos/{$photo->id}?miniatura=1", false);
         }
+    }
+
+    public function test_photos_tab_runs_a_fixed_number_of_queries(): void
+    {
+        $treatment = $this->treatment();
+        foreach (range(1, 3) as $index) {
+            $this->attachment($treatment, ['caption' => "Do atendimento {$index}"]);
+            $this->attachment(null, ['caption' => "Avulsa {$index}"]);
+        }
+
+        $this->actingAs(User::factory()->professional()->create());
+        DB::enableQueryLog();
+
+        $this->get("{$this->url}?aba=fotos")->assertOk()->assertSee('Do atendimento 3')->assertSee('Avulsa 3');
+
+        // Permissões, paciente, auditoria, criador e ficha, contagem e página da
+        // galeria, atendimentos e procedimentos: nada por foto.
+        $this->assertSame(8, count(DB::getQueryLog()));
+    }
+
+    public function test_the_record_is_read_only_and_only_accepts_loose_photos(): void
+    {
+        $this->treatment();
+
+        $this->actingAs(User::factory()->professional()->create())->get("{$this->url}?aba=atendimentos")
+            ->assertOk()->assertDontSee('Registrar atendimento')->assertDontSee('atendimentos/novo', false);
+
+        $this->get("{$this->url}?aba=fotos")->assertOk()->assertSee('Adicionar fotos avulsas')->assertSee('name="taken_on"', false);
     }
 
     public function test_notes_tab_lists_the_evolutions_newest_first(): void

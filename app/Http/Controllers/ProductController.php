@@ -88,7 +88,7 @@ class ProductController extends Controller
     public function store(ProductRequest $request): RedirectResponse
     {
         $product = DB::transaction(function () use ($request): Product {
-            $product = Product::create($request->validated());
+            $product = Product::create($request->productData());
 
             $this->audit->log(AuditAction::ProductCreated, $product);
 
@@ -126,7 +126,7 @@ class ProductController extends Controller
     public function update(ProductRequest $request, Product $product): RedirectResponse
     {
         DB::transaction(function () use ($request, $product): void {
-            $product->fill($request->validated());
+            $product->fill($request->productData());
 
             // Só os nomes dos campos entram na auditoria, nunca os valores.
             $changed = array_keys($product->getDirty());

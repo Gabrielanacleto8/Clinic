@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\AttachmentType;
 use App\Enums\AuditAction;
 use App\Enums\Permission;
 use App\Http\Requests\PatientRequest;
 use App\Models\FinancialInstallment;
 use App\Models\Patient;
-use App\Models\TreatmentAttachment;
+use App\Models\PatientAttachment;
 use App\Models\TreatmentNote;
 use App\Models\TreatmentProduct;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Support\ClinicTime;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -163,14 +163,17 @@ class PatientController extends Controller
                     ->paginate(15)->withQueryString(),
             ],
             'fotos' => [
-                'records' => TreatmentAttachment::query()
-                    ->select('treatment_attachments.*')
-                    ->join('treatments', 'treatments.id', '=', 'treatment_attachments.treatment_id')
-                    ->where($ofPatient)
-                    ->where('treatment_attachments.type', AttachmentType::Photo)
+                // Avulsas e de atendimento juntas, da mais recente à mais antiga. O dia
+                // da foto de atendimento é o do atendimento no fuso da clínica, como a tela mostra.
+                'records' => PatientAttachment::query()
+                    ->select('patient_attachments.*')
+                    ->where('patient_attachments.patient_id', $patient->getKey())
+                    ->photos()
+                    ->leftJoin('treatments', 'treatments.id', '=', 'patient_attachments.treatment_id')
+                    ->where(fn ($query) => $query->whereNull('patient_attachments.treatment_id')->orWhereNull('treatments.deleted_at'))
                     ->with(['treatment:id,patient_id,procedure_id,performed_at', 'treatment.procedure:id,name'])
-                    ->orderByDesc('treatments.performed_at')
-                    ->orderBy('treatment_attachments.id')
+                    ->orderByRaw("coalesce(patient_attachments.taken_on, date(convert_tz(treatments.performed_at, '+00:00', ?))) desc", [ClinicTime::utcOffset()])
+                    ->orderByDesc('patient_attachments.id')
                     ->paginate(24)->withQueryString(),
             ],
             'evolucoes' => [

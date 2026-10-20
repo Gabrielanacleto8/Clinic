@@ -18,6 +18,16 @@ final class ClinicTime
         return (string) config('clinic.timezone');
     }
 
+    /**
+     * Deslocamento atual do fuso da clínica em relação ao UTC ("-03:00"), para
+     * conversões feitas no banco: convert_tz com deslocamento numérico não
+     * depende das tabelas de fuso do MySQL.
+     */
+    public static function utcOffset(): string
+    {
+        return CarbonImmutable::now(self::timezone())->format('P');
+    }
+
     public static function local(DateTimeInterface $date): CarbonImmutable
     {
         return CarbonImmutable::instance($date)->setTimezone(self::timezone());

@@ -33,6 +33,7 @@ enum AuditAction: string
     case ProductCreated = 'product.created';
     case ProductUpdated = 'product.updated';
     case StockMoved = 'stock.moved';
+    case StockUnitOpened = 'stock.unit_opened';
 
     case AnamnesisUpdated = 'anamnesis.updated';
 

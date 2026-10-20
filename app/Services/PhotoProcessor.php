@@ -24,6 +24,49 @@ class PhotoProcessor
      */
     public function process(UploadedFile $file): array
     {
+        $source = $this->load($file);
+
+        $image = $this->fit($source, (int) config('clinic.photos.max_dimension'));
+        $thumbnail = $this->fit($source, (int) config('clinic.photos.thumbnail_dimension'));
+
+        return [
+            'image' => $this->encode($image, 85),
+            'thumbnail' => $this->encode($thumbnail, 80),
+            'width' => imagesx($image),
+            'height' => imagesy($image),
+        ];
+    }
+
+    /**
+     * Foto de identificação: recorte quadrado do centro, em tamanho pequeno.
+     * Só o necessário para reconhecer a pessoa é guardado.
+     *
+     * @throws InvalidPhotoException
+     */
+    public function avatar(UploadedFile $file): string
+    {
+        $source = $this->load($file);
+        $side = min(imagesx($source), imagesy($source));
+        $target = min($side, (int) config('clinic.photos.avatar_dimension'));
+
+        $square = imagecreatetruecolor($target, $target);
+        imagefill($square, 0, 0, (int) imagecolorallocate($square, 255, 255, 255));
+        imagecopyresampled(
+            $square, $source, 0, 0,
+            intdiv(imagesx($source) - $side, 2), intdiv(imagesy($source) - $side, 2),
+            $target, $target, $side, $side,
+        );
+
+        return $this->encode($square, 85);
+    }
+
+    /**
+     * Valida o arquivo pelo conteúdo e devolve os pixels já na orientação certa.
+     *
+     * @throws InvalidPhotoException
+     */
+    private function load(UploadedFile $file): GdImage
+    {
         $path = $file->getRealPath();
 
         // Lê só o cabeçalho: tipo real e dimensões, sem confiar na extensão.
@@ -48,17 +91,7 @@ class PhotoProcessor
             throw new InvalidPhotoException('Não foi possível ler a imagem enviada.');
         }
 
-        $source = $this->applyOrientation($source, $info[2] === IMAGETYPE_JPEG ? $path : null);
-
-        $image = $this->fit($source, (int) config('clinic.photos.max_dimension'));
-        $thumbnail = $this->fit($source, (int) config('clinic.photos.thumbnail_dimension'));
-
-        return [
-            'image' => $this->encode($image, 85),
-            'thumbnail' => $this->encode($thumbnail, 80),
-            'width' => imagesx($image),
-            'height' => imagesy($image),
-        ];
+        return $this->applyOrientation($source, $info[2] === IMAGETYPE_JPEG ? $path : null);
     }
 
     /**

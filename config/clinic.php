@@ -35,6 +35,8 @@ return [
         'max_megapixels' => 50,
         'max_dimension' => 2560,
         'thumbnail_dimension' => 480,
+        // Foto de identificação do paciente: quadrada, recortada no centro.
+        'avatar_dimension' => 320,
     ],
 
 ];

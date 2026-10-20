@@ -7,7 +7,10 @@ use App\Enums\AuditAction;
 use App\Enums\FinancialCategory;
 use App\Enums\PaymentMethod;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\UnusableStockException;
 use App\Models\Appointment;
+use App\Models\ProductBatch;
+use App\Models\StockUnit;
 use App\Models\Treatment;
 use App\Models\User;
 use App\Support\ClinicTime;
@@ -32,7 +35,7 @@ class TreatmentRecorder
 
     /**
      * @param  Treatment  $treatment  Ainda não gravado, já com paciente, profissional, procedimento e autor.
-     * @param  list<array{product_batch_id: int, quantity: string}>  $products
+     * @param  list<array{product_batch_id: int, stock_unit_id?: int|null, quantity: string}>  $products  No fracionado, sem unidade abre uma nova do lote.
      * @param  array{amount: string, payment_method: PaymentMethod, installments: int, first_due_date: string, first_installment_paid: bool}|null  $payment  Nulo quando não há cobrança.
      * @param  int|null  $appointmentId  Agendamento que este atendimento encerra, se houver.
      *
@@ -42,10 +45,10 @@ class TreatmentRecorder
     {
         return DB::transaction(function () use ($treatment, $products, $payment, $appointmentId, $user): Treatment {
             $treatment->save();
-            $treatment->products()->createMany($products);
-            $treatment->load(['products.batch.product', 'procedure:id,name', 'patient:id,name']);
 
-            $this->withdrawProducts($treatment, $user);
+            $this->withdrawProducts($treatment, $products, $user);
+
+            $treatment->load(['products.batch.product', 'procedure:id,name', 'patient:id,name']);
 
             if ($payment !== null) {
                 $this->finance->record(
@@ -79,31 +82,68 @@ class TreatmentRecorder
     }
 
     /**
+     * Baixa cada produto usado e grava o que foi aplicado no paciente. No
+     * fracionado, a baixa sai da unidade física informada ou de uma unidade
+     * aberta agora; se a sobra não pode ir para outro paciente, ela é
+     * descartada ao fim do atendimento.
+     *
+     * @param  list<array{product_batch_id: int, stock_unit_id?: int|null, quantity: string}>  $products
+     *
      * @throws ValidationException
      */
-    private function withdrawProducts(Treatment $treatment, User $user): void
+    private function withdrawProducts(Treatment $treatment, array $products, User $user): void
     {
-        foreach ($treatment->products as $used) {
-            $batch = $used->batch;
-            $name = $batch->product->name.', lote '.$batch->batch_code;
+        $batches = ProductBatch::query()->with('product')->whereKey(array_column($products, 'product_batch_id'))->get()->keyBy('id');
+        $unitIds = array_filter(array_column($products, 'stock_unit_id'));
+        $units = $unitIds === [] ? collect() : StockUnit::query()->whereKey($unitIds)->get()->keyBy('id');
+
+        foreach ($products as $row) {
+            $batch = $batches->get($row['product_batch_id']) ?? throw ValidationException::withMessages(['products' => 'Um dos lotes informados não existe mais. Recarregue a página.']);
+            $product = $batch->product;
+            $name = $product->name.', lote '.$batch->batch_code;
+            $unit = isset($row['stock_unit_id']) ? $units->get($row['stock_unit_id']) : null;
 
             // Produto vencido ou retirado de uso não é aplicado em paciente.
             if ($batch->isExpired()) {
                 throw ValidationException::withMessages(['products' => "O lote de {$name} está vencido. Escolha outro lote."]);
             }
 
-            if (! $batch->product->is_active) {
-                throw ValidationException::withMessages(['products' => "O produto {$batch->product->name} está inativo. Retire-o do atendimento."]);
+            if (! $product->is_active) {
+                throw ValidationException::withMessages(['products' => "O produto {$product->name} está inativo. Retire-o do atendimento."]);
+            }
+
+            if (isset($row['stock_unit_id']) && ($unit === null || ! $product->isFractioned() || $unit->product_batch_id !== $batch->getKey())) {
+                throw ValidationException::withMessages(['products' => "A unidade informada para {$name} não é deste lote."]);
             }
 
             try {
-                $this->stock->consume($batch, $used->quantity, $treatment, $user);
+                if ($product->isFractioned()) {
+                    $unit ??= $this->stock->openUnit($batch, $user);
+                    $unit->setRelation('batch', $batch);
+                    $this->stock->consumeFromUnit($unit, $row['quantity'], $treatment, $user);
+
+                    if (! $product->multi_patient_use) {
+                        $this->stock->discard($unit, 'Sobra de unidade de uso em um só paciente, descartada ao fim do atendimento.', $user, $treatment);
+                    }
+                } else {
+                    $this->stock->consume($batch, $row['quantity'], $treatment, $user);
+                }
+            } catch (UnusableStockException $exception) {
+                throw ValidationException::withMessages(['products' => $exception->getMessage()]);
             } catch (InsufficientStockException $exception) {
+                $where = $exception->unit ? ' na '.mb_strtolower($exception->unit->label()) : '';
+
                 throw ValidationException::withMessages([
-                    'products' => "Saldo insuficiente de {$name}. Disponível: ".LocalizedDecimal::quantity($exception->available)
-                        .', necessário: '.LocalizedDecimal::quantity($used->quantity).'.',
+                    'products' => "Saldo insuficiente de {$name}{$where}. Disponível: ".LocalizedDecimal::quantity($exception->available)
+                        .', necessário: '.LocalizedDecimal::quantity($row['quantity']).'.',
                 ]);
             }
+
+            $treatment->products()->create([
+                'product_batch_id' => $batch->getKey(),
+                'stock_unit_id' => $unit?->getKey(),
+                'quantity' => $row['quantity'],
+            ]);
         }
     }
 

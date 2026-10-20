@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\AttachmentType;
 use App\Support\ClinicTime;
 use Database\Factories\TreatmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -92,19 +91,19 @@ class Treatment extends Model
     }
 
     /**
-     * @return HasMany<TreatmentAttachment, $this>
+     * @return HasMany<PatientAttachment, $this>
      */
     public function photos(): HasMany
     {
-        return $this->hasMany(TreatmentAttachment::class)->where('type', AttachmentType::Photo);
+        return $this->hasMany(PatientAttachment::class)->photos();
     }
 
     /**
-     * @return HasMany<TreatmentAttachment, $this>
+     * @return HasMany<PatientAttachment, $this>
      */
     public function documents(): HasMany
     {
-        return $this->hasMany(TreatmentAttachment::class)->where('type', AttachmentType::Document);
+        return $this->hasMany(PatientAttachment::class)->documents();
     }
 
     /**

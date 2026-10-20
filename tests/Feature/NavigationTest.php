@@ -46,10 +46,14 @@ class NavigationTest extends TestCase
 
         $onPatients = $this->sidebar($this->actingAs($admin)->get('/pacientes/novo')->getContent());
         $onUsers = $this->sidebar($this->actingAs($admin)->get('/usuarios')->getContent());
+        $onPermissions = $this->sidebar($this->actingAs($admin)->get('/usuarios/permissoes')->getContent());
 
         $this->assertMatchesRegularExpression('/href="[^"]*\/pacientes"[^>]*aria-current="page"/', $onPatients);
         $this->assertDoesNotMatchRegularExpression('/href="[^"]*\/usuarios"[^>]*aria-current="page"/', $onPatients);
         $this->assertMatchesRegularExpression('/href="[^"]*\/usuarios"[^>]*aria-current="page"/', $onUsers);
+        // Permissões é uma aba de usuários: o módulo continua marcado e não há item próprio no menu.
+        $this->assertMatchesRegularExpression('/href="[^"]*\/usuarios"[^>]*aria-current="page"/', $onPermissions);
+        $this->assertStringNotContainsString('href="'.route('users.permissions.edit').'"', $onPermissions);
     }
 
     public function test_sidebar_lists_no_modules_while_the_password_is_temporary(): void

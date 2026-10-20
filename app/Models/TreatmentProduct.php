@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Produto usado em um atendimento, identificado pelo lote do estoque. Nome,
- * unidade e validade vêm do lote e do produto: não são copiados para cá.
+ * Produto usado em um atendimento, identificado pelo lote do estoque e, no
+ * fracionado, pela unidade física. Nome, unidade e validade vêm do lote e do
+ * produto: não são copiados para cá.
  */
-#[Fillable(['product_batch_id', 'quantity'])]
+#[Fillable(['product_batch_id', 'stock_unit_id', 'quantity'])]
 class TreatmentProduct extends Model
 {
     /**
@@ -35,5 +36,15 @@ class TreatmentProduct extends Model
     public function batch(): BelongsTo
     {
         return $this->belongsTo(ProductBatch::class, 'product_batch_id');
+    }
+
+    /**
+     * Unidade física usada, no produto fracionado.
+     *
+     * @return BelongsTo<StockUnit, $this>
+     */
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(StockUnit::class, 'stock_unit_id');
     }
 }

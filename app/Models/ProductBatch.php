@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\ClinicTime;
 use App\Support\Like;
+use App\Support\Quantity;
 use Carbon\CarbonImmutable;
 use Database\Factories\ProductBatchFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,6 +49,40 @@ class ProductBatch extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    /**
+     * Unidades físicas abertas deste lote.
+     *
+     * @return HasMany<StockUnit, $this>
+     */
+    public function units(): HasMany
+    {
+        return $this->hasMany(StockUnit::class);
+    }
+
+    /**
+     * Parte do saldo que ainda está lacrada: o saldo do lote menos o que
+     * resta nas unidades abertas. Espera "open_quantity" (withOpenQuantity)
+     * ou soma as unidades na hora.
+     */
+    public function sealedQuantity(): string
+    {
+        $open = array_key_exists('open_quantity', $this->getAttributes())
+            ? ($this->open_quantity ?? 0)
+            : $this->units()->withBalance()->sum('quantity');
+
+        return Quantity::fromThousandths(Quantity::toThousandths($this->quantity) - Quantity::toThousandths($open));
+    }
+
+    /**
+     * Acrescenta "open_quantity": o que resta nas unidades abertas do lote.
+     *
+     * @param  Builder<ProductBatch>  $query
+     */
+    public function scopeWithOpenQuantity(Builder $query): void
+    {
+        $query->withSum(['units as open_quantity' => fn (Builder $units) => $units->withBalance()], 'quantity');
     }
 
     /**

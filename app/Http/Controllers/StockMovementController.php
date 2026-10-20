@@ -13,6 +13,7 @@ use App\Services\StockLedger;
 use App\Support\LocalizedDecimal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -34,7 +35,12 @@ class StockMovementController extends Controller
             'ate' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
-        $movements = StockMovement::query()
+        $filtered = StockMovement::query()
+            ->when($filters['q'] ?? null, fn ($query, string $term) => $query->search($term))
+            ->when($filters['tipo'] ?? null, fn ($query, string $type) => $query->where('type', $type))
+            ->inPeriod($filters['de'] ?? null, $filters['ate'] ?? null);
+
+        $movements = (clone $filtered)
             ->with([
                 'batch:id,product_id,batch_code',
                 'batch.product:id,name,unit',
@@ -43,15 +49,14 @@ class StockMovementController extends Controller
                 'treatment:id,patient_id,professional_id',
                 'treatment.professional:id,name',
             ])
-            ->when($filters['q'] ?? null, fn ($query, string $term) => $query->search($term))
-            ->when($filters['tipo'] ?? null, fn ($query, string $type) => $query->where('type', $type))
-            ->inPeriod($filters['de'] ?? null, $filters['ate'] ?? null)
             ->latest('id')
             ->paginate(20)
             ->withQueryString();
 
         return view('stock.movements', [
             'movements' => $movements,
+            // Valor do que foi perdido ou descartado dentro dos mesmos filtros.
+            'lostValue' => abs((float) (clone $filtered)->where('type', StockMovementType::Loss->value)->sum(DB::raw('quantity * unit_cost'))),
             'filters' => ['q' => $filters['q'] ?? '', 'tipo' => $filters['tipo'] ?? '', 'de' => $filters['de'] ?? '', 'ate' => $filters['ate'] ?? ''],
             'alerts' => $alerts->summary(),
         ]);

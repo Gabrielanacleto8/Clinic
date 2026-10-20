@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\AttachmentType;
 use App\Enums\AuditAction;
+use App\Models\PatientAttachment;
 use App\Models\Treatment;
-use App\Models\TreatmentAttachment;
 use App\Models\User;
 use App\Services\AttachmentVault;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,13 +41,13 @@ class TreatmentDocumentTest extends TestCase
         return $this->realUpload($name, $contents ?? self::PDF);
     }
 
-    private function uploadOne(): TreatmentAttachment
+    private function uploadOne(): PatientAttachment
     {
         $this->actingAs($this->author)
             ->post("{$this->url}/documentos", ['document' => $this->pdf(), 'title' => 'Termo de consentimento'])
             ->assertSessionHasNoErrors();
 
-        return TreatmentAttachment::firstOrFail();
+        return PatientAttachment::firstOrFail();
     }
 
     public function test_professional_can_attach_a_pdf_document(): void
@@ -56,7 +56,7 @@ class TreatmentDocumentTest extends TestCase
             ->post("{$this->url}/documentos", ['document' => $this->pdf('../../etc/termo assinado.pdf'), 'title' => 'Termo de consentimento'])
             ->assertRedirect($this->url)->assertSessionHasNoErrors();
 
-        $document = TreatmentAttachment::sole();
+        $document = PatientAttachment::sole();
 
         $this->assertSame(AttachmentType::Document, $document->type);
         $this->assertSame('Termo de consentimento', $document->caption);
@@ -95,7 +95,7 @@ class TreatmentDocumentTest extends TestCase
 
         foreach ($rejected as $label => $file) {
             $this->post("{$this->url}/documentos", ['document' => $file, 'title' => 'Documento'])->assertSessionHasErrors('document');
-            $this->assertSame(0, TreatmentAttachment::count(), "Aceitou: {$label}");
+            $this->assertSame(0, PatientAttachment::count(), "Aceitou: {$label}");
         }
 
         // O arquivo falso do Laravel informa o tipo pelo nome e passa pela
@@ -106,7 +106,7 @@ class TreatmentDocumentTest extends TestCase
         $this->post("{$this->url}/documentos", ['document' => $this->pdf(), 'title' => ''])->assertSessionHasErrors('title');
         $this->post("{$this->url}/documentos", ['title' => 'Sem arquivo'])->assertSessionHasErrors('document');
 
-        $this->assertSame(0, TreatmentAttachment::count());
+        $this->assertSame(0, PatientAttachment::count());
         $this->assertSame([], Storage::disk('patient_photos')->allFiles());
     }
 
@@ -162,12 +162,12 @@ class TreatmentDocumentTest extends TestCase
             $this->actingAs($professional)->delete("{$this->url}/documentos/{$document->id}")->assertForbidden();
         }
 
-        $this->assertSame(1, TreatmentAttachment::count());
+        $this->assertSame(1, PatientAttachment::count());
         $this->assertNotSoftDeleted($document);
 
         // Um colega acrescenta, por exemplo, o termo assinado no retorno.
         $this->post("{$this->url}/documentos", ['document' => $this->pdf(), 'title' => 'Termo do retorno'])->assertSessionHasNoErrors();
-        $this->assertSame(2, TreatmentAttachment::count());
+        $this->assertSame(2, PatientAttachment::count());
 
         $this->actingAs(User::factory()->admin()->create())->delete("{$this->url}/documentos/{$document->id}")->assertRedirect($this->url);
 

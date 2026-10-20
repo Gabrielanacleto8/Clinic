@@ -56,7 +56,7 @@ O fluxo principal é: paciente, agenda, atendimento, procedimento, estoque e fin
 
 - **Início:** indicadores do dia e do mês, agenda de hoje, próximos agendamentos e alertas de estoque. Cada bloco só aparece para quem tem a permissão correspondente.
 - **Agenda:** visões de dia, semana e mês. Agendar, remarcar, confirmar presença, marcar falta, cancelar e reabrir. O sistema recusa horários sobrepostos para o mesmo profissional.
-- **Pacientes:** cadastro e página do paciente com ficha de saúde e abas de atendimentos, produtos utilizados, fotos, evoluções e financeiro.
+- **Pacientes:** cadastro e ficha do paciente, só para consulta, com ficha de saúde e abas de atendimentos, produtos utilizados, fotos, evoluções e financeiro. Pela aba de fotos entram fotos retroativas, com a data em que foram feitas, para o acervo anterior ao sistema.
 - **Procedimentos:** catálogo com valor, duração, categoria e os produtos normalmente utilizados.
 - **Estoque:** produtos, lotes com validade, entradas, saídas, ajustes, histórico de movimentações e alertas de estoque mínimo e de vencimento.
 - **Financeiro:** receitas e despesas, parcelas, pagamentos e totais do mês.
@@ -73,7 +73,7 @@ Um atendimento finalizado não pode mais ser alterado nem descartado, nem pelo a
 
 ## Perfis de acesso
 
-O administrador tem sempre acesso total, e só ele gerencia usuários e permissões. O acesso dos outros dois perfis é definido na tela **Permissões**. O padrão de instalação é:
+O administrador tem sempre acesso total, e só ele gerencia usuários e permissões. O acesso dos outros dois perfis é definido na aba **Permissões** do módulo de usuários. O padrão de instalação é:
 
 | Permissão | Profissional | Recepção |
 | --- | --- | --- |

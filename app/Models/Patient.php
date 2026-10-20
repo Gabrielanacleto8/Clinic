@@ -29,7 +29,7 @@ class Patient extends Model
      *
      * @var list<string>
      */
-    protected $hidden = ['cpf', 'cpf_hash', 'notes'];
+    protected $hidden = ['cpf', 'cpf_hash', 'notes', 'avatar_path'];
 
     /**
      * @return array<string, string>
@@ -58,6 +58,18 @@ class Patient extends Model
     }
 
     /**
+     * Iniciais do nome, mostradas no lugar da foto de identificação quando ela não existe.
+     */
+    public function initials(): string
+    {
+        $words = preg_split('/\s+/u', trim($this->name), -1, PREG_SPLIT_NO_EMPTY) ?: ['?'];
+        $first = $words[0];
+        $last = count($words) > 1 ? end($words) : '';
+
+        return mb_strtoupper(mb_substr($first, 0, 1).mb_substr($last, 0, 1));
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function creator(): BelongsTo
@@ -79,6 +91,19 @@ class Patient extends Model
     public function treatments(): HasMany
     {
         return $this->hasMany(Treatment::class);
+    }
+
+    /**
+     * Fotos do paciente, avulsas ou de atendimentos que não foram arquivados.
+     * É por aqui que a rota /pacientes/{patient}/fotos/{photo} resolve a foto.
+     *
+     * @return HasMany<PatientAttachment, $this>
+     */
+    public function photos(): HasMany
+    {
+        return $this->hasMany(PatientAttachment::class)
+            ->photos()
+            ->where(fn (Builder $query) => $query->whereNull('treatment_id')->orWhereHas('treatment'));
     }
 
     /**

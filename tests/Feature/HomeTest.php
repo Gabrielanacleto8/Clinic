@@ -83,7 +83,7 @@ class HomeTest extends TestCase
         $patient = Patient::first();
         Treatment::factory()->count(2)->create(['patient_id' => $patient->id, 'performed_at' => '2026-10-05 15:00:00']);
         Treatment::factory()->create(['patient_id' => $patient->id, 'performed_at' => '2026-09-20 15:00:00']);   // mês passado
-        Treatment::factory()->create(['patient_id' => $patient->id]);                                                             // rascunho
+        Treatment::factory()->create(['patient_id' => $patient->id, 'performed_at' => '2025-10-05 15:00:00']);   // ano passado
 
         FinancialEntry::factory()->withInstallment('500', '2026-10-10')->withInstallment('250', '2026-11-10', number: 2)->create(['issued_on' => '2026-10-02']);
         FinancialEntry::factory()->withInstallment('999', '2026-09-10')->create(['issued_on' => '2026-09-30']);

@@ -58,7 +58,7 @@
             @if ($todayAppointments->isEmpty())
                 <p class="px-4 py-10 text-center text-sm text-slate-500 sm:px-6">Nenhum agendamento para hoje.</p>
             @else
-                @include('appointments._list', ['appointments' => $todayAppointments])
+                @include('appointments._list', ['appointments' => $todayAppointments, 'origin' => App\Enums\TreatmentOrigin::Home])
             @endif
         </section>
 
@@ -133,6 +133,6 @@
     @endif
 
     @if ($treatmentForm)
-        @include('treatments._dialog')
+        @include('treatments._dialog', ['origin' => App\Enums\TreatmentOrigin::Home])
     @endif
 </x-layouts.app>

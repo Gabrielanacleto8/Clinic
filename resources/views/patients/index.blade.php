@@ -42,11 +42,14 @@
                 @forelse ($patients as $patient)
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-medium">
-                            @if ($archived)
-                                {{ $patient->name }}
-                            @else
-                                <a href="{{ route('patients.show', $patient) }}" class="text-teal-800 hover:underline">{{ $patient->name }}</a>
-                            @endif
+                            <div class="flex items-center gap-3">
+                                <x-patients.avatar :patient="$patient" />
+                                @if ($archived)
+                                    {{ $patient->name }}
+                                @else
+                                    <a href="{{ route('patients.show', $patient) }}" class="text-teal-800 hover:underline">{{ $patient->name }}</a>
+                                @endif
+                            </div>
                         </td>
                         {{-- Na listagem o CPF aparece parcialmente oculto. --}}
                         <td data-label="CPF" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $patient->maskedCpf() }}</td>

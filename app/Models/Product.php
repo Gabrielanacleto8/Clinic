@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'code', 'category', 'brand', 'manufacturer', 'supplier', 'unit', 'minimum_stock', 'cost', 'price', 'is_active'])]
+#[Fillable(['name', 'code', 'category', 'brand', 'manufacturer', 'supplier', 'unit', 'unit_content', 'hours_after_opening', 'multi_patient_use', 'minimum_stock', 'cost', 'price', 'is_active'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -27,6 +27,9 @@ class Product extends Model
         return [
             'category' => ProductCategory::class,
             'unit' => ProductUnit::class,
+            'unit_content' => 'decimal:3',
+            'hours_after_opening' => 'integer',
+            'multi_patient_use' => 'boolean',
             'minimum_stock' => 'decimal:3',
             'cost' => 'decimal:2',
             'price' => 'decimal:2',
@@ -40,6 +43,15 @@ class Product extends Model
     public function batches(): HasMany
     {
         return $this->hasMany(ProductBatch::class);
+    }
+
+    /**
+     * Fracionado: usado aos poucos, por unidade física aberta (frasco,
+     * seringa, ampola), e não direto do lote.
+     */
+    public function isFractioned(): bool
+    {
+        return $this->unit_content !== null;
     }
 
     /**
