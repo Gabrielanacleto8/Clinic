@@ -307,7 +307,7 @@ class TreatmentTest extends TestCase
 
         $this->assertSame('1850,50', $defaults[$procedure->id]['amount']);
         $this->assertEqualsCanonicalizing(
-            [['product_batch_id' => $first->id, 'quantity' => '1'], ['product_batch_id' => $only->id, 'quantity' => '2,5']],
+            [['product_batch_id' => $first->id, 'stock_unit_id' => null, 'quantity' => '1'], ['product_batch_id' => $only->id, 'stock_unit_id' => null, 'quantity' => '2,5']],
             $defaults[$procedure->id]['products'],
         );
         // Procedimento sem produtos típicos sugere só o valor.

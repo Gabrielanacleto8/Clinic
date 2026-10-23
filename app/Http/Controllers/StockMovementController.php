@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\StockMovementType;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\UnusableStockException;
 use App\Http\Requests\StockMovementRequest;
 use App\Models\Product;
 use App\Models\ProductBatch;
@@ -68,11 +69,6 @@ class StockMovementController extends Controller
         $quantity = (string) $request->validated('quantity');
         $reason = (string) $request->validated('reason');
 
-        // Produto vencido não circula: só sai do estoque como perda.
-        if ($request->type() === StockMovementType::Exit && $batch->isExpired()) {
-            throw ValidationException::withMessages(['product_batch_id' => 'Este lote está vencido. Registre a baixa como perda.']);
-        }
-
         try {
             if ($request->type() === StockMovementType::Adjustment) {
                 $message = $ledger->adjustTo($batch, $quantity, $reason, $request->user()) === null
@@ -85,9 +81,13 @@ class StockMovementController extends Controller
                 $ledger->withdraw($batch, $quantity, $reason, $request->user());
                 $message = 'Saída registrada.';
             }
+        } catch (UnusableStockException $exception) {
+            // Produto vencido não circula: só sai do estoque como perda.
+            throw ValidationException::withMessages(['product_batch_id' => $exception->getMessage()]);
         } catch (InsufficientStockException $exception) {
             throw ValidationException::withMessages([
-                'quantity' => 'Saldo insuficiente no lote '.$exception->batch->batch_code.'. Disponível: '.LocalizedDecimal::quantity($exception->available).'.',
+                'quantity' => ($batch->product->isFractioned() ? 'Saldo lacrado insuficiente no lote ' : 'Saldo insuficiente no lote ')
+                    .$exception->batch->batch_code.'. Disponível: '.LocalizedDecimal::quantity($exception->available).'.',
             ]);
         }
 

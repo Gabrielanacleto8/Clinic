@@ -174,7 +174,7 @@ class AgendaTest extends TestCase
         $this->assertLessThanOrEqual(8, count(DB::getQueryLog()));
     }
 
-    public function test_invalid_dates_are_rejected_and_the_old_view_parameter_is_ignored(): void
+    public function test_invalid_dates_are_rejected_and_the_week_view_opens_the_chosen_week(): void
     {
         $this->actingAs(User::factory()->create());
 
@@ -182,8 +182,8 @@ class AgendaTest extends TestCase
         $this->get('/agenda?data=2026-13-45')->assertSessionHasErrors('data');
         $this->get('/agenda?data[]=2026-10-08')->assertSessionHasErrors('data');
 
-        // Links antigos, do tempo das visões de dia e semana, continuam abrindo a agenda.
-        $this->get('/agenda?visao=semana&data=2026-10-12')->assertOk()->assertSee('Outubro de 2026')->assertSee('Segunda-feira, 12 de outubro');
+        $this->get('/agenda?visao=semana&data=2026-10-12')->assertOk()
+            ->assertSee('Semana de 12 de outubro a 18 de outubro de 2026')->assertSee('Segunda-feira, 12 de outubro');
     }
 
     public function test_appointments_of_archived_patients_are_hidden(): void

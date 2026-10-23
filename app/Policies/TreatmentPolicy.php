@@ -8,7 +8,8 @@ use App\Models\User;
 
 /**
  * Um atendimento registrado é histórico permanente: ninguém o altera nem o
- * exclui. Só se acrescentam evoluções, fotos e documentos.
+ * exclui. Só se acrescentam evoluções, fotos e documentos. Registro feito com
+ * erro é anulado, e continua no prontuário marcado como tal.
  */
 class TreatmentPolicy
 {
@@ -46,6 +47,15 @@ class TreatmentPolicy
     public function detach(User $user, Treatment $treatment): bool
     {
         return $user->isAdmin();
+    }
+
+    /**
+     * Anular um registro feito com erro. Não altera nem apaga o registro:
+     * desfaz os efeitos dele (estoque, financeiro, agenda) e o marca como anulado.
+     */
+    public function void(User $user, Treatment $treatment): bool
+    {
+        return $user->hasPermission(Permission::RecordsVoid) && ! $treatment->isVoided();
     }
 
     /**

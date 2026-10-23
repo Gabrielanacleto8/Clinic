@@ -58,6 +58,9 @@
                         </td>
                         <td data-label="Procedimento" class="px-4 py-3 font-medium">
                             <a href="{{ route('patients.treatments.show', [$treatment->patient, $treatment]) }}" class="text-teal-800 hover:underline" data-treatment-summary-link>{{ $treatment->procedure->name }}</a>
+                            @if ($treatment->isVoided())
+                                <span class="badge ml-1 bg-red-100 text-red-800">Anulado</span>
+                            @endif
                             @if ($treatment->treated_areas)
                                 <span class="block text-xs font-normal text-slate-500">{{ $treatment->treated_areas }}</span>
                             @endif

@@ -11,6 +11,7 @@ use App\Support\InstallmentPlan;
 use App\Support\LocalizedDecimal;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class FinancialEntryRequest extends FormRequest
 {
@@ -46,6 +47,21 @@ class FinancialEntryRequest extends FormRequest
             'installments' => ['required', 'integer', 'min:1', 'max:'.InstallmentPlan::MAX_INSTALLMENTS],
             'first_due_date' => ['required', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
             'first_installment_paid' => ['required', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return list<callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if (! $validator->errors()->hasAny(['total', 'installments'])
+                    && ! InstallmentPlan::fits((string) $this->input('total'), (int) $this->input('installments'))) {
+                    $validator->errors()->add('installments', InstallmentPlan::TOO_MANY_MESSAGE);
+                }
+            },
         ];
     }
 

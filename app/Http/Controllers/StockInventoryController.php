@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Enums\ProductCategory;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\UnusableStockException;
 use App\Http\Requests\StockInventoryRequest;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Services\StockLedger;
+use App\Support\ClinicTime;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,12 +33,15 @@ class StockInventoryController extends Controller
             'categoria' => ['nullable', Rule::enum(ProductCategory::class)],
         ]);
 
-        // Lotes com saldo no sistema, agrupados por produto na ordem de uso.
+        // Lotes com saldo no sistema e dentro da validade, agrupados por
+        // produto na ordem de uso. Lote vencido não se ajusta: sai como perda.
         $batches = ProductBatch::query()
             ->select('product_batches.*')
             ->join('products', 'products.id', '=', 'product_batches.product_id')
-            ->with('product:id,name,code,unit')
+            ->with('product:id,name,code,unit,unit_content')
+            ->withOpenQuantity()
             ->where('product_batches.quantity', '>', 0)
+            ->where(fn ($query) => $query->whereNull('product_batches.expires_on')->orWhere('product_batches.expires_on', '>=', ClinicTime::today()))
             ->when($filters['q'] ?? null, fn ($query, string $term) => $query->search($term))
             ->when($filters['categoria'] ?? null, fn ($query, string $category) => $query->where('products.category', $category))
             ->orderBy('products.name')
@@ -70,11 +75,11 @@ class StockInventoryController extends Controller
             return $batches->filter(function (ProductBatch $batch) use ($ledger, $counts, $request): bool {
                 try {
                     return $ledger->adjustTo($batch, $counts[$batch->id], (string) $request->validated('reason'), $request->user()) !== null;
+                } catch (UnusableStockException $exception) {
+                    // O lote venceu entre abrir a tela e enviar a contagem.
+                    throw ValidationException::withMessages(["counted.{$batch->id}" => $exception->getMessage()]);
                 } catch (InsufficientStockException) {
-                    // Produto fracionado: a contagem não pode ficar abaixo do que resta nas unidades abertas.
-                    throw ValidationException::withMessages([
-                        "counted.{$batch->id}" => 'A contagem é menor que o que resta nas unidades abertas deste lote. Descarte essas unidades antes.',
-                    ]);
+                    throw ValidationException::withMessages(["counted.{$batch->id}" => 'A contagem deixaria o saldo do lote negativo.']);
                 }
             })->count();
         });

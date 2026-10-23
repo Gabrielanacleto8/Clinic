@@ -68,7 +68,9 @@
                       :max="ClinicTime::toInput(now()->addMinutes(5))" />
 
         @if ($user->isAdmin())
-            <x-form.select :scope="$scope" class="md:col-span-4" name="professional_id" label="Profissional responsável" required
+            {{-- Profissional do agendamento que saiu da lista (desativado, sem permissão) fica sem
+                 seleção: o navegador escolheria o primeiro nome e o registro iria para outra pessoa. --}}
+            <x-form.select :scope="$scope" class="md:col-span-4" name="professional_id" label="Profissional responsável" required placeholder="Selecione"
                            :options="$professionals->pluck('name', 'id')->all()" :selected="$treatment->professional_id ?? $user->id" />
         @else
             <div class="md:col-span-4">
@@ -191,13 +193,17 @@
         <x-form.input :scope="$scope" class="md:col-span-2" name="first_due_date" label="Primeiro vencimento" type="date" :value="ClinicTime::today()"
                       hint="As demais parcelas vencem de mês em mês." />
         <div class="md:col-span-4 md:pt-7">
-            <label class="flex items-center gap-2 text-sm">
-                <input type="hidden" name="first_installment_paid" value="0">
-                <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
-                       @checked(old('first_installment_paid', true))>
-                Pagamento (ou primeira parcela) já recebido
-            </label>
-            <p class="mt-1 text-xs text-slate-500">No cartão de crédito, todas as parcelas ficam como recebidas: a maquininha repassa o valor inteiro.</p>
+            @if ($user->hasPermission(App\Enums\Permission::FinanceManage))
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="hidden" name="first_installment_paid" value="0">
+                    <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
+                           @checked(old('first_installment_paid', true))>
+                    Pagamento (ou primeira parcela) já recebido
+                </label>
+                <p class="mt-1 text-xs text-slate-500">No cartão de crédito, todas as parcelas ficam como recebidas: a maquininha repassa o valor inteiro.</p>
+            @else
+                <p class="text-sm text-slate-600">A cobrança entra como pendente. O recebimento é registrado no financeiro.</p>
+            @endif
         </div>
     </div>
 </section>

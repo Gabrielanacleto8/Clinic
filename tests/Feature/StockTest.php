@@ -167,7 +167,7 @@ class StockTest extends TestCase
         $this->assertCount(3, $movements);
         $this->assertSame(StockMovementType::Entry, $movements[0]->type);
         $this->assertSame('300.000', $movements[0]->quantity);
-        $this->assertSame(['1234.56', 'Distribuidora Y', '1234', 'Compra do trimestre'], [
+        $this->assertSame(['1234.5600', 'Distribuidora Y', '1234', 'Compra do trimestre'], [
             $movements[0]->unit_cost, $movements[0]->supplier, $movements[0]->invoice_number, $movements[0]->reason,
         ]);
         $this->assertSame($this->admin->id, $movements[0]->user_id);

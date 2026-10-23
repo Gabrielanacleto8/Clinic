@@ -8,6 +8,7 @@ use App\Support\Like;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use LogicException;
 
 /**
@@ -28,7 +29,7 @@ class StockMovement extends Model
         return [
             'type' => StockMovementType::class,
             'quantity' => 'decimal:3',
-            'unit_cost' => 'decimal:2',
+            'unit_cost' => 'decimal:4',
             'created_at' => 'datetime',
         ];
     }
@@ -52,6 +53,30 @@ class StockMovement extends Model
             ->where('supplier', 'like', $like)
             ->orWhere('invoice_number', 'like', $like)
             ->orWhereHas('batch', fn (Builder $batch) => $batch->search($term)));
+    }
+
+    /**
+     * Consumos que não foram estornados pela anulação do atendimento.
+     *
+     * @param  Builder<StockMovement>  $query
+     */
+    public function scopeUnreversedConsumption(Builder $query): void
+    {
+        self::whereUnreversedConsumption($query->getQuery());
+    }
+
+    /**
+     * Mesma regra de scopeUnreversedConsumption() para uma consulta sobre
+     * "stock_movements" montada sem o modelo.
+     */
+    public static function whereUnreversedConsumption(QueryBuilder $query): void
+    {
+        $query->where('stock_movements.type', StockMovementType::Consumption->value)
+            ->whereNotExists(fn ($reversal) => $reversal->selectRaw('1')->from('stock_movements as reversals')
+                ->where('reversals.type', StockMovementType::Reversal->value)
+                ->whereColumn('reversals.treatment_id', 'stock_movements.treatment_id')
+                ->whereColumn('reversals.product_batch_id', 'stock_movements.product_batch_id')
+                ->whereColumn('reversals.stock_unit_key', 'stock_movements.stock_unit_key'));
     }
 
     /**

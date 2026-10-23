@@ -38,7 +38,7 @@ class DashboardMetrics
         }
 
         if ($user->hasPermission(Permission::RecordsView)) {
-            $selects[] = '(select count(*) from treatments where deleted_at is null and performed_at between ? and ?) as treatments';
+            $selects[] = '(select count(*) from treatments where deleted_at is null and voided_at is null and performed_at between ? and ?) as treatments';
             array_push($bindings, $month->utc(), $month->endOfMonth()->utc());
         }
 
@@ -49,14 +49,15 @@ class DashboardMetrics
         }
 
         if ($user->hasPermission(Permission::StockView)) {
-            $today = ClinicTime::today();
             $alertLimit = ClinicTime::local(now())->addDays((int) config('clinic.stock.expiry_alert_days'))->format('Y-m-d');
 
-            $selects[] = '(select count(*) from products p where p.is_active = 1 and p.minimum_stock > 0 and (select coalesce(sum(b.quantity), 0)'
-                .' from product_batches b where b.product_id = p.id and (b.expires_on is null or b.expires_on >= ?)) <= p.minimum_stock) as low_stock';
+            // Mesma regra de estoque baixo da aba do estoque (Product::lowStock()).
+            $lowStock = Product::query()->lowStock()->selectRaw('count(*)')->toBase();
+            $selects[] = '('.$lowStock->toSql().') as low_stock';
+            array_push($bindings, ...$lowStock->getBindings());
             // Lotes com saldo já vencidos ou que vencem dentro do prazo de alerta.
             $selects[] = '(select count(*) from product_batches where quantity > 0 and expires_on <= ?) as expiring_batches';
-            array_push($bindings, $today, $alertLimit);
+            $bindings[] = $alertLimit;
         }
 
         if ($selects === []) {
@@ -76,7 +77,7 @@ class DashboardMetrics
         [$start, $end] = ClinicTime::dayBounds(ClinicTime::today());
 
         return Appointment::query()
-            ->with(['patient', 'professional:id,name', 'procedure:id,name', 'treatment'])
+            ->with(['patient:id,name', 'professional:id,name', 'procedure:id,name', 'treatment:id,patient_id'])
             ->whereHas('patient')
             ->whereBetween('scheduled_at', [$start, $end])
             ->orderBy('scheduled_at')

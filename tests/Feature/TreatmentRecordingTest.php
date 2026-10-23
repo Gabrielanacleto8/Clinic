@@ -6,7 +6,9 @@ use App\Enums\AuditAction;
 use App\Enums\FinancialCategory;
 use App\Enums\FinancialEntryType;
 use App\Enums\PaymentMethod;
+use App\Enums\Permission;
 use App\Enums\StockMovementType;
+use App\Enums\UserRole;
 use App\Models\FinancialEntry;
 use App\Models\Patient;
 use App\Models\Product;
@@ -15,6 +17,7 @@ use App\Models\StockMovement;
 use App\Models\Treatment;
 use App\Models\TreatmentNote;
 use App\Models\User;
+use App\Services\RolePermissions;
 use App\Services\StockLedger;
 use App\Services\TreatmentRecorder;
 use Carbon\CarbonImmutable;
@@ -105,8 +108,18 @@ class TreatmentRecordingTest extends TestCase
         $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::TreatmentCreated->value]);
     }
 
+    /**
+     * Dar o pagamento por recebido no registro exige a permissão de registrar pagamentos.
+     */
+    private function letProfessionalsReceivePayments(): void
+    {
+        app(RolePermissions::class)->sync(UserRole::Professional, [...Permission::defaultsFor(UserRole::Professional), Permission::FinanceView, Permission::FinanceManage]);
+    }
+
     public function test_registering_deducts_stock_and_records_finance_at_once(): void
     {
+        $this->letProfessionalsReceivePayments();
+
         $this->actingAs($this->author)->post($this->url, $this->payload())
             ->assertSessionHasNoErrors()
             ->assertSessionHas('success', 'Atendimento registrado. Estoque e financeiro foram atualizados.');
@@ -145,6 +158,7 @@ class TreatmentRecordingTest extends TestCase
     public function test_revenue_belongs_to_the_day_the_treatment_was_performed(): void
     {
         // Atendimento da semana passada, registrado só hoje e já pago.
+        $this->letProfessionalsReceivePayments();
         $this->record(['performed_at' => '2026-10-01T23:30', 'installments' => 1, 'first_due_date' => '2026-10-01']);
 
         $entry = FinancialEntry::with('installments')->sole();
@@ -302,8 +316,9 @@ class TreatmentRecordingTest extends TestCase
         // O profissional registra a cobrança, mas não vê o financeiro.
         $this->get($treatmentUrl)->assertOk()->assertDontSee('Parcela 1/3')->assertDontSee('R$ 1.200,00');
 
+        // Sem a permissão de registrar pagamentos, a caixa "já recebido" é ignorada e a cobrança fica pendente.
         $this->actingAs(User::factory()->admin()->create())->get($treatmentUrl)
-            ->assertSee('R$ 1.200,00')->assertSee('Cartão de crédito')->assertSee('Parcela 1/3')->assertSee('Pago')->assertDontSee('Pendente');
+            ->assertSee('R$ 1.200,00')->assertSee('Cartão de crédito')->assertSee('Parcela 1/3')->assertSee('Pendente');
     }
 
     public function test_stock_history_points_back_to_the_treatment(): void

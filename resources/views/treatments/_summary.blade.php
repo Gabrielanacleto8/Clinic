@@ -16,6 +16,11 @@
         · {{ $treatment->professional->name }}
     </p>
     <p class="mt-1 text-xs text-slate-500">Registrado em {{ ClinicTime::format($treatment->created_at) }}.</p>
+    @if ($treatment->isVoided())
+        <p class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="note">
+            Registro anulado em {{ ClinicTime::format($treatment->voided_at) }}. Motivo: {{ $treatment->void_reason }}
+        </p>
+    @endif
 
     <x-health-alerts :anamnesis="$patient->anamnesis" class="mt-4" />
 

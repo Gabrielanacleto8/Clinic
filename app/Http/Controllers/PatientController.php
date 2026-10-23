@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AppointmentStatus;
 use App\Enums\AuditAction;
 use App\Enums\Permission;
 use App\Http\Requests\PatientRequest;
+use App\Models\Appointment;
 use App\Models\FinancialInstallment;
 use App\Models\Patient;
 use App\Models\PatientAttachment;
 use App\Models\TreatmentNote;
 use App\Models\TreatmentProduct;
 use App\Models\User;
+use App\Services\AppointmentScheduler;
 use App\Services\AuditLogger;
 use App\Support\ClinicTime;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -95,8 +98,9 @@ class PatientController extends Controller
     public function store(PatientRequest $request): RedirectResponse
     {
         $patient = $this->saveGuardingCpf(function () use ($request): Patient {
-            $patient = new Patient($request->validated());
+            $patient = new Patient($request->patientData());
             $patient->created_by = $request->user()->getKey();
+            $this->applyImageUseConsent($patient, $request->imageUseConsent());
             $patient->save();
 
             $this->audit->log(AuditAction::PatientCreated, $patient);
@@ -116,7 +120,8 @@ class PatientController extends Controller
         // Recepção vê só o cadastro; o prontuário nem chega a ser consultado.
         $clinical = Gate::allows('viewClinicalRecords', $patient);
         $tabs = $this->availableTabs($request->user(), $clinical);
-        $tab = array_key_exists((string) $request->query('aba'), $tabs) ? $request->query('aba') : array_key_first($tabs);
+        $requested = $request->query('aba');
+        $tab = is_string($requested) && array_key_exists($requested, $tabs) ? $requested : array_key_first($tabs);
 
         return view('patients.show', [
             'patient' => $patient->load($clinical ? ['creator', 'anamnesis'] : ['creator']),
@@ -157,6 +162,8 @@ class PatientController extends Controller
                     ->select('treatment_products.*')
                     ->join('treatments', 'treatments.id', '=', 'treatment_products.treatment_id')
                     ->where($ofPatient)
+                    // Produto de atendimento anulado voltou ao estoque: não foi aplicado.
+                    ->whereNull('treatments.voided_at')
                     ->with(['batch.product:id,name,unit', 'treatment:id,patient_id,procedure_id,performed_at', 'treatment.procedure:id,name'])
                     ->orderByDesc('treatments.performed_at')
                     ->orderBy('treatment_products.id')
@@ -217,7 +224,8 @@ class PatientController extends Controller
     public function update(PatientRequest $request, Patient $patient): RedirectResponse
     {
         $this->saveGuardingCpf(function () use ($request, $patient): Patient {
-            $patient->fill($request->validated());
+            $patient->fill($request->patientData());
+            $this->applyImageUseConsent($patient, $request->imageUseConsent());
 
             // Só os nomes dos campos entram na auditoria, nunca os valores.
             $changed = array_keys($patient->getDirty());
@@ -234,17 +242,46 @@ class PatientController extends Controller
         return redirect()->route('patients.show', $patient)->with('success', 'Dados do paciente atualizados.');
     }
 
-    public function destroy(Patient $patient): RedirectResponse
+    public function destroy(Patient $patient, AppointmentScheduler $scheduler): RedirectResponse
     {
         Gate::authorize('delete', $patient);
 
-        DB::transaction(function () use ($patient): void {
+        $cancelled = DB::transaction(function () use ($patient, $scheduler): int {
             $patient->delete();
 
             $this->audit->log(AuditAction::PatientArchived, $patient);
+
+            // Agendamento de paciente arquivado some da agenda: em aberto, ele seguiria
+            // ocupando o horário do profissional sem ninguém ver nem poder cancelar.
+            $open = Appointment::query()
+                ->where('patient_id', $patient->getKey())
+                ->whereIn('status', AppointmentStatus::open())
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($open as $appointment) {
+                $from = $appointment->status;
+                $appointment->status = AppointmentStatus::Cancelled;
+                $scheduler->save($appointment);
+
+                $this->audit->log(AuditAction::AppointmentStatusChanged, $appointment, [
+                    'patient_id' => $patient->getKey(),
+                    'from' => $from->value,
+                    'to' => AppointmentStatus::Cancelled->value,
+                    'reason' => 'patient_archived',
+                ]);
+            }
+
+            return $open->count();
         });
 
-        return redirect()->route('patients.index')->with('success', 'Paciente arquivado.');
+        $message = match ($cancelled) {
+            0 => 'Paciente arquivado.',
+            1 => 'Paciente arquivado. O agendamento em aberto dele foi cancelado.',
+            default => "Paciente arquivado. Os {$cancelled} agendamentos em aberto dele foram cancelados.",
+        };
+
+        return redirect()->route('patients.index')->with('success', $message);
     }
 
     public function restore(Patient $patient): RedirectResponse
@@ -258,6 +295,19 @@ class PatientController extends Controller
         });
 
         return redirect()->route('patients.show', $patient)->with('success', 'Paciente restaurado.');
+    }
+
+    /**
+     * Autorizar grava quando; retirar a autorização apaga a data. Marcar de
+     * novo quem já autorizou mantém a data original.
+     */
+    private function applyImageUseConsent(Patient $patient, ?bool $consent): void
+    {
+        if ($consent === true && $patient->image_use_consented_at === null) {
+            $patient->image_use_consented_at = now();
+        } elseif ($consent === false) {
+            $patient->image_use_consented_at = null;
+        }
     }
 
     /**

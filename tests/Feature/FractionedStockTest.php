@@ -118,7 +118,7 @@ class FractionedStockTest extends TestCase
         $this->assertSame($unit->id, $consumption->stock_unit_id);
         $this->assertSame($treatment->id, $consumption->treatment_id);
         $this->assertSame('-30.000', $consumption->quantity);
-        $this->assertSame('12.00', $consumption->unit_cost);
+        $this->assertSame('12.0000', $consumption->unit_cost);
         $this->assertSame('360.00', $consumption->value());
 
         $this->assertDatabaseHas('treatment_products', ['treatment_id' => $treatment->id, 'product_batch_id' => $this->toxin->id, 'stock_unit_id' => $unit->id, 'quantity' => '30.000']);
@@ -618,11 +618,15 @@ class FractionedStockTest extends TestCase
         $this->actingAs($this->admin)->get('/estoque/movimentacoes?tipo=entry')->assertOk()->assertDontSee('Perdas e descartes nestes filtros');
     }
 
-    public function test_inventory_accepts_a_count_that_keeps_the_open_units(): void
+    public function test_inventory_counts_only_the_sealed_part_and_keeps_the_open_units(): void
     {
         $unit = app(StockLedger::class)->openUnit($this->toxin, $this->admin);
 
-        $this->actingAs($this->admin)->put('/estoque/inventario', ['reason' => 'Inventário', 'counted' => [$this->toxin->id => '100']])
+        // 300 U: 100 na unidade aberta e 200 lacradas. A contagem é só do lacrado.
+        $this->actingAs($this->admin)->get('/estoque/inventario')->assertOk()
+            ->assertSee('200 U lacrado')->assertSee('+ 100 U em unidades abertas');
+
+        $this->actingAs($this->admin)->put('/estoque/inventario', ['reason' => 'Inventário', 'counted' => [$this->toxin->id => '0']])
             ->assertSessionHasNoErrors();
 
         $this->assertSame('100.000', $this->toxin->refresh()->quantity);
@@ -784,5 +788,78 @@ class FractionedStockTest extends TestCase
 
         $this->assertSame($withOne, $this->countQueries('/estoque/movimentacoes'));
         $this->assertSame($lossesWithOne, $this->countQueries('/estoque/movimentacoes?tipo=loss'));
+    }
+
+    public function test_reversing_a_treatment_returns_every_withdrawal_to_its_batch_and_unit(): void
+    {
+        $plain = Product::factory()->create(['name' => 'Anestésico tópico']);
+        $plainBatch = app(StockReceiver::class)->receive($plain->id, ['batch_code' => 'AN01', 'quantity' => '10', 'expires_on' => '2027-06-30', 'unit_cost' => '5.00'], $this->admin)->batch;
+
+        $this->treat([
+            ['product_batch_id' => $this->toxin->id, 'quantity' => '30'],
+            ['product_batch_id' => $this->filler->id, 'quantity' => '0,8'],
+            ['product_batch_id' => $plainBatch->id, 'quantity' => '2'],
+        ])->assertSessionHasNoErrors();
+
+        $treatment = Treatment::sole();
+        $toxinUnit = StockUnit::where('product_batch_id', $this->toxin->id)->sole();
+        $fillerUnit = StockUnit::where('product_batch_id', $this->filler->id)->sole();
+        $this->assertSame('0.000', $fillerUnit->quantity);
+
+        $reversals = app(StockLedger::class)->reverseTreatment($treatment, 'Atendimento anulado: paciente errado.', $this->admin);
+
+        // Um estorno por lote e unidade. Na seringa de uso único, consumo e sobra
+        // voltam juntos ao lote como lacrado: ela foi aberta e descartada, não volta a ser usável.
+        $this->assertCount(3, $reversals);
+        $this->assertSame(['300.000', '3.000', '10.000'], [$this->toxin->refresh()->quantity, $this->filler->refresh()->quantity, $plainBatch->refresh()->quantity]);
+        $this->assertSame(['100.000', '0.000'], [$toxinUnit->refresh()->quantity, $fillerUnit->refresh()->quantity]);
+        $this->assertSame('3.000', $this->filler->refresh()->sealedQuantity());
+
+        $byBatch = StockMovement::where('type', StockMovementType::Reversal->value)->get()->keyBy('product_batch_id');
+        $this->assertSame(['30.000', $toxinUnit->id, '12.0000'], [$byBatch[$this->toxin->id]->quantity, $byBatch[$this->toxin->id]->stock_unit_id, $byBatch[$this->toxin->id]->unit_cost]);
+        $this->assertSame(['1.000', null, '900.0000', '900.00'], [$byBatch[$this->filler->id]->quantity, $byBatch[$this->filler->id]->stock_unit_id, $byBatch[$this->filler->id]->unit_cost, $byBatch[$this->filler->id]->value()]);
+        $this->assertSame(['2.000', null], [$byBatch[$plainBatch->id]->quantity, $byBatch[$plainBatch->id]->stock_unit_id]);
+        $this->assertSame([$treatment->id], $byBatch->pluck('treatment_id')->unique()->values()->all());
+        $this->assertSame('Atendimento anulado: paciente errado.', $byBatch[$plainBatch->id]->reason);
+
+        // A seringa aberta não vai para outro paciente nem volta aos alertas de descarte.
+        $this->assertFalse($fillerUnit->refresh()->load('batch.product')->isUsable());
+        $this->assertSame(0, app(StockAlerts::class)->summary()['units_to_discard']);
+
+        // Auditoria de cada estorno, ligada ao atendimento e sem o motivo.
+        $logs = AuditLog::where('action', AuditAction::StockMoved->value)->where('metadata->type', StockMovementType::Reversal->value)->get();
+        $this->assertCount(3, $logs);
+        $this->assertSame([$treatment->id], $logs->pluck('metadata.treatment_id')->unique()->values()->all());
+        $this->assertStringNotContainsString('paciente errado', $logs->toJson());
+
+        // O estorno aparece no livro de estoque.
+        $this->actingAs($this->admin)->get('/estoque/movimentacoes?tipo=reversal')->assertOk()->assertSee('Estorno de atendimento');
+    }
+
+    public function test_a_treatment_is_reversed_only_once(): void
+    {
+        $this->treat([['product_batch_id' => $this->toxin->id, 'quantity' => '30']])->assertSessionHasNoErrors();
+        $treatment = Treatment::sole();
+        $ledger = app(StockLedger::class);
+
+        $ledger->reverseTreatment($treatment, 'Anulado', $this->admin);
+
+        try {
+            $ledger->reverseTreatment($treatment, 'Anulado de novo', $this->admin);
+            $this->fail('O estoque de um atendimento só pode ser estornado uma vez.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('O estoque deste atendimento já foi estornado.', $exception->getMessage());
+        }
+
+        $this->assertSame('300.000', $this->toxin->refresh()->quantity);
+        $this->assertSame(1, StockMovement::where('type', StockMovementType::Reversal->value)->count());
+    }
+
+    public function test_reversing_a_treatment_without_products_changes_nothing(): void
+    {
+        $this->treat([])->assertSessionHasNoErrors();
+
+        $this->assertSame([], app(StockLedger::class)->reverseTreatment(Treatment::sole(), 'Anulado', $this->admin));
+        $this->assertSame(0, StockMovement::where('type', StockMovementType::Reversal->value)->count());
     }
 }

@@ -42,12 +42,16 @@ class StockLedger
 
     /**
      * Saída manual que não é perda nem consumo: devolução, uso interno, transferência.
-     * No produto fracionado, sai só da parte lacrada.
+     * No produto fracionado, sai só da parte lacrada. Lote vencido não sai
+     * por aqui: produto vencido não circula, só é baixado como perda.
      *
      * @throws InsufficientStockException
+     * @throws UnusableStockException
      */
     public function withdraw(ProductBatch $batch, string $quantity, string $reason, ?User $user): StockMovement
     {
+        $this->refuseExpired($batch);
+
         return $this->apply($batch, StockMovementType::Exit, -Quantity::toThousandths($quantity), $reason, $user);
     }
 
@@ -152,16 +156,76 @@ class StockLedger
     }
 
     /**
-     * Ajusta o saldo do lote para a quantidade contada. Devolve nulo quando
-     * a contagem confere com o saldo e não há o que registrar.
+     * Devolve ao estoque tudo o que um atendimento baixou: o consumo e, no
+     * fracionado de uso em um só paciente, a sobra descartada. Cada lote (ou
+     * unidade) recebe uma movimentação de estorno com o total devolvido,
+     * ligada ao atendimento e ao custo médio das baixas originais. Usado
+     * na anulação do atendimento; um atendimento só é estornado uma vez.
      *
-     * @throws InsufficientStockException Quando a contagem fica abaixo do que resta nas unidades abertas.
+     * @return list<StockMovement>
+     *
+     * @throws LogicException Quando o atendimento já foi estornado.
+     */
+    public function reverseTreatment(Treatment $treatment, string $reason, ?User $user): array
+    {
+        return DB::transaction(function () use ($treatment, $reason, $user): array {
+            $outgoing = StockMovement::query()
+                ->where('treatment_id', $treatment->getKey())
+                ->whereIn('type', [StockMovementType::Consumption->value, StockMovementType::Loss->value])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if (StockMovement::query()->where('treatment_id', $treatment->getKey())->where('type', StockMovementType::Reversal->value)->exists()) {
+                throw new LogicException('O estoque deste atendimento já foi estornado.');
+            }
+
+            $reversals = [];
+            $units = StockUnit::query()->with('batch.product:id,multi_patient_use')->whereKey($outgoing->pluck('stock_unit_id')->filter()->unique()->all())->get()->keyBy('id');
+
+            // Unidade de uso em um só paciente foi aberta e descartada: ela não
+            // volta a ser usável. O que ela tinha volta ao lote como lacrado,
+            // como se não tivesse sido aberta; o registro certo abre outra.
+            $returnsToUnit = fn (StockMovement $movement) => $movement->stock_unit_id !== null
+                && $units->get($movement->stock_unit_id)?->batch->product->multi_patient_use;
+
+            // Um estorno por lote e unidade: o índice único do atendimento
+            // também impede estornar duas vezes o mesmo lote ou unidade.
+            foreach ($outgoing->groupBy(fn (StockMovement $movement) => $movement->product_batch_id.'-'.($returnsToUnit($movement) ? $movement->stock_unit_id : 0)) as $movements) {
+                $first = $movements->first();
+                $quantity = -$movements->sum(fn (StockMovement $movement) => Quantity::toThousandths($movement->quantity));
+                $value = $movements->sum(fn (StockMovement $movement) => abs((float) $movement->quantity) * (float) ($movement->unit_cost ?? 0));
+                $hasCost = $movements->contains(fn (StockMovement $movement) => $movement->unit_cost !== null);
+
+                $batch = $this->lockBatch(ProductBatch::query()->findOrFail($first->product_batch_id));
+                $unit = $returnsToUnit($first) ? $units->get($first->stock_unit_id) : null;
+
+                $reversals[] = $this->apply($batch, StockMovementType::Reversal, $quantity, $reason, $user, $treatment, extra: [
+                    'unit_cost' => $hasCost ? number_format($value / ($quantity / Quantity::SCALE), 4, '.', '') : null,
+                ], unit: $unit);
+            }
+
+            return $reversals;
+        });
+    }
+
+    /**
+     * Ajusta o saldo do lote para a quantidade contada. No produto
+     * fracionado, a contagem é só do que está lacrado: o que resta nas
+     * unidades abertas fica como está e sai por discard(). Devolve nulo
+     * quando a contagem confere com o saldo e não há o que registrar. Lote
+     * vencido não é ajustado: o que há nele é baixado como perda.
+     *
+     * @throws UnusableStockException
      */
     public function adjustTo(ProductBatch $batch, string $countedQuantity, string $reason, ?User $user): ?StockMovement
     {
+        $this->refuseExpired($batch);
+
         return DB::transaction(function () use ($batch, $countedQuantity, $reason, $user): ?StockMovement {
-            $current = Quantity::toThousandths($this->lockedQuantity($batch));
-            $delta = Quantity::toThousandths($countedQuantity) - $current;
+            $batch = $this->lockBatch($batch);
+            $open = $batch->product->isFractioned() ? Quantity::toThousandths($this->lockedOpenQuantity($batch)) : 0;
+            $delta = Quantity::toThousandths($countedQuantity) + $open - Quantity::toThousandths($batch->quantity);
 
             return $delta === 0 ? null : $this->apply($batch, StockMovementType::Adjustment, $delta, $reason, $user);
         });
@@ -224,6 +288,8 @@ class StockLedger
                 'product_batch_id' => $batch->getKey(),
                 'stock_unit_id' => $unit?->getKey(),
                 'treatment_id' => $treatment?->getKey(),
+                // Para a auditoria por paciente reunir também o que foi aplicado nele.
+                'patient_id' => $treatment?->patient_id,
             ]), $user);
 
             return $movement;
@@ -268,7 +334,17 @@ class StockLedger
 
         $cost = $average ?? $batch->product->cost;
 
-        return $cost === null ? null : number_format((float) $cost, 2, '.', '');
+        return $cost === null ? null : number_format((float) $cost, 4, '.', '');
+    }
+
+    /**
+     * @throws UnusableStockException
+     */
+    private function refuseExpired(ProductBatch $batch): void
+    {
+        if ($batch->isExpired()) {
+            throw new UnusableStockException('O lote '.$batch->batch_code.' está vencido. Registre a baixa como perda.');
+        }
     }
 
     /**

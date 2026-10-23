@@ -45,6 +45,6 @@
 </section>
 
 <div class="flex flex-wrap items-center justify-end gap-3">
-    <a href="{{ route('home', $appointment->exists ? ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')] : []) }}" class="btn btn-secondary">Voltar</a>
+    <a href="{{ route('agenda.index', $appointment->exists ? ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')] : []) }}" class="btn btn-secondary">Voltar</a>
     <button type="submit" class="btn btn-primary">{{ $appointment->exists ? 'Salvar alterações' : 'Agendar' }}</button>
 </div>

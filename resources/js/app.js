@@ -42,12 +42,54 @@ document.addEventListener('input', (event) => {
 });
 
 // <form data-confirm="..."> pede confirmação antes de enviar.
+// Formulário POST já enviado não sai de novo enquanto a página não muda:
+// duplo clique no registro de atendimento gravaria tudo duas vezes.
+// Formulário que não troca de página (download) leva data-allow-resubmit.
 document.addEventListener('submit', (event) => {
-    const message = event.target.dataset?.confirm;
+    const form = event.target;
+    const message = form.dataset?.confirm;
+
+    if (form.dataset.submitting !== undefined) {
+        event.preventDefault();
+        return;
+    }
 
     if (message && !window.confirm(message)) {
         event.preventDefault();
+        return;
     }
+
+    if (!event.defaultPrevented && form.method === 'post' && form.dataset.allowResubmit === undefined) {
+        form.dataset.submitting = '';
+    }
+});
+
+// Formulário longo (registro de atendimento, ficha de saúde, evolução) com
+// data-keepalive: enquanto a pessoa digita, a sessão é renovada a cada poucos
+// minutos, para o texto não se perder quando ela expira. Sem digitação, a
+// sessão expira normalmente por inatividade.
+const keepaliveForms = document.querySelectorAll('form[data-keepalive]');
+
+if (keepaliveForms.length > 0) {
+    const url = keepaliveForms[0].dataset.keepalive;
+    const interval = 5 * 60 * 1000;
+    let typedAt = 0;
+
+    keepaliveForms.forEach((form) => form.addEventListener('input', () => (typedAt = Date.now())));
+
+    window.setInterval(() => {
+        if (Date.now() - typedAt < interval) {
+            fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).catch(() => {});
+        }
+    }, interval);
+}
+
+// Página de impressão: o botão abre o diálogo de imprimir (ou salvar em PDF) do navegador.
+document.querySelector('[data-print]')?.addEventListener('click', () => window.print());
+
+// Voltar pelo navegador restaura a página do cache com o formulário ainda marcado.
+window.addEventListener('pageshow', () => {
+    document.querySelectorAll('form[data-submitting]').forEach((form) => delete form.dataset.submitting);
 });
 
 // Menu lateral recolhível em telas pequenas. Em telas largas ele fica sempre
@@ -454,7 +496,9 @@ if (procedureSelect) {
 
     // Unidade física: só para lote de produto fracionado, e só as unidades
     // abertas daquele lote. Sem JavaScript, o servidor confere a escolha.
-    const syncUnits = (row) => {
+    // Com preferOpen, sugere a unidade aberta há mais tempo do lote (as opções
+    // já vêm nessa ordem), para não abrir uma nova à toa.
+    const syncUnits = (row, { preferOpen = false } = {}) => {
         const fractioned = row.batch.selectedOptions[0]?.hasAttribute('data-fractioned') ?? false;
 
         row.unitField.hidden = !fractioned;
@@ -469,11 +513,15 @@ if (procedureSelect) {
         if (row.unit.selectedOptions[0]?.disabled || !fractioned) {
             row.unit.value = '';
         }
+
+        if (fractioned && preferOpen) {
+            row.unit.value = [...row.unit.options].find((option) => option.value !== '' && !option.disabled)?.value ?? '';
+        }
     };
 
     rows.forEach((row) => {
         syncUnits(row);
-        row.batch.addEventListener('change', () => syncUnits(row));
+        row.batch.addEventListener('change', () => syncUnits(row, { preferOpen: true }));
     });
 
     const suggestionFor = (procedureId) => defaults[procedureId] ?? { amount: null, products: [] };
@@ -505,6 +553,7 @@ if (procedureSelect) {
                 row.batch.value = next.products[index]?.product_batch_id ?? '';
                 row.quantity.value = next.products[index]?.quantity ?? '';
                 syncUnits(row);
+                row.unit.value = next.products[index]?.stock_unit_id ?? '';
             });
         }
 

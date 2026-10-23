@@ -62,7 +62,28 @@ class PatientRequest extends FormRequest
             'city' => ['nullable', 'string', 'max:100'],
             'state' => ['nullable', 'string', Rule::in(BrazilianStates::CODES)],
             'notes' => ['nullable', 'string', 'max:5000'],
+            // Ausente: a autorização fica como está.
+            'image_use_consent' => ['nullable', 'boolean'],
         ];
+    }
+
+    /**
+     * Dados do cadastro, sem a autorização de uso de imagem, que o controller
+     * registra com a data à parte.
+     *
+     * @return array<string, mixed>
+     */
+    public function patientData(): array
+    {
+        return $this->safe()->except(['image_use_consent']);
+    }
+
+    /**
+     * Nulo quando o formulário não tratou da autorização.
+     */
+    public function imageUseConsent(): ?bool
+    {
+        return $this->has('image_use_consent') ? $this->boolean('image_use_consent') : null;
     }
 
     /**
@@ -85,6 +106,7 @@ class PatientRequest extends FormRequest
             'city' => 'cidade',
             'state' => 'UF',
             'notes' => 'observações',
+            'image_use_consent' => 'autorização de uso de imagem',
         ];
     }
 

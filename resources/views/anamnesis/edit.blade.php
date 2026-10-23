@@ -4,7 +4,7 @@
         <h1 class="mt-1 text-xl font-semibold tracking-tight">Ficha de saúde</h1>
         <p class="mt-1 text-sm text-slate-600">Informações consultadas antes de cada procedimento. Todos os campos são gravados com criptografia.</p>
 
-        <form method="POST" action="{{ route('patients.anamnesis.update', $patient) }}" class="mt-6 space-y-6" novalidate>
+        <form method="POST" action="{{ route('patients.anamnesis.update', $patient) }}" class="mt-6 space-y-6" novalidate data-keepalive="{{ route('session.keepalive') }}">
             @csrf
             @method('PUT')
 

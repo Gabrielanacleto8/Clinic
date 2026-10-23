@@ -102,6 +102,7 @@ class TreatmentRecorder
             $product = $batch->product;
             $name = $product->name.', lote '.$batch->batch_code;
             $unit = isset($row['stock_unit_id']) ? $units->get($row['stock_unit_id']) : null;
+            $openedNow = false;
 
             // Produto vencido ou retirado de uso não é aplicado em paciente.
             if ($batch->isExpired()) {
@@ -118,7 +119,10 @@ class TreatmentRecorder
 
             try {
                 if ($product->isFractioned()) {
-                    $unit ??= $this->stock->openUnit($batch, $user);
+                    if ($unit === null) {
+                        $unit = $this->stock->openUnit($batch, $user);
+                        $openedNow = true;
+                    }
                     $unit->setRelation('batch', $batch);
                     $this->stock->consumeFromUnit($unit, $row['quantity'], $treatment, $user);
 
@@ -131,6 +135,15 @@ class TreatmentRecorder
             } catch (UnusableStockException $exception) {
                 throw ValidationException::withMessages(['products' => $exception->getMessage()]);
             } catch (InsufficientStockException $exception) {
+                // A unidade aberta agora é desfeita junto com o resto: citar o número dela confundiria.
+                if ($openedNow) {
+                    throw ValidationException::withMessages([
+                        'products' => "A quantidade de {$name} passa do conteúdo de uma unidade ("
+                            .LocalizedDecimal::quantity($product->unit_content).' '.$product->unit->symbol()
+                            .'). Use uma linha para cada unidade aberta.',
+                    ]);
+                }
+
                 $where = $exception->unit ? ' na '.mb_strtolower($exception->unit->label()) : '';
 
                 throw ValidationException::withMessages([

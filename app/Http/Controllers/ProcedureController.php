@@ -69,7 +69,7 @@ class ProcedureController extends Controller
 
         return view('procedures.edit', [
             'procedure' => $procedure->load('products:id'),
-            'products' => $this->selectableProducts(),
+            'products' => $this->selectableProducts($procedure),
         ]);
     }
 
@@ -84,10 +84,18 @@ class ProcedureController extends Controller
     }
 
     /**
+     * Produtos ativos, mais os que o procedimento já usa mesmo que inativos:
+     * fora da lista, eles seriam apagados do procedimento ao salvar.
+     *
      * @return Collection<int, Product>
      */
-    private function selectableProducts(): Collection
+    private function selectableProducts(?Procedure $procedure = null): Collection
     {
-        return Product::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'unit']);
+        $current = $procedure?->products->modelKeys() ?? [];
+
+        return Product::query()
+            ->where(fn ($query) => $query->where('is_active', true)->when($current !== [], fn ($inner) => $inner->orWhereIn('id', $current)))
+            ->orderBy('name')
+            ->get(['id', 'name', 'unit', 'is_active']);
     }
 }

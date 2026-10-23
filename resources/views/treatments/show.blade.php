@@ -10,14 +10,38 @@
 @endphp
 <x-layouts.app :title="$treatment->procedure->name.' · '.$patient->name">
     <a href="{{ route('patients.show', $patient) }}" class="text-sm text-slate-600 hover:underline">← {{ $patient->name }}</a>
-    <h1 class="mt-1 text-xl font-semibold tracking-tight">{{ $treatment->procedure->name }}</h1>
-    <p class="mt-1 text-sm text-slate-600">
-        {{ ClinicTime::format($treatment->performed_at, 'd/m/Y') }} às {{ ClinicTime::format($treatment->performed_at, 'H:i') }}
-        · {{ $treatment->professional->name }}
-    </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h1 class="mt-1 text-xl font-semibold tracking-tight">
+                {{ $treatment->procedure->name }}
+                @if ($treatment->isVoided())
+                    <span class="badge ml-1 bg-red-100 align-middle text-red-800">Anulado</span>
+                @endif
+            </h1>
+            <p class="mt-1 text-sm text-slate-600">
+                {{ ClinicTime::format($treatment->performed_at, 'd/m/Y') }} às {{ ClinicTime::format($treatment->performed_at, 'H:i') }}
+                · {{ $treatment->professional->name }}
+            </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{{ route('patients.record', [$patient, 'atendimento' => $treatment->id]) }}" class="btn btn-secondary">Imprimir</a>
+            @can('void', $treatment)
+                <button type="button" class="btn btn-danger" data-dialog-open="treatment-void">Anular registro</button>
+            @endcan
+        </div>
+    </div>
+
+    @if ($treatment->isVoided())
+        <div class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="note">
+            <p class="font-semibold">Registro anulado em {{ ClinicTime::format($treatment->voided_at) }} por {{ $treatment->voidedBy?->name ?? 'usuário removido' }}.</p>
+            <p class="mt-1 whitespace-pre-line">Motivo: {{ $treatment->void_reason }}</p>
+            <p class="mt-1">O estoque foi devolvido e a cobrança, excluída. O registro fica no prontuário só como histórico.</p>
+        </div>
+    @endif
 
     <p class="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" role="note">
-        Registrado em {{ ClinicTime::format($treatment->created_at) }}. O registro não pode mais ser alterado: novas informações entram como evolução.
+        Registrado em {{ ClinicTime::format($treatment->created_at) }}{{ $treatment->creator ? ' por '.$treatment->creator->name : '' }}.
+        O registro não pode mais ser alterado: novas informações entram como evolução. Se foi feito com erro (paciente, lote ou valor errado), ele pode ser anulado e registrado de novo.
     </p>
 
     <x-health-alerts :anamnesis="$patient->anamnesis" class="mt-6" />
@@ -110,7 +134,7 @@
         @include('treatments._notes_list')
 
         @can('addNote', $treatment)
-            <form method="POST" action="{{ route('patients.treatments.notes.store', [$patient, $treatment]) }}" class="mt-6 border-t border-slate-200 pt-6" novalidate>
+            <form method="POST" action="{{ route('patients.treatments.notes.store', [$patient, $treatment]) }}" class="mt-6 border-t border-slate-200 pt-6" novalidate data-keepalive="{{ route('session.keepalive') }}">
                 @csrf
                 <x-form.textarea name="body" label="Nova evolução" required rows="3" maxlength="5000"
                                  hint="Como o paciente evoluiu, correções ao registro ou informações do retorno. Depois de salva, não pode ser editada." />
@@ -145,4 +169,25 @@
             </form>
         </x-dialog>
     @endif
+
+    @can('void', $treatment)
+        <x-dialog id="treatment-void" title="Anular registro">
+            <form method="POST" action="{{ route('patients.treatments.void', [$patient, $treatment]) }}" class="space-y-4" novalidate
+                  data-confirm="Anular este atendimento? O estoque será devolvido, a cobrança excluída e o agendamento reaberto.">
+                @csrf
+                <input type="hidden" name="_dialog" value="treatment-void">
+                <p class="text-sm text-slate-600">
+                    Use só para registro feito com erro: paciente, lote, quantidade ou valor errados. O registro continua no prontuário, marcado como anulado;
+                    o estoque baixado volta, a cobrança é excluída e o agendamento volta para a agenda. Depois, registre o atendimento certo.
+                </p>
+                <p class="text-sm text-slate-600">Se a cobrança já tem pagamento registrado, desfaça o pagamento no financeiro antes.</p>
+                <x-form.textarea scope="treatment-void" name="reason" label="Motivo" required rows="3" maxlength="1000"
+                                 hint="Ex.: registrado no paciente errado. Gravado com criptografia." />
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn btn-secondary" data-dialog-close>Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Anular registro</button>
+                </div>
+            </form>
+        </x-dialog>
+    @endcan
 </x-layouts.app>

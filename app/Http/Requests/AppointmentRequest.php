@@ -88,8 +88,13 @@ class AppointmentRequest extends FormRequest
                 $scheduledAt = ClinicTime::fromInput($this->input('scheduled_at'));
                 [$todayStart] = ClinicTime::dayBounds(ClinicTime::today());
 
+                // Remarcar sem mudar o horário (só observações, procedimento) vale mesmo
+                // para agendamento em aberto de dia que já passou.
+                $unchanged = $this->isUpdate()
+                    && $this->input('scheduled_at') === ClinicTime::toInput($this->route('appointment')->scheduled_at);
+
                 // Encaixes de hoje são aceitos, mesmo em horário que já passou.
-                if ($scheduledAt->isBefore($todayStart)) {
+                if ($scheduledAt->isBefore($todayStart) && ! $unchanged) {
                     $validator->errors()->add('scheduled_at', 'Não é possível agendar em uma data que já passou.');
                 }
 

@@ -15,6 +15,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class TreatmentDocumentController extends Controller
 {
@@ -34,18 +35,27 @@ class TreatmentDocumentController extends Controller
             throw ValidationException::withMessages(['document' => 'O arquivo não é um PDF válido.']);
         }
 
-        DB::transaction(function () use ($request, $patient, $treatment, $contents): void {
-            $document = new PatientAttachment(['caption' => $request->validated('title')]);
-            $document->type = AttachmentType::Document;
-            $document->patient_id = $patient->getKey();
-            $document->treatment_id = $treatment->getKey();
-            $document->path = $this->vault->store($patient->getKey(), $contents);
-            $document->size = strlen($contents);
-            $document->uploaded_by = $request->user()->getKey();
-            $document->save();
+        $path = $this->vault->store($patient->getKey(), $contents);
 
-            $this->audit->log(AuditAction::DocumentUploaded, $document, ['patient_id' => $patient->getKey(), 'treatment_id' => $treatment->getKey()]);
-        });
+        try {
+            DB::transaction(function () use ($request, $patient, $treatment, $contents, $path): void {
+                $document = new PatientAttachment(['caption' => $request->validated('title')]);
+                $document->type = AttachmentType::Document;
+                $document->patient_id = $patient->getKey();
+                $document->treatment_id = $treatment->getKey();
+                $document->path = $path;
+                $document->size = strlen($contents);
+                $document->uploaded_by = $request->user()->getKey();
+                $document->save();
+
+                $this->audit->log(AuditAction::DocumentUploaded, $document, ['patient_id' => $patient->getKey(), 'treatment_id' => $treatment->getKey()]);
+            });
+        } catch (Throwable $exception) {
+            // Sem o registro, o arquivo gravado ficaria órfão no disco.
+            $this->vault->delete($path);
+
+            throw $exception;
+        }
 
         return redirect()->route('patients.treatments.show', [$patient, $treatment])->with('success', 'Documento adicionado.');
     }

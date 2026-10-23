@@ -3,7 +3,9 @@
 
     $unit = $product->unit->symbol();
     $batchOptions = $batches->mapWithKeys(fn ($batch) => [
-        $batch->id => $batch->batch_code.' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit,
+        $batch->id => $batch->batch_code.($product->isFractioned()
+            ? ' · lacrado '.LocalizedDecimal::quantity($batch->sealedQuantity()).' '.$unit
+            : ' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit).($batch->isExpired() ? ' · vencido' : ''),
     ])->all();
     $canMove = auth()->user()->can('move', $product);
     $canAdjust = auth()->user()->can('adjust', $product);

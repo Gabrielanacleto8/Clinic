@@ -63,17 +63,25 @@ return new class extends Migration
         });
     }
 
+    /**
+     * As unicidades antigas (atendimento + lote) não voltam como únicas: com
+     * produto fracionado, o mesmo atendimento grava consumo e descarte do
+     * mesmo lote, ou duas unidades dele, e recriá-las falharia com dados
+     * reais. Voltam como índice comum, com o nome antigo, para a chave
+     * estrangeira do atendimento ter índice e as migrations anteriores
+     * conseguirem removê-lo ao voltar mais.
+     */
     public function down(): void
     {
         Schema::table('treatment_products', function (Blueprint $table) {
-            $table->unique(['treatment_id', 'product_batch_id']);
+            $table->index(['treatment_id', 'product_batch_id'], 'treatment_products_treatment_id_product_batch_id_unique');
             $table->dropUnique('treatment_products_treatment_unit_unique');
             $table->dropColumn('stock_unit_key');
             $table->dropConstrainedForeignId('stock_unit_id');
         });
 
         Schema::table('stock_movements', function (Blueprint $table) {
-            $table->unique(['treatment_id', 'product_batch_id']);
+            $table->index(['treatment_id', 'product_batch_id'], 'stock_movements_treatment_id_product_batch_id_unique');
             $table->dropUnique('stock_movements_treatment_consumption_unique');
             $table->dropColumn('stock_unit_key');
             $table->dropConstrainedForeignId('stock_unit_id');

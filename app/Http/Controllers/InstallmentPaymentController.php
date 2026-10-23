@@ -3,37 +3,37 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AuditAction;
+use App\Http\Requests\InstallmentPaymentRequest;
 use App\Models\FinancialEntry;
 use App\Models\FinancialInstallment;
 use App\Services\AuditLogger;
-use App\Support\ClinicTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class InstallmentPaymentController extends Controller
 {
+    /** Paciente do lançamento travado, para a auditoria por paciente. */
+    private ?int $patientId = null;
+
     public function __construct(private readonly AuditLogger $audit) {}
+
+    /**
+     * @return array<string, int>
+     */
+    private function auditData(FinancialInstallment $installment): array
+    {
+        return array_filter(['financial_entry_id' => $installment->financial_entry_id, 'patient_id' => $this->patientId], fn ($value) => $value !== null);
+    }
 
     /**
      * Registra o pagamento de uma parcela em aberto.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(InstallmentPaymentRequest $request): RedirectResponse
     {
-        Gate::authorize('settle', FinancialEntry::class);
-
-        $validated = $request->validate([
-            // Só parcelas ainda em aberto: pagar duas vezes não é possível.
-            'installment_id' => ['required', 'integer', Rule::exists(FinancialInstallment::class, 'id')->whereNull('paid_at')],
-            'paid_at' => ['required', 'date_format:Y-m-d', 'after:2000-01-01', 'before_or_equal:'.ClinicTime::today()],
-        ], [
-            'installment_id.exists' => 'Esta parcela não está mais em aberto.',
-            'paid_at.before_or_equal' => 'A data do pagamento não pode estar no futuro.',
-        ], ['installment_id' => 'parcela', 'paid_at' => 'data do pagamento']);
+        $validated = $request->validated();
 
         $installment = FinancialInstallment::query()->findOrFail($validated['installment_id']);
 
@@ -49,7 +49,7 @@ class InstallmentPaymentController extends Controller
             foreach ($settled as $each) {
                 $each->update(['paid_at' => $validated['paid_at']]);
 
-                $this->audit->log(AuditAction::InstallmentPaid, $each, ['financial_entry_id' => $each->financial_entry_id]);
+                $this->audit->log(AuditAction::InstallmentPaid, $each, $this->auditData($each));
             }
 
             return $settled->count();
@@ -80,7 +80,7 @@ class InstallmentPaymentController extends Controller
             foreach ($reopened as $each) {
                 $each->update(['paid_at' => null]);
 
-                $this->audit->log(AuditAction::InstallmentReopened, $each, ['financial_entry_id' => $each->financial_entry_id]);
+                $this->audit->log(AuditAction::InstallmentReopened, $each, $this->auditData($each));
             }
 
             return $reopened->count();
@@ -102,7 +102,8 @@ class InstallmentPaymentController extends Controller
      */
     private function siblingsSettledTogether(FinancialInstallment $installment): Builder
     {
-        $entry = FinancialEntry::query()->select(['id', 'type', 'payment_method'])->lockForUpdate()->findOrFail($installment->financial_entry_id);
+        $entry = FinancialEntry::query()->select(['id', 'type', 'payment_method', 'patient_id'])->lockForUpdate()->findOrFail($installment->financial_entry_id);
+        $this->patientId = $entry->patient_id;
 
         $query = $entry->payment_method->settlesAllInstallments($entry->type)
             ? FinancialInstallment::query()->where('financial_entry_id', $entry->id)->orderBy('number')

@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Enums\TreatmentOrigin;
 use App\Http\Requests\TreatmentRequest;
 use App\Http\Requests\TreatmentWithPatientRequest;
+use App\Http\Requests\VoidTreatmentRequest;
 use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Procedure;
@@ -14,6 +15,7 @@ use App\Models\Treatment;
 use App\Services\AuditLogger;
 use App\Services\TreatmentFormOptions;
 use App\Services\TreatmentRecorder;
+use App\Services\TreatmentVoider;
 use App\Support\ClinicTime;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -91,6 +93,37 @@ class TreatmentController extends Controller
 
     public function store(TreatmentRequest $request, Patient $patient, TreatmentRecorder $recorder): RedirectResponse
     {
+        $appointmentId = $request->filled('appointment_id') ? (int) $request->validated('appointment_id') : null;
+
+        return $this->register($request, $patient, $recorder, $appointmentId);
+    }
+
+    /**
+     * Diálogo "Registrar atendimento": o paciente vem do formulário, e não da URL.
+     * Se ele tem agendamento em aberto no dia do atendimento, o registro o
+     * encerra, como se tivesse partido da agenda: assim o horário não fica
+     * em aberto nem recebe um segundo registro.
+     */
+    public function storeForChosenPatient(TreatmentWithPatientRequest $request, TreatmentRecorder $recorder): RedirectResponse
+    {
+        $patient = Patient::query()->findOrFail((int) $request->validated('patient_id'));
+
+        Gate::authorize('viewClinicalRecords', $patient);
+
+        [$dayStart, $dayEnd] = ClinicTime::dayBounds(ClinicTime::local(ClinicTime::fromInput($request->validated('performed_at')))->format('Y-m-d'));
+
+        $appointmentId = Appointment::query()
+            ->where('patient_id', $patient->getKey())
+            ->openForTreatment()
+            ->whereBetween('scheduled_at', [$dayStart, $dayEnd])
+            ->orderBy('scheduled_at')
+            ->value('id');
+
+        return $this->register($request, $patient, $recorder, $appointmentId);
+    }
+
+    private function register(TreatmentRequest $request, Patient $patient, TreatmentRecorder $recorder, ?int $appointmentId): RedirectResponse
+    {
         Gate::authorize('viewClinicalRecords', $patient);
 
         $treatment = new Treatment($request->safe()->only(self::FILLABLE));
@@ -100,15 +133,13 @@ class TreatmentController extends Controller
         $treatment->professional_id = $this->resolveProfessionalId($request);
         $treatment->created_by = $request->user()->getKey();
 
-        $recorder->record(
-            $treatment,
-            $request->products(),
-            $request->payment(),
-            $request->filled('appointment_id') ? (int) $request->validated('appointment_id') : null,
-            $request->user(),
-        );
+        $recorder->record($treatment, $request->products(), $request->payment(), $appointmentId, $request->user());
 
         $message = 'Atendimento registrado. Estoque e financeiro foram atualizados.';
+
+        if ($appointmentId !== null && $request instanceof TreatmentWithPatientRequest) {
+            $message .= ' O agendamento do paciente nesse dia passou para "Atendido".';
+        }
         $origin = TreatmentOrigin::tryFrom((string) $request->validated('origem'));
 
         // Sem origem (link direto), abre o registro. Com origem, o usuário fica no
@@ -117,21 +148,11 @@ class TreatmentController extends Controller
             return redirect()->route('patients.treatments.show', [$patient, $treatment])->with('success', $message);
         }
 
-        $appointment = $request->filled('appointment_id') ? Appointment::find((int) $request->validated('appointment_id')) : null;
+        $appointment = $appointmentId !== null ? Appointment::find($appointmentId) : null;
 
         return redirect()->to($origin->url($appointment))
             ->with('success', $message)
             ->with('success_link', ['url' => route('patients.treatments.show', [$patient, $treatment]), 'label' => 'Ver o atendimento']);
-    }
-
-    /**
-     * Diálogo "Registrar atendimento": o paciente vem do formulário, e não da URL.
-     */
-    public function storeForChosenPatient(TreatmentWithPatientRequest $request, TreatmentRecorder $recorder): RedirectResponse
-    {
-        $patient = Patient::query()->findOrFail((int) $request->validated('patient_id'));
-
-        return $this->store($request, $patient, $recorder);
     }
 
     public function show(Request $request, Patient $patient, Treatment $treatment): View
@@ -142,6 +163,8 @@ class TreatmentController extends Controller
 
         $treatment->load([
             'professional:id,name',
+            'creator:id,name',
+            'voidedBy:id,name',
             'procedure:id,name',
             'products.batch.product:id,name,unit',
             'photos' => fn ($query) => $query->oldest('id'),
@@ -186,6 +209,18 @@ class TreatmentController extends Controller
             'patient' => $patient->load('anamnesis'),
             'treatment' => $treatment,
         ]);
+    }
+
+    /**
+     * Anula um registro feito com erro: devolve o estoque, exclui a cobrança e
+     * reabre o agendamento. O registro continua no prontuário, marcado.
+     */
+    public function void(VoidTreatmentRequest $request, Patient $patient, Treatment $treatment, TreatmentVoider $voider): RedirectResponse
+    {
+        $voider->void($treatment, $request->user(), $request->validated('reason'));
+
+        return redirect()->route('patients.treatments.show', [$patient, $treatment])
+            ->with('success', 'Atendimento anulado. O estoque foi devolvido, a cobrança foi excluída e o agendamento, se havia, voltou para a agenda.');
     }
 
     /**

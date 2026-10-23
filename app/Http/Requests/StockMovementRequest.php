@@ -5,12 +5,15 @@ namespace App\Http\Requests;
 use App\Enums\StockMovementType;
 use App\Models\ProductBatch;
 use App\Support\LocalizedDecimal;
+use App\Support\Quantity;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Saída, perda ou ajuste lançado à mão sobre um lote do produto. Todos
- * exigem motivo; o ajuste exige também a permissão de inventário.
+ * exigem motivo; o ajuste exige também a permissão de inventário. No
+ * produto fracionado, valem só para o que está lacrado, em unidades inteiras.
  */
 class StockMovementRequest extends FormRequest
 {
@@ -46,6 +49,28 @@ class StockMovementRequest extends FormRequest
             // No ajuste, é a quantidade contada (pode ser zero). Nos demais, a quantidade movimentada.
             'quantity' => ['required', 'numeric', 'decimal:0,3', $isAdjustment ? 'min:0' : 'gt:0', 'max:999999'],
             'reason' => ['required', 'string', 'max:255'],
+        ];
+    }
+
+    /**
+     * @return list<callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $product = $this->route('product');
+                $content = $product->isFractioned() ? Quantity::toThousandths($product->unit_content) : 0;
+
+                if ($content === 0 || $validator->errors()->has('quantity') || Quantity::toThousandths($this->input('quantity')) % $content === 0) {
+                    return;
+                }
+
+                $validator->errors()->add('quantity', 'Este produto é fracionado: '
+                    .($this->type() === StockMovementType::Adjustment ? 'conte só o que está lacrado, ' : 'só o que está lacrado sai por aqui, ')
+                    .'em unidades inteiras de '.LocalizedDecimal::quantity($product->unit_content).' '.$product->unit->symbol()
+                    .'. O que resta em unidade aberta sai pelo descarte da unidade.');
+            },
         ];
     }
 

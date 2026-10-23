@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AuditAction;
 use App\Enums\FinancialEntryType;
 use App\Models\FinancialEntry;
 use App\Models\FinancialInstallment;
+use App\Services\AuditLogger;
 use App\Support\ClinicTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -18,11 +20,11 @@ class FinanceController extends Controller
 {
     private const TYPES = ['todos' => 'Receitas e despesas', 'receitas' => 'Só receitas', 'despesas' => 'Só despesas'];
 
-    private const STATUSES = ['todas' => 'Todas as situações', 'pagas' => 'Pagas', 'pendentes' => 'Pendentes', 'vencidas' => 'Vencidas'];
+    private const STATUSES = ['todas' => 'Todas as situações', 'pagas' => 'Pagas', 'abertas' => 'Em aberto (a vencer e vencidas)', 'pendentes' => 'A vencer', 'vencidas' => 'Vencidas'];
 
     private const REVENUE_MONTHS = 6;
 
-    public function index(Request $request): View
+    public function index(Request $request, AuditLogger $audit): View
     {
         Gate::authorize('viewAny', FinancialEntry::class);
 
@@ -37,6 +39,9 @@ class FinanceController extends Controller
         $end = $month->endOfMonth()->format('Y-m-d');
         $type = $filters['tipo'] ?? 'todos';
         $status = $filters['situacao'] ?? 'todas';
+
+        // Os lançamentos levam nome de paciente e valores: leitura auditada.
+        $audit->log(AuditAction::FinanceViewed, null, ['month' => $month->format('Y-m'), 'type' => $type, 'status' => $status]);
 
         return view('finance.index', [
             'month' => $month,
@@ -114,11 +119,13 @@ class FinanceController extends Controller
         return FinancialInstallment::query()
             ->select('financial_installments.*')
             ->join('financial_entries', 'financial_entries.id', '=', 'financial_installments.financial_entry_id')
-            ->with(['entry' => fn ($query) => $query->withCount('installments')->with('patient:id,name')])
+            // Paciente arquivado continua identificado no lançamento dele.
+            ->with(['entry' => fn ($query) => $query->withCount('installments')->with(['patient' => fn ($patient) => $patient->withTrashed()->select(['id', 'name'])])])
             ->where(fn ($query) => $query->whereBetween('due_date', [$start, $end])->orWhereBetween('paid_at', [$start, $end]))
             ->when($type === 'receitas', fn ($query) => $query->where('financial_entries.type', FinancialEntryType::Income->value))
             ->when($type === 'despesas', fn ($query) => $query->where('financial_entries.type', FinancialEntryType::Expense->value))
             ->when($status === 'pagas', fn ($query) => $query->whereNotNull('paid_at'))
+            ->when($status === 'abertas', fn ($query) => $query->whereNull('paid_at'))
             ->when($status === 'pendentes', fn ($query) => $query->whereNull('paid_at')->where('due_date', '>=', $today))
             ->when($status === 'vencidas', fn ($query) => $query->whereNull('paid_at')->where('due_date', '<', $today))
             ->orderBy('due_date')

@@ -90,10 +90,12 @@ class RolePermissions
     private function withRequirements(array $permissions): array
     {
         $values = [];
+        $pending = $permissions;
 
-        foreach ($permissions as $permission) {
-            for ($current = $permission; $current !== null; $current = $current->requires()) {
+        while (($current = array_pop($pending)) !== null) {
+            if (! isset($values[$current->value])) {
                 $values[$current->value] = true;
+                array_push($pending, ...$current->requires());
             }
         }
 

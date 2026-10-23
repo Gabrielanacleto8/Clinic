@@ -3,6 +3,7 @@
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AnamnesisController;
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\FinanceController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\InstallmentPaymentController;
 use App\Http\Controllers\PatientAvatarController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientPhotoController;
+use App\Http\Controllers\PatientRecordController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProcedureController;
 use App\Http\Controllers\ProductBatchController;
@@ -37,6 +39,9 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
     Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
+
+    // Mantém a sessão viva enquanto alguém digita um formulário longo (ver app.js).
+    Route::get('sessao', fn () => response()->noContent())->middleware('throttle:20,1')->name('session.keepalive');
 
     Route::get('senha', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('senha', [PasswordController::class, 'update'])->name('password.update');
@@ -80,6 +85,9 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             Route::post('avatar', [PatientAvatarController::class, 'update'])->name('avatar.update');
             Route::delete('avatar', [PatientAvatarController::class, 'destroy'])->name('avatar.destroy');
 
+            // Arquivado também: o prontuário segue consultável sem restaurar o cadastro.
+            Route::get('prontuario', [PatientRecordController::class, 'show'])->name('record')->withTrashed();
+
             Route::get('ficha-de-saude', [AnamnesisController::class, 'edit'])->name('anamnesis.edit');
             Route::put('ficha-de-saude', [AnamnesisController::class, 'update'])->name('anamnesis.update');
             Route::get('alertas-de-saude', [AnamnesisController::class, 'alerts'])->middleware('throttle:60,1')->name('health-alerts');
@@ -97,6 +105,7 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
 
             // Resumo do atendimento para a janela da lista de atendimentos.
             Route::get('atendimentos/{treatment}/resumo', [TreatmentController::class, 'summary'])->name('treatments.summary');
+            Route::post('atendimentos/{treatment}/anulacao', [TreatmentController::class, 'void'])->name('treatments.void');
 
             Route::post('atendimentos/{treatment}/fotos', [TreatmentPhotoController::class, 'store'])->name('treatments.photos.store');
 
@@ -118,6 +127,7 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::get('estoque/movimentacoes', [StockMovementController::class, 'index'])->name('stock.movements.index');
         Route::get('estoque/lotes', [ProductBatchController::class, 'index'])->name('stock.batches.index');
         Route::get('estoque/lotes/{batch}', [ProductBatchController::class, 'show'])->name('stock.batches.show');
+        Route::patch('estoque/lotes/{batch}', [ProductBatchController::class, 'update'])->name('stock.batches.update');
         // Unidades físicas de produto fracionado.
         Route::post('estoque/lotes/{batch}/unidades', [StockUnitController::class, 'store'])->name('stock.units.store');
         Route::get('estoque/unidades/{unit}', [StockUnitController::class, 'show'])->name('stock.units.show');
@@ -144,6 +154,8 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::delete('financeiro/pagamentos/{installment}', [InstallmentPaymentController::class, 'destroy'])->name('finance.payments.destroy');
 
         // Aba de permissões dentro de usuários. Antes do resource, para "permissoes" não ser lido como um id.
+        Route::get('auditoria', [AuditLogController::class, 'index'])->name('audit.index');
+
         Route::get('usuarios/permissoes', [PermissionController::class, 'edit'])->name('users.permissions.edit');
         Route::put('usuarios/permissoes', [PermissionController::class, 'update'])->name('users.permissions.update');
 

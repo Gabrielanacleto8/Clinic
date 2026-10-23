@@ -107,7 +107,7 @@ class ProductController extends Controller
         return view('products.show', [
             'product' => $product,
             // Lotes com saldo primeiro, do vencimento mais próximo ao mais distante.
-            'batches' => $product->batches()->orderByRaw('quantity = 0')->firstToExpire()->get(),
+            'batches' => $product->batches()->withOpenQuantity()->orderByRaw('quantity = 0')->firstToExpire()->get(),
             'movements' => StockMovement::query()
                 ->whereIn('product_batch_id', $product->batches()->select('id'))
                 ->with(['batch:id,batch_code', 'user:id,name', 'treatment:id,patient_id,professional_id', 'treatment.professional:id,name'])

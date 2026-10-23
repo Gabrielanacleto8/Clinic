@@ -27,7 +27,7 @@
 
     // Linhas já salvas mais algumas em branco, dentro do limite aceito.
     $savedProducts = old('products', $procedure->exists
-        ? $procedure->products->map(fn ($product) => ['product_id' => $product->id, 'quantity' => LocalizedDecimal::quantity($product->pivot->quantity)])->all()
+        ? $procedure->products->map(fn ($product) => ['product_id' => $product->id, 'quantity' => LocalizedDecimal::quantityInput($product->pivot->quantity)])->all()
         : []);
     $productRows = min(App\Http\Requests\ProcedureRequest::MAX_PRODUCTS, max(3, count($savedProducts) + 2));
 @endphp
@@ -55,7 +55,7 @@
                             <option value="">—</option>
                             @foreach ($products as $product)
                                 <option value="{{ $product->id }}" @selected((string) ($row['product_id'] ?? '') === (string) $product->id)>
-                                    {{ $product->name }} ({{ $product->unit->symbol() }})
+                                    {{ $product->name }} ({{ $product->unit->symbol() }}){{ $product->is_active ? '' : ' · inativo' }}
                                 </option>
                             @endforeach
                         </select>

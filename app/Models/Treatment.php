@@ -29,7 +29,7 @@ class Treatment extends Model
     /**
      * @var list<string>
      */
-    protected $hidden = ['assessment', 'description', 'post_care', 'complications'];
+    protected $hidden = ['assessment', 'description', 'post_care', 'complications', 'void_reason'];
 
     /**
      * @return array<string, string>
@@ -43,7 +43,44 @@ class Treatment extends Model
             'description' => 'encrypted',
             'post_care' => 'encrypted',
             'complications' => 'encrypted',
+            'voided_at' => 'immutable_datetime',
+            'void_reason' => 'encrypted',
         ];
+    }
+
+    /**
+     * Anulado: registrado com erro e desfeito por TreatmentVoider. Continua no
+     * prontuário, mas sem efeito no estoque, no financeiro e na agenda.
+     */
+    public function isVoided(): bool
+    {
+        return $this->voided_at !== null;
+    }
+
+    /**
+     * @param  Builder<Treatment>  $query
+     */
+    public function scopeNotVoided(Builder $query): void
+    {
+        $query->whereNull('voided_at');
+    }
+
+    /**
+     * Quem registrou: pode ser diferente do profissional que atendeu.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by');
     }
 
     /**

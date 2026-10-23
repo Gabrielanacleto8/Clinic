@@ -40,6 +40,7 @@ class Patient extends Model
             'cpf' => 'encrypted',
             'notes' => 'encrypted',
             'birth_date' => 'immutable_date',
+            'image_use_consented_at' => 'immutable_datetime',
             'sex' => Sex::class,
         ];
     }

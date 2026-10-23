@@ -11,6 +11,17 @@ final class InstallmentPlan
 {
     public const MAX_INSTALLMENTS = 12;
 
+    public const TOO_MANY_MESSAGE = 'O valor não dá para tantas parcelas: cada uma precisa de pelo menos R$ 0,01.';
+
+    /**
+     * Cada parcela precisa de pelo menos um centavo: parcela zerada ficaria
+     * pendente para sempre no financeiro.
+     */
+    public static function fits(string $total, int $count): bool
+    {
+        return $count >= 1 && (int) round(((float) $total) * 100) >= $count;
+    }
+
     /**
      * A conta é feita em centavos inteiros. O que sobra da divisão vai para a
      * primeira parcela, de modo que a soma das parcelas é sempre exatamente o total.

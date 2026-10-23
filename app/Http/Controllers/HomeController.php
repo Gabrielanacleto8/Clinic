@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AuditAction;
 use App\Enums\Permission;
 use App\Models\Treatment;
+use App\Services\AuditLogger;
 use App\Services\DashboardMetrics;
 use App\Services\TreatmentFormOptions;
 use App\Support\ClinicTime;
@@ -16,11 +18,16 @@ class HomeController extends Controller
      * Início: o dia da clínica em resumo. Cada bloco só é montado, e
      * consultado no banco, para quem tem a permissão correspondente.
      */
-    public function index(Request $request, DashboardMetrics $metrics, TreatmentFormOptions $options): View
+    public function index(Request $request, DashboardMetrics $metrics, TreatmentFormOptions $options, AuditLogger $audit): View
     {
         $user = $request->user();
         $seesAgenda = $user->hasPermission(Permission::AgendaView);
         $seesStock = $user->hasPermission(Permission::StockView);
+
+        // Os agendamentos de hoje e dos próximos dias são leitura da agenda.
+        if ($seesAgenda) {
+            $audit->log(AuditAction::AgendaViewed, null, ['view' => 'home']);
+        }
 
         return view('home', [
             'today' => ClinicTime::local(now()),

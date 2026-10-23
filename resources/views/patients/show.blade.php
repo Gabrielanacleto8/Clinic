@@ -32,12 +32,18 @@
             @can('create', App\Models\Appointment::class)
                 <a href="{{ route('appointments.create', ['paciente' => $patient->id]) }}" class="btn btn-primary">Agendar</a>
             @endcan
+            @can('viewClinicalRecords', $patient)
+                <a href="{{ route('patients.record', $patient) }}" class="btn btn-secondary">Imprimir prontuário</a>
+            @endcan
+            @can('viewAny', App\Models\AuditLog::class)
+                <a href="{{ route('audit.index', ['paciente' => $patient->id]) }}" class="btn btn-secondary">Ver acessos</a>
+            @endcan
             @can('update', $patient)
                 <a href="{{ route('patients.edit', $patient) }}" class="btn btn-secondary">Editar</a>
             @endcan
             @can('delete', $patient)
                 <form method="POST" action="{{ route('patients.destroy', $patient) }}"
-                      data-confirm="Arquivar o cadastro de {{ $patient->name }}? Ele sai da listagem, mas não é apagado.">
+                      data-confirm="Arquivar o cadastro de {{ $patient->name }}? Ele sai da listagem, mas não é apagado. Os agendamentos em aberto dele serão cancelados.">
                     @csrf
                     @method('DELETE')
                     <button type="submit" class="btn btn-danger">Arquivar</button>
@@ -78,6 +84,19 @@
         <section class="card p-6 lg:col-span-2">
             <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Endereço</h2>
             <p class="mt-4 text-sm">{{ $address ?: '—' }}</p>
+        </section>
+
+        <section class="card p-6 lg:col-span-2">
+            <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Uso de imagem em divulgação</h2>
+            <p class="mt-4 text-sm">
+                @if ($patient->image_use_consented_at)
+                    <span class="badge bg-emerald-100 text-emerald-800">Autorizado</span>
+                    <span class="text-slate-600">em {{ App\Support\ClinicTime::format($patient->image_use_consented_at, 'd/m/Y') }}</span>
+                @else
+                    <span class="badge bg-amber-100 text-amber-800">Não autorizado</span>
+                    <span class="text-slate-600">As fotos ficam só no prontuário.</span>
+                @endif
+            </p>
         </section>
 
         <section class="card p-6 lg:col-span-2">

@@ -45,7 +45,8 @@ class StockEntryRequest extends FormRequest
                 ...($this->filled('manufactured_on') ? ['after:manufactured_on'] : []),
             ],
             'quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'],
-            'unit_cost' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
+            // Até quatro casas: insumo barato custa frações de centavo por unidade.
+            'unit_cost' => ['nullable', 'numeric', 'decimal:0,4', 'min:0', 'max:999999.9999'],
             'supplier' => ['nullable', 'string', 'max:150'],
             'invoice_number' => ['nullable', 'string', 'max:60'],
             'reason' => ['nullable', 'string', 'max:255'],

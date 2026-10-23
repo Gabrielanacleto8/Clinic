@@ -35,19 +35,36 @@ class StockReceiver
 
     /**
      * Lote informado na entrada: o existente com aquele código, ou um novo.
-     * Fabricação e validade de um lote existente não são trocadas por uma entrada.
+     * Fabricação e validade de um lote existente não são trocadas por uma
+     * entrada, e lote vencido não recebe entrada: produto vencido não circula.
      *
      * @param  array<string, mixed>  $entry
+     *
+     * @throws ValidationException
      */
     private function batchFor(int $productId, array $entry): ProductBatch
     {
         $code = trim((string) $entry['batch_code']);
-        $dates = Arr::only($entry, ['manufactured_on', 'expires_on']);
+        $dates = array_filter(Arr::only($entry, ['manufactured_on', 'expires_on']), fn ($date) => $date !== null);
 
         $batch = ProductBatch::query()->where('product_id', $productId)->where('batch_code', $code)->lockForUpdate()->first();
 
         if ($batch === null) {
-            return ProductBatch::create(['product_id' => $productId, 'batch_code' => $code, ...$dates]);
+            // Duas entradas simultâneas do mesmo lote novo: a segunda encontra
+            // o lote criado pela primeira, em vez de esbarrar no índice único.
+            $batch = ProductBatch::createOrFirst(['product_id' => $productId, 'batch_code' => $code], $dates);
+
+            if ($batch->wasRecentlyCreated) {
+                return $batch;
+            }
+
+            $batch = ProductBatch::query()->whereKey($batch->getKey())->lockForUpdate()->firstOrFail();
+        }
+
+        if ($batch->isExpired()) {
+            throw ValidationException::withMessages([
+                'batch_code' => 'O lote '.$code.' venceu em '.$batch->expires_on->format('d/m/Y').'. Não é possível dar entrada em lote vencido.',
+            ]);
         }
 
         foreach (['manufactured_on' => 'fabricação', 'expires_on' => 'validade'] as $field => $label) {

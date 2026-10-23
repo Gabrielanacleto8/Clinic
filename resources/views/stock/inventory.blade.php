@@ -9,6 +9,10 @@
         <p class="mt-1 max-w-3xl text-sm text-slate-600">
             Informe a quantidade encontrada em cada lote conferido. Lote em branco fica como está, e cada diferença é registrada como ajuste no histórico de movimentações.
         </p>
+        <p class="mt-1 max-w-3xl text-sm text-slate-600">
+            Produto fracionado: conte só as unidades lacradas, na unidade de medida (ex.: 2 frascos de 100 U = 200). O que resta nas unidades abertas não entra na contagem.
+            Lotes vencidos não aparecem aqui: registre a perda deles na página do lote.
+        </p>
     </div>
 
     <form method="GET" action="{{ route('stock.inventory.edit') }}" class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-12" role="search">
@@ -57,7 +61,11 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach ($batches as $batch)
-                            @php $unit = $batch->product->unit->symbol(); $field = 'counted.'.$batch->id; @endphp
+                            @php
+                                $unit = $batch->product->unit->symbol();
+                                $field = 'counted.'.$batch->id;
+                                $fractioned = $batch->product->isFractioned();
+                            @endphp
                             <tr>
                                 <td data-label="Produto" class="px-4 py-3 font-medium">{{ $batch->product->name }}</td>
                                 <td data-label="Lote" class="px-4 py-3 tabular-nums">{{ $batch->batch_code }}</td>
@@ -65,9 +73,18 @@
                                     {{ $batch->expires_on?->format('d/m/Y') ?? 'Sem validade' }}
                                     @include('stock._expiry_badge', ['batch' => $batch])
                                 </td>
-                                <td data-label="Saldo no sistema" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::quantity($batch->quantity) }} {{ $unit }}</td>
-                                <td data-label="Quantidade contada" class="px-4 py-2">
-                                    <label for="counted-{{ $batch->id }}" class="sr-only">Quantidade contada do lote {{ $batch->batch_code }} ({{ $unit }})</label>
+                                <td data-label="Saldo no sistema" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                                    @if ($fractioned)
+                                        {{ LocalizedDecimal::quantity($batch->sealedQuantity()) }} {{ $unit }} lacrado
+                                        @if ((float) $batch->open_quantity > 0)
+                                            <span class="block text-xs text-slate-500">+ {{ LocalizedDecimal::quantity($batch->open_quantity) }} {{ $unit }} em unidades abertas</span>
+                                        @endif
+                                    @else
+                                        {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $unit }}
+                                    @endif
+                                </td>
+                                <td data-label="{{ $fractioned ? 'Lacrado contado' : 'Quantidade contada' }}" class="px-4 py-2">
+                                    <label for="counted-{{ $batch->id }}" class="sr-only">{{ $fractioned ? 'Quantidade lacrada contada' : 'Quantidade contada' }} do lote {{ $batch->batch_code }} ({{ $unit }})</label>
                                     <input id="counted-{{ $batch->id }}" name="counted[{{ $batch->id }}]" type="text" inputmode="decimal" autocomplete="off"
                                            value="{{ old($field) }}" @class(['input sm:max-w-40', 'input-error' => $errors->has($field)])>
                                     @error($field)

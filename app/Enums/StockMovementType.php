@@ -9,6 +9,8 @@ enum StockMovementType: string
     case Consumption = 'consumption';
     case Loss = 'loss';
     case Adjustment = 'adjustment';
+    // Devolução ao estoque do que um atendimento anulado baixou.
+    case Reversal = 'reversal';
 
     /**
      * Tipos que um usuário lança à mão sobre um lote existente. A entrada tem
@@ -29,6 +31,7 @@ enum StockMovementType: string
             self::Consumption => 'Consumo em procedimento',
             self::Loss => 'Perda',
             self::Adjustment => 'Ajuste',
+            self::Reversal => 'Estorno de atendimento',
         };
     }
 
@@ -40,6 +43,7 @@ enum StockMovementType: string
             self::Consumption => 'bg-sky-100 text-sky-800',
             self::Loss => 'bg-red-100 text-red-800',
             self::Adjustment => 'bg-amber-100 text-amber-800',
+            self::Reversal => 'bg-violet-100 text-violet-800',
         };
     }
 

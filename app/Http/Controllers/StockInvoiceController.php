@@ -7,8 +7,10 @@ use App\Exceptions\InvalidInvoiceException;
 use App\Http\Requests\ImportInvoiceRequest;
 use App\Http\Requests\UploadInvoiceRequest;
 use App\Models\Product;
+use App\Models\StockInvoice;
 use App\Models\StockMovement;
 use App\Services\InvoiceXmlReader;
+use App\Services\PendingInvoiceImports;
 use App\Services\StockInvoiceImporter;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -20,11 +22,11 @@ use Illuminate\View\View;
 /**
  * Importação de nota fiscal (XML da NF-e): cadastra os produtos que ainda
  * não existem e lança as entradas. O XML é lido e descartado; entre o envio
- * e a confirmação, os itens lidos ficam na sessão do usuário.
+ * e a confirmação, os itens lidos ficam na sessão (PendingInvoiceImports).
  */
 class StockInvoiceController extends Controller
 {
-    private const SESSION_KEY = 'stock.invoice_import';
+    public function __construct(private readonly PendingInvoiceImports $pending) {}
 
     public function store(UploadInvoiceRequest $request, InvoiceXmlReader $reader): RedirectResponse
     {
@@ -34,9 +36,7 @@ class StockInvoiceController extends Controller
             throw ValidationException::withMessages(['invoice' => $exception->getMessage()]);
         }
 
-        $request->session()->put(self::SESSION_KEY, $invoice);
-
-        return redirect()->route('stock.invoice.edit');
+        return redirect()->route('stock.invoice.edit', ['importacao' => $this->pending->put($request->session(), $invoice)]);
     }
 
     /**
@@ -46,20 +46,26 @@ class StockInvoiceController extends Controller
     {
         Gate::authorize('create', Product::class);
 
-        $invoice = $request->session()->get(self::SESSION_KEY);
+        $token = $request->query('importacao');
+        $invoice = $this->pending->get($request->session(), $token);
 
         if ($invoice === null) {
             return redirect()->route('products.index')->with('warning', 'Envie o XML da nota fiscal para começar a importação.');
         }
 
-        $products = Product::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'unit']);
+        $products = Product::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'unit', 'unit_content']);
+        $imported = $this->importedInvoice($invoice);
 
         return view('stock.invoice', [
+            'token' => $token,
             'invoice' => $invoice,
             'products' => $products,
             'matches' => $this->matches($invoice['items'], $products),
-            // Mesma nota do mesmo fornecedor já lançada: alerta contra entrada em dobro.
-            'alreadyImported' => $invoice['number'] !== '' && StockMovement::query()
+            'inactiveMatches' => $this->inactiveMatches($invoice['items']),
+            'imported' => $imported,
+            // Notas lançadas antes do registro pela chave de acesso: só um
+            // alerta pelo número e fornecedor das entradas.
+            'alreadyImported' => $imported === null && $invoice['number'] !== '' && StockMovement::query()
                 ->where('type', StockMovementType::Entry)
                 ->where('invoice_number', $invoice['number'])
                 ->where('supplier', $invoice['supplier'])
@@ -69,15 +75,16 @@ class StockInvoiceController extends Controller
 
     public function update(ImportInvoiceRequest $request, StockInvoiceImporter $importer): RedirectResponse
     {
-        $invoice = $request->session()->get(self::SESSION_KEY);
+        $token = (string) $request->validated('importacao');
+        $invoice = $this->pending->get($request->session(), $token);
 
         if ($invoice === null) {
-            return redirect()->route('products.index')->with('warning', 'A importação expirou. Envie o XML da nota fiscal de novo.');
+            return redirect()->route('products.index')->with('warning', 'A importação expirou ou já foi concluída. Envie o XML da nota fiscal de novo.');
         }
 
         $result = $importer->import($invoice, $request->rows(), $request->user());
 
-        $request->session()->forget(self::SESSION_KEY);
+        $this->pending->forget($request->session(), $token);
 
         $plural = fn (int $total, string $one, string $many) => $total.' '.($total === 1 ? $one : $many);
 
@@ -91,9 +98,21 @@ class StockInvoiceController extends Controller
     {
         Gate::authorize('create', Product::class);
 
-        $request->session()->forget(self::SESSION_KEY);
+        $this->pending->forget($request->session(), $request->input('importacao'));
 
         return redirect()->route('products.index')->with('success', 'Importação cancelada. Nada foi gravado.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $invoice
+     */
+    private function importedInvoice(array $invoice): ?StockInvoice
+    {
+        if (($invoice['access_key'] ?? null) === null) {
+            return null;
+        }
+
+        return StockInvoice::query()->with('user:id,name')->where('access_key', $invoice['access_key'])->first();
     }
 
     /**
@@ -111,6 +130,34 @@ class StockInvoiceController extends Controller
 
         return collect($items)
             ->map(fn (array $item) => ($byCode[mb_strtolower($item['code'])] ?? $byName[mb_strtolower($item['name'])] ?? null)?->id)
+            ->filter()
+            ->all();
+    }
+
+    /**
+     * Produto inativo com o mesmo nome ou código de cada item. Ele não aparece
+     * na lista de produtos, mas impede cadastrar o item como produto novo.
+     *
+     * @param  list<array<string, mixed>>  $items
+     * @return array<int, string> Índice do item => nome do produto inativo.
+     */
+    private function inactiveMatches(array $items): array
+    {
+        $names = array_map(fn (array $item) => $item['name'], $items);
+        $codes = array_filter(array_map(fn (array $item) => $item['code'], $items), filled(...));
+
+        $inactive = Product::query()
+            ->where('is_active', false)
+            ->where(fn ($query) => $query->whereIn('name', $names)->orWhereIn('code', $codes))
+            ->get(['id', 'name', 'code']);
+
+        if ($inactive->isEmpty()) {
+            return [];
+        }
+
+        return collect($items)
+            ->map(fn (array $item) => $inactive->first(fn (Product $product) => mb_strtolower($product->name) === mb_strtolower($item['name'])
+                || ($product->code !== null && $item['code'] !== '' && mb_strtolower($product->code) === mb_strtolower($item['code'])))?->name)
             ->filter()
             ->all();
     }

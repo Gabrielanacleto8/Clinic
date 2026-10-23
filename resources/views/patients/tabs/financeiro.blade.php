@@ -1,4 +1,9 @@
-@php use App\Support\LocalizedDecimal; @endphp
+@php
+    use App\Support\LocalizedDecimal;
+
+    // Quem vê o financeiro sem ver o prontuário não ganha link para o atendimento.
+    $canSeeRecords = auth()->user()->can('viewClinicalRecords', $patient);
+@endphp
 <dl class="mt-4 grid grid-cols-2 gap-4">
     <div class="card px-4 py-3">
         <dt class="text-xs text-slate-500">Total pago</dt>
@@ -33,7 +38,7 @@
                     <tr>
                         <td data-label="Vencimento" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $installment->due_date->format('d/m/Y') }}</td>
                         <td data-label="Descrição" class="px-4 py-3">
-                            @if ($entry->treatment_id)
+                            @if ($entry->treatment_id && $canSeeRecords)
                                 <a href="{{ route('patients.treatments.show', [$patient, $entry->treatment_id]) }}" class="font-medium text-teal-800 hover:underline">{{ $entry->description }}</a>
                             @else
                                 <span class="font-medium">{{ $entry->description }}</span>

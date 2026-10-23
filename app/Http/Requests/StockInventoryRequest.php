@@ -3,11 +3,15 @@
 namespace App\Http\Requests;
 
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Support\LocalizedDecimal;
+use App\Support\Quantity;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 /**
- * Contagem de inventário: a quantidade encontrada em cada lote conferido.
+ * Contagem de inventário: a quantidade encontrada em cada lote conferido. No
+ * produto fracionado, conta-se só o que está lacrado, em unidades inteiras.
  */
 class StockInventoryRequest extends FormRequest
 {
@@ -38,6 +42,37 @@ class StockInventoryRequest extends FormRequest
             'counted' => ['required', 'array', 'max:'.self::PER_PAGE],
             // Linha em branco é lote não conferido: fica como está.
             'counted.*' => ['nullable', 'numeric', 'decimal:0,3', 'min:0', 'max:999999'],
+        ];
+    }
+
+    /**
+     * @return list<callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $counts = collect(is_array($this->input('counted')) ? $this->input('counted') : [])
+                    ->filter(fn ($quantity, $batchId) => is_numeric($quantity) && is_numeric($batchId) && ! $validator->errors()->has("counted.{$batchId}"));
+
+                if ($counts->isEmpty()) {
+                    return;
+                }
+
+                $batches = ProductBatch::query()
+                    ->with('product:id,unit,unit_content')
+                    ->whereKey($counts->keys()->map(fn ($id) => (int) $id)->all())
+                    ->get(['id', 'product_id']);
+
+                foreach ($batches as $batch) {
+                    $product = $batch->product;
+
+                    if ($product->isFractioned() && Quantity::toThousandths($counts[$batch->id]) % Quantity::toThousandths($product->unit_content) !== 0) {
+                        $validator->errors()->add("counted.{$batch->id}", 'Conte só o lacrado, em unidades inteiras de '
+                            .LocalizedDecimal::quantity($product->unit_content).' '.$product->unit->symbol().'.');
+                    }
+                }
+            },
         ];
     }
 

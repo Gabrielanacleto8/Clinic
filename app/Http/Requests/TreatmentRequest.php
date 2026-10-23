@@ -76,8 +76,9 @@ class TreatmentRequest extends FormRequest
             'complications' => ['nullable', 'string', 'max:5000'],
             'return_date' => ['nullable', 'date_format:Y-m-d'],
 
-            // Só tem efeito para administradores; ver TreatmentController.
+            // Só tem efeito para administradores, que sempre escolhem; ver TreatmentController.
             'professional_id' => [
+                Rule::requiredIf(fn () => $this->user()->isAdmin()),
                 'nullable',
                 'integer',
                 Rule::exists(User::class, 'id')
@@ -165,6 +166,11 @@ class TreatmentRequest extends FormRequest
                     $validator->errors()->add('performed_at', 'Informe uma data de atendimento válida.');
                 }
 
+                if ($this->hasCharge() && ! $validator->errors()->hasAny(['amount', 'installments'])
+                    && ! InstallmentPlan::fits((string) $this->input('amount'), (int) $this->input('installments'))) {
+                    $validator->errors()->add('installments', InstallmentPlan::TOO_MANY_MESSAGE);
+                }
+
                 if ($this->filled('return_date') && ! $validator->errors()->has('return_date')
                     && $this->input('return_date') < ClinicTime::local($performedAt)->format('Y-m-d')) {
                     $validator->errors()->add('return_date', 'O retorno não pode ser anterior ao atendimento.');
@@ -174,8 +180,10 @@ class TreatmentRequest extends FormRequest
     }
 
     /**
-     * Cada unidade, e cada lote sem unidade, entra uma vez só; a unidade
-     * informada tem de ser do lote da mesma linha.
+     * Cada unidade aberta, e cada lote de produto não fracionado, entra uma
+     * vez só; a unidade informada tem de ser do lote da mesma linha. No
+     * fracionado, cada linha sem unidade abre uma unidade nova, então o mesmo
+     * lote pode se repetir (duas seringas novas no mesmo atendimento).
      */
     private function checkProductRows(Validator $validator): void
     {
@@ -183,6 +191,10 @@ class TreatmentRequest extends FormRequest
             ->filter(fn ($row, $index) => is_array($row) && filled($row['product_batch_id'] ?? null) && ! $validator->errors()->has("products.$index.product_batch_id"));
 
         $unitIds = $rows->pluck('stock_unit_id')->filter(fn ($id) => is_numeric($id))->all();
+        $fractionedBatchIds = $rows->isEmpty() ? collect() : ProductBatch::query()
+            ->whereKey($rows->pluck('product_batch_id')->filter(fn ($id) => is_numeric($id))->all())
+            ->whereHas('product', fn ($query) => $query->whereNotNull('unit_content'))
+            ->pluck('id');
         $unitBatches = $unitIds === [] ? collect() : StockUnit::query()->whereKey($unitIds)->pluck('product_batch_id', 'id');
 
         foreach ($rows as $index => $row) {
@@ -193,7 +205,11 @@ class TreatmentRequest extends FormRequest
             }
         }
 
-        $keys = $rows->map(fn (array $row) => filled($row['stock_unit_id'] ?? null) ? 'unidade-'.$row['stock_unit_id'] : 'lote-'.$row['product_batch_id']);
+        $keys = $rows->map(fn (array $row, int|string $index) => match (true) {
+            filled($row['stock_unit_id'] ?? null) => 'unidade-'.$row['stock_unit_id'],
+            $fractionedBatchIds->contains((int) $row['product_batch_id']) => 'nova-'.$index,
+            default => 'lote-'.$row['product_batch_id'],
+        });
 
         foreach ($keys as $index => $key) {
             if ($keys->filter(fn ($other) => $other === $key)->count() > 1) {
@@ -238,7 +254,8 @@ class TreatmentRequest extends FormRequest
             'payment_method' => PaymentMethod::from($this->validated('payment_method')),
             'installments' => (int) $this->validated('installments'),
             'first_due_date' => $this->validated('first_due_date'),
-            'first_installment_paid' => $this->boolean('first_installment_paid'),
+            // Dar o pagamento por recebido é registrar um pagamento: só com a permissão do financeiro.
+            'first_installment_paid' => $this->boolean('first_installment_paid') && $this->user()->hasPermission(Permission::FinanceManage),
         ];
     }
 
@@ -279,6 +296,7 @@ class TreatmentRequest extends FormRequest
             'products.*.product_batch_id.exists' => 'Este lote não existe, está vencido ou é de um produto inativo.',
             'products.*.stock_unit_id.exists' => 'Esta unidade não existe mais. Recarregue a página.',
             'products.*.quantity.required_with' => 'Informe a quantidade utilizada deste produto.',
+            'professional_id.required' => 'Escolha o profissional responsável.',
             'amount.numeric' => 'Informe o valor em reais, como 850,00. Use 0 para atendimento sem cobrança.',
         ];
     }

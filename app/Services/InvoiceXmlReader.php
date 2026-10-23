@@ -46,7 +46,7 @@ class InvoiceXmlReader
     ];
 
     /**
-     * @return array{number: string, series: string, issued_on: ?string, supplier: string, items: list<array<string, mixed>>}
+     * @return array{access_key: ?string, number: string, series: string, issued_on: ?string, supplier: string, items: list<array<string, mixed>>}
      *
      * @throws InvalidInvoiceException
      */
@@ -76,7 +76,11 @@ class InvoiceXmlReader
             $items[] = $this->item($xpath, $detail, $text);
         }
 
+        // Chave de acesso: o atributo Id de infNFe é "NFe" seguido dos 44 dígitos.
+        $accessKey = preg_replace('/^NFe/', '', trim((string) $info->attributes?->getNamedItem('Id')?->nodeValue));
+
         return [
+            'access_key' => preg_match('/^\d{44}$/', (string) $accessKey) === 1 ? $accessKey : null,
             'number' => Str::limit($text('ide/nNF'), 60, ''),
             'series' => $text('ide/serie'),
             'issued_on' => $this->date($text('ide/dhEmi') ?: $text('ide/dEmi')),
@@ -143,7 +147,10 @@ class InvoiceXmlReader
             'unit' => (self::UNITS[mb_strtoupper($text('prod/uCom', $detail))] ?? ProductUnit::Unit)->value,
             'category' => (self::CATEGORIES[substr($text('prod/NCM', $detail), 0, 4)] ?? ProductCategory::Other)->value,
             'quantity' => $quantity,
-            'unit_cost' => number_format((float) $text('prod/vUnCom', $detail), 2, '.', ''),
+            'unit_cost' => number_format((float) $text('prod/vUnCom', $detail), 4, '.', ''),
+            // Valor total do item: não muda quando a quantidade é convertida
+            // para a unidade do estoque, então é dele que sai o custo unitário.
+            'total_cost' => number_format((float) ($text('prod/vProd', $detail) ?: (float) $text('prod/qCom', $detail) * (float) $text('prod/vUnCom', $detail)), 2, '.', ''),
             'lots' => $lots !== [] ? $lots : [['batch_code' => '', 'quantity' => $quantity, 'manufactured_on' => null, 'expires_on' => null]],
         ];
     }

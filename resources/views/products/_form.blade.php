@@ -23,7 +23,7 @@
         <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('supplier')" name="supplier" label="Fornecedor" :value="$product->supplier" maxlength="150" autocomplete="off" />
         <x-form.select :scope="$scope" class="md:col-span-2" :id="$id('unit')" name="unit" label="Unidade de medida" :options="App\Enums\ProductUnit::options()"
                        :selected="$product->unit?->value" required placeholder="Selecione" />
-        <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('minimum_stock')" name="minimum_stock" label="Estoque mínimo" :value="LocalizedDecimal::quantity($product->minimum_stock ?? 0)"
+        <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('minimum_stock')" name="minimum_stock" label="Estoque mínimo" :value="LocalizedDecimal::quantityInput($product->minimum_stock ?? 0)"
                       required inputmode="decimal" autocomplete="off" hint="Zero desliga o alerta de estoque baixo." />
 
         <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('cost')" name="cost" label="Custo unitário (R$)" :value="LocalizedDecimal::moneyInput($product->cost)"
@@ -46,7 +46,7 @@
             Para frasco, seringa ou ampola usados aos poucos. Cada unidade física é aberta e controlada à parte. Deixe em branco se o produto sai inteiro do lote.
         </p>
         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
-            <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('unit_content')" name="unit_content" label="Conteúdo de cada unidade" :value="LocalizedDecimal::quantity($product->unit_content)"
+            <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('unit_content')" name="unit_content" label="Conteúdo de cada unidade" :value="LocalizedDecimal::quantityInput($product->unit_content)"
                           inputmode="decimal" autocomplete="off" hint="Na unidade de medida. Ex.: 100 (U) por frasco." />
             <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('hours_after_opening')" name="hours_after_opening" label="Prazo depois de aberto (horas)" :value="$product->hours_after_opening"
                           type="number" min="1" max="8760" hint="Pela bula. Vazio: vale só a validade do lote." />

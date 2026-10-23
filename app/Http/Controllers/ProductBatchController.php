@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AuditAction;
 use App\Enums\StockMovementType;
+use App\Http\Requests\UpdateProductBatchRequest;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\StockMovement;
+use App\Services\AuditLogger;
 use App\Services\StockAlerts;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -87,5 +92,39 @@ class ProductBatchController extends Controller
                 ->latest('id')
                 ->paginate(20),
         ]);
+    }
+
+    /**
+     * Corrige fabricação e validade digitadas errado. As datas antigas e as
+     * novas entram na auditoria: são dados do lote, não do paciente, e a
+     * correção mexe na rastreabilidade.
+     */
+    public function update(UpdateProductBatchRequest $request, ProductBatch $batch, AuditLogger $audit): RedirectResponse
+    {
+        $changed = DB::transaction(function () use ($request, $batch, $audit): array {
+            $batch = ProductBatch::query()->whereKey($batch->getKey())->lockForUpdate()->firstOrFail();
+            $before = ['manufactured_on' => $batch->manufactured_on?->format('Y-m-d'), 'expires_on' => $batch->expires_on?->format('Y-m-d')];
+
+            $batch->fill($request->validated());
+            $changed = array_keys($batch->getDirty());
+
+            if ($changed === []) {
+                return [];
+            }
+
+            $batch->save();
+
+            $audit->log(AuditAction::ProductBatchUpdated, $batch, [
+                'product_id' => $batch->product_id,
+                'fields' => $changed,
+                'from' => array_intersect_key($before, array_flip($changed)),
+                'to' => array_intersect_key(['manufactured_on' => $batch->manufactured_on?->format('Y-m-d'), 'expires_on' => $batch->expires_on?->format('Y-m-d')], array_flip($changed)),
+            ]);
+
+            return $changed;
+        });
+
+        return redirect()->route('stock.batches.show', $batch)
+            ->with('success', $changed === [] ? 'As datas já estavam assim. Nada foi alterado.' : 'Datas do lote corrigidas.');
     }
 }

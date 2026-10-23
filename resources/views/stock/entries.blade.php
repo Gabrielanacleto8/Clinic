@@ -61,7 +61,7 @@
                         <td data-label="Quantidade" class="px-4 py-3 text-right font-medium whitespace-nowrap text-emerald-700 tabular-nums">
                             +{{ LocalizedDecimal::quantity($entry->quantity) }} {{ $product->unit->symbol() }}
                         </td>
-                        <td data-label="Custo unit." class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ $entry->unit_cost !== null ? LocalizedDecimal::money($entry->unit_cost) : '—' }}</td>
+                        <td data-label="Custo unit." class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ $entry->unit_cost !== null ? LocalizedDecimal::unitMoney($entry->unit_cost) : '—' }}</td>
                         <td data-label="Fornecedor" class="px-4 py-3 text-slate-600">{{ $entry->supplier ?: '—' }}</td>
                         <td data-label="Nota fiscal" class="px-4 py-3 text-slate-600 tabular-nums">{{ $entry->invoice_number ?: '—' }}</td>
                         <td data-label="Usuário" class="px-4 py-3 text-slate-600">{{ $entry->user?->name ?? '—' }}</td>

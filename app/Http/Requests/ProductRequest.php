@@ -5,8 +5,10 @@ namespace App\Http\Requests;
 use App\Enums\ProductCategory;
 use App\Enums\ProductUnit;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\StockUnit;
 use App\Support\LocalizedDecimal;
+use App\Support\Quantity;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -77,7 +79,51 @@ class ProductRequest extends FormRequest
                     $validator->errors()->add('unit_content', 'Há unidades abertas deste produto com saldo. Use ou descarte essas unidades antes de deixar de fracioná-lo.');
                 }
             },
+            $this->checkUnitChange(...),
+            $this->checkSealedStockFitsUnits(...),
         ];
+    }
+
+    /**
+     * Trocar a unidade de medida de um produto com lotes reinterpretaria todo
+     * o histórico (3 frascos viram 3 U). O certo é cadastrar outro produto.
+     */
+    private function checkUnitChange(Validator $validator): void
+    {
+        $product = $this->route('product');
+
+        if ($product instanceof Product && ! $validator->errors()->has('unit') && $this->input('unit') !== $product->unit->value
+            && $product->batches()->exists()) {
+            $validator->errors()->add('unit', 'Este produto já tem lotes e movimentações nesta unidade de medida. Para controlar em outra unidade, cadastre um produto novo.');
+        }
+    }
+
+    /**
+     * Ao fracionar o produto ou mudar o conteúdo da unidade, o que já está
+     * lacrado em cada lote precisa formar unidades inteiras; senão a sobra
+     * nunca poderia ser aberta.
+     */
+    private function checkSealedStockFitsUnits(Validator $validator): void
+    {
+        $product = $this->route('product');
+
+        if (! $product instanceof Product || $validator->errors()->has('unit_content') || ! is_numeric($this->input('unit_content'))) {
+            return;
+        }
+
+        $content = Quantity::toThousandths($this->input('unit_content'));
+
+        if ($product->isFractioned() && Quantity::toThousandths($product->unit_content) === $content) {
+            return;
+        }
+
+        $misfit = $product->batches()->withOpenQuantity()->where('quantity', '>', 0)->get(['id', 'product_id', 'batch_code', 'quantity'])
+            ->first(fn (ProductBatch $batch) => Quantity::toThousandths($batch->sealedQuantity()) % $content !== 0);
+
+        if ($misfit !== null) {
+            $validator->errors()->add('unit_content', 'O lote '.$misfit->batch_code.' tem '.LocalizedDecimal::quantity($misfit->sealedQuantity()).' '
+                .$product->unit->symbol().' lacrados, que não formam unidades inteiras deste conteúdo. Ajuste o saldo do lote antes.');
+        }
     }
 
     /**

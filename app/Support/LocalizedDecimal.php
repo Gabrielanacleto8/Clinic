@@ -10,8 +10,11 @@ final class LocalizedDecimal
     /**
      * Converte a entrada do usuário para o formato do banco (1234.56).
      *
-     * Com vírgula, os pontos são separadores de milhar. Sem vírgula, o ponto é
-     * aceito como decimal. O que não for número volta como veio, para a
+     * Com vírgula, os pontos são separadores de milhar. Sem vírgula, pontos em
+     * grupos de três dígitos depois de um número que não começa por zero
+     * também são milhar ("1.000" é mil, "12.500" é doze mil e quinhentos),
+     * como se escreve no Brasil; os demais pontos são aceitos como decimal
+     * ("0.5", "2.25"). O que não for número volta como veio, para a
      * validação recusar com a mensagem certa.
      */
     public static function normalize(mixed $value): mixed
@@ -24,6 +27,8 @@ final class LocalizedDecimal
 
         if (str_contains($candidate, ',')) {
             $candidate = str_replace(',', '.', str_replace('.', '', $candidate));
+        } elseif (preg_match('/^[1-9]\d{0,2}(\.\d{3})+$/', $candidate) === 1) {
+            $candidate = str_replace('.', '', $candidate);
         }
 
         return preg_match('/^\d+(\.\d+)?$/', $candidate) === 1 ? $candidate : $value;
@@ -32,6 +37,21 @@ final class LocalizedDecimal
     public static function money(int|float|string|null $value): string
     {
         return $value === null ? '' : 'R$ '.number_format((float) $value, 2, ',', '.');
+    }
+
+    /**
+     * Custo por unidade de medida: centavos sempre, e até quatro casas quando
+     * o valor tem fração de centavo (R$ 0,085 por agulha).
+     */
+    public static function unitMoney(int|float|string|null $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $formatted = number_format((float) $value, 4, ',', '.');
+
+        return 'R$ '.preg_replace('/(,\d{2}\d*?)0+$/', '$1', $formatted);
     }
 
     /**

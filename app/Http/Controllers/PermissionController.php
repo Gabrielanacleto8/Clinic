@@ -18,9 +18,11 @@ use Illuminate\View\View;
  */
 class PermissionController extends Controller
 {
-    public function edit(RolePermissions $rolePermissions): View
+    public function edit(RolePermissions $rolePermissions, AuditLogger $audit): View
     {
         Gate::authorize('manage-permissions');
+
+        $audit->log(AuditAction::PermissionsViewed);
 
         return view('users.permissions', [
             'modules' => collect(Permission::cases())->groupBy(fn (Permission $permission) => $permission->module()),

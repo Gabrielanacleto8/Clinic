@@ -5,7 +5,9 @@
 
     $unit = $product->unit->symbol();
     $sum = fn (StockMovementType $type) => LocalizedDecimal::quantity(abs((float) ($totals[$type->value] ?? 0))).' '.$unit;
-    $batchOptions = [$batch->id => $batch->batch_code.' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit];
+    $batchOptions = [$batch->id => $batch->batch_code.($product->isFractioned()
+        ? ' · lacrado '.LocalizedDecimal::quantity($batch->sealedQuantity()).' '.$unit
+        : ' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit)];
     $preset = json_encode(['product_batch_id' => $batch->id]);
     $fractioned = $product->isFractioned();
     $sealed = $fractioned ? $batch->sealedQuantity() : null;
@@ -36,6 +38,7 @@
             @endcan
             @can('adjust', $product)
                 <button type="button" class="btn btn-secondary" data-dialog-open="stock-adjustment" data-dialog-values="{{ $preset }}">Ajuste</button>
+                <button type="button" class="btn btn-secondary" data-dialog-open="batch-dates">Corrigir datas</button>
             @endcan
         </div>
     </div>
@@ -68,6 +71,9 @@
 
     <p class="mt-3 text-sm text-slate-600">
         Entradas: {{ $sum(StockMovementType::Entry) }} · Saídas: {{ $sum(StockMovementType::Exit) }} · Perdas: {{ $sum(StockMovementType::Loss) }}
+        @if ((float) ($totals[StockMovementType::Reversal->value] ?? 0) > 0)
+            · Devolvido por atendimentos anulados: {{ $sum(StockMovementType::Reversal) }}
+        @endif
         @if ($lostValue > 0)
             ({{ LocalizedDecimal::money($lostValue) }} desperdiçados)
         @endif
@@ -132,4 +138,27 @@
     </div>
 
     @include('stock._movement_dialogs', ['product' => $product, 'batchOptions' => $batchOptions])
+
+    @can('adjust', $product)
+        <x-dialog id="batch-dates" title="Corrigir datas do lote">
+            <form method="POST" action="{{ route('stock.batches.update', $batch) }}" class="space-y-4" novalidate>
+                @csrf
+                @method('PATCH')
+                <input type="hidden" name="_dialog" value="batch-dates">
+
+                <p class="text-sm text-slate-600">
+                    Use para corrigir fabricação ou validade digitadas errado na entrada. A correção fica registrada na auditoria, com as datas antigas e as novas.
+                </p>
+                <x-form.input scope="batch-dates" id="batch-manufactured" name="manufactured_on" label="Fabricação" type="date"
+                              :value="$batch->manufactured_on?->format('Y-m-d')" :max="ClinicTime::today()" />
+                <x-form.input scope="batch-dates" id="batch-expires" name="expires_on" label="Validade" type="date"
+                              :value="$batch->expires_on?->format('Y-m-d')" hint="Se a data correta já passou, o lote passa a constar como vencido." />
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn btn-secondary" data-dialog-close>Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar datas</button>
+                </div>
+            </form>
+        </x-dialog>
+    @endcan
 </x-layouts.app>

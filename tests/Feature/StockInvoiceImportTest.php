@@ -9,6 +9,7 @@ use App\Enums\StockMovementType;
 use App\Models\AuditLog;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\StockInvoice;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\InvoiceXmlReader;
@@ -25,6 +26,9 @@ class StockInvoiceImportTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
+    /** Token da última nota enviada, que identifica a conferência na sessão. */
+    private string $token = '';
 
     protected function setUp(): void
     {
@@ -57,10 +61,10 @@ class StockInvoiceImportTest extends TestCase
      *
      * @param  list<string>  $items
      */
-    private function invoiceXml(array $items, string $number = '4521', string $supplier = 'Distribuidora Alfa Ltda'): string
+    private function invoiceXml(array $items, string $number = '4521', string $supplier = 'Distribuidora Alfa Ltda', ?string $accessKey = '35261012345678000199550010000045211000045210'): string
     {
         return '<?xml version="1.0" encoding="UTF-8"?>'
-            .'<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe><infNFe Id="NFe35261012345678000199550010000045211000045210" versao="4.00">'
+            .'<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe><infNFe'.($accessKey === null ? '' : ' Id="NFe'.$accessKey.'"').' versao="4.00">'
             ."<ide><nNF>{$number}</nNF><serie>1</serie><dhEmi>2026-10-01T10:15:00-03:00</dhEmi></ide>"
             .'<emit><CNPJ>12345678000199</CNPJ><xNome>'.htmlspecialchars($supplier, ENT_XML1).'</xNome></emit>'
             .implode('', $items)
@@ -69,7 +73,24 @@ class StockInvoiceImportTest extends TestCase
 
     private function upload(string $contents, string $name = 'nota.xml'): TestResponse
     {
-        return $this->post('/estoque/nota-fiscal', ['_dialog' => 'invoice-import', 'invoice' => $this->realUpload($name, $contents, 'text/xml')]);
+        $response = $this->post('/estoque/nota-fiscal', ['_dialog' => 'invoice-import', 'invoice' => $this->realUpload($name, $contents, 'text/xml')]);
+        parse_str((string) parse_url((string) $response->headers->get('Location'), PHP_URL_QUERY), $query);
+        $this->token = (string) ($query['importacao'] ?? '');
+
+        return $response;
+    }
+
+    private function reviewUrl(?string $token = null): string
+    {
+        return '/estoque/nota-fiscal?importacao='.($token ?? $this->token);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function confirm(array $items, ?string $token = null): TestResponse
+    {
+        return $this->put('/estoque/nota-fiscal', ['importacao' => $token ?? $this->token, 'items' => $items]);
     }
 
     /**
@@ -96,7 +117,7 @@ class StockInvoiceImportTest extends TestCase
         $items = [
             [
                 'import' => '1', 'product_id' => '', 'name' => 'Toxina botulínica 100 U', 'code' => 'TX-100', 'category' => 'injectable', 'unit' => 'fr',
-                'unit_cost' => '950,50', 'enter' => '1',
+                'total_cost' => '2.851,50', 'enter' => '1',
                 'lots' => [
                     ['batch_code' => 'L2401', 'quantity' => '2', 'manufactured_on' => '2026-05-10', 'expires_on' => '2027-05-10'],
                     ['batch_code' => 'L2402', 'quantity' => '1', 'manufactured_on' => '2026-06-15', 'expires_on' => '2027-06-15'],
@@ -104,7 +125,7 @@ class StockInvoiceImportTest extends TestCase
             ],
             [
                 'import' => '1', 'product_id' => '', 'name' => 'Agulha 30G 13 mm', 'code' => '7891234567895', 'category' => 'disposable', 'unit' => 'cx',
-                'unit_cost' => '18,90', 'enter' => '0',
+                'total_cost' => '189,00', 'enter' => '0',
                 'lots' => [['batch_code' => '', 'quantity' => '10', 'manufactured_on' => '', 'expires_on' => '']],
             ],
         ];
@@ -155,12 +176,14 @@ class StockInvoiceImportTest extends TestCase
 
         $this->actingAs($this->admin);
 
-        $this->upload($this->sampleInvoice())->assertRedirect(route('stock.invoice.edit'))->assertSessionHasNoErrors();
+        $this->upload($this->sampleInvoice())->assertRedirect(route('stock.invoice.edit', ['importacao' => $this->token]))->assertSessionHasNoErrors();
+        $this->assertSame(32, strlen($this->token));
 
-        $this->get('/estoque/nota-fiscal')
+        $this->get($this->reviewUrl())
             ->assertOk()
             ->assertSee('NF nº 4521 · série 1 · emitida em 01/10/2026 · Distribuidora Alfa Ltda')
-            ->assertSee('1. TOXINA BOTULINICA 100U')->assertSee('Na nota: 3 FR × R$ 950,50')
+            ->assertSee('1. TOXINA BOTULINICA 100U')->assertSee('Na nota: 3 FR × R$ 950,50')->assertSee('= R$ 2.851,50')
+            ->assertSee('value="2851,50"', false)
             ->assertSee('2. AGULHA 30G 13MM')->assertSee('Na nota: 10 CX × R$ 18,90')
             // Lotes do grupo de rastreabilidade, um por linha.
             ->assertSee('value="L2401"', false)->assertSee('value="2027-05-10"', false)->assertSee('value="L2402"', false)
@@ -183,7 +206,7 @@ class StockInvoiceImportTest extends TestCase
         $this->actingAs($this->admin);
         $this->upload($this->sampleInvoice());
 
-        $this->put('/estoque/nota-fiscal', ['items' => $this->reviewedItems()])
+        $this->confirm($this->reviewedItems())
             ->assertRedirect(route('stock.entries.index'))
             ->assertSessionHas('success', 'Nota fiscal importada: 2 produtos cadastrados e 2 entradas lançadas.');
 
@@ -204,18 +227,21 @@ class StockInvoiceImportTest extends TestCase
         );
         $this->assertSame([$toxin->id], $batches->pluck('product_id')->unique()->all());
 
-        // As entradas levam os dados da compra e quem importou.
+        // As entradas levam os dados da compra e quem importou. O custo é o
+        // valor total do item dividido pela quantidade lançada.
         $movements = StockMovement::orderBy('id')->get();
         $this->assertSame(
-            [[StockMovementType::Entry, '2.000', '950.50', 'Distribuidora Alfa Ltda', '4521', $this->admin->id], [StockMovementType::Entry, '1.000', '950.50', 'Distribuidora Alfa Ltda', '4521', $this->admin->id]],
+            [[StockMovementType::Entry, '2.000', '950.5000', 'Distribuidora Alfa Ltda', '4521', $this->admin->id], [StockMovementType::Entry, '1.000', '950.5000', 'Distribuidora Alfa Ltda', '4521', $this->admin->id]],
             $movements->map(fn (StockMovement $movement) => [$movement->type, $movement->quantity, $movement->unit_cost, $movement->supplier, $movement->invoice_number, $movement->user_id])->all(),
         );
 
         $this->assertSame(2, AuditLog::where('action', AuditAction::ProductCreated->value)->count());
         $this->assertSame(2, AuditLog::where('action', AuditAction::StockMoved->value)->count());
 
-        // A importação termina ali: a tela de conferência não fica disponível.
-        $this->get('/estoque/nota-fiscal')->assertRedirect(route('products.index'));
+        // A importação termina ali: a tela de conferência não fica disponível,
+        // e a nota fica registrada pela chave de acesso.
+        $this->get($this->reviewUrl())->assertRedirect(route('products.index'));
+        $this->assertSame(['35261012345678000199550010000045211000045210'], StockInvoice::pluck('access_key')->all());
         $this->get('/estoque/entradas')->assertSee('L2401')->assertSee('4521')->assertSee('Distribuidora Alfa Ltda');
     }
 
@@ -227,11 +253,11 @@ class StockInvoiceImportTest extends TestCase
         $this->actingAs($this->admin);
         $this->upload($this->sampleInvoice());
 
-        $this->put('/estoque/nota-fiscal', ['items' => $this->reviewedItems([
+        $this->confirm($this->reviewedItems([
             // Os dados de cadastro digitados são ignorados quando o produto já existe.
             0 => ['product_id' => (string) $toxin->id, 'name' => 'Outro nome qualquer', 'code' => 'OUTRO'],
             1 => ['import' => '0'],
-        ])])->assertSessionHas('success', 'Nota fiscal importada: 0 produtos cadastrados e 2 entradas lançadas.');
+        ]))->assertSessionHas('success', 'Nota fiscal importada: 0 produtos cadastrados e 2 entradas lançadas.');
 
         $this->assertSame(1, Product::count());
         $this->assertSame(['Toxina botulínica 100 U', 'TX-100', '800.00', 'Fornecedor antigo'], [$toxin->refresh()->name, $toxin->code, $toxin->cost, $toxin->supplier]);
@@ -249,13 +275,13 @@ class StockInvoiceImportTest extends TestCase
         ]));
 
         $lot = fn (string $code, string $quantity, string $expiresOn) => [['batch_code' => $code, 'quantity' => $quantity, 'manufactured_on' => '', 'expires_on' => $expiresOn]];
-        $glove = ['import' => '1', 'product_id' => '', 'name' => 'Luva nitrílica M', 'code' => 'LV-M', 'category' => 'disposable', 'unit' => 'cx', 'unit_cost' => '45', 'enter' => '1'];
+        $glove = ['import' => '1', 'product_id' => '', 'name' => 'Luva nitrílica M', 'code' => 'LV-M', 'category' => 'disposable', 'unit' => 'cx', 'total_cost' => '90', 'enter' => '1'];
 
-        $this->put('/estoque/nota-fiscal', ['items' => [
+        $this->confirm([
             [...$glove, 'lots' => $lot('LV01', '200', '2029-01-10')],   // quantidade convertida para a unidade do estoque
             [...$glove, 'lots' => $lot('LV02', '300', '2029-02-10')],
-            ['import' => '1', 'product_id' => '', 'name' => 'Gaze estéril', 'code' => '', 'category' => 'disposable', 'unit' => 'un', 'unit_cost' => '', 'enter' => '0', 'lots' => $lot('', '50', '')],
-        ]])
+            ['import' => '1', 'product_id' => '', 'name' => 'Gaze estéril', 'code' => '', 'category' => 'disposable', 'unit' => 'un', 'total_cost' => '', 'enter' => '0', 'lots' => $lot('', '50', '')],
+        ])
             ->assertRedirect(route('stock.entries.index'))
             ->assertSessionHas('success', 'Nota fiscal importada: 2 produtos cadastrados e 2 entradas lançadas.');
 
@@ -272,14 +298,14 @@ class StockInvoiceImportTest extends TestCase
         $this->actingAs($this->admin);
         $this->upload($this->sampleInvoice());
 
-        $attempt = fn (array $overrides) => $this->from('/estoque/nota-fiscal')->put('/estoque/nota-fiscal', ['items' => $this->reviewedItems($overrides)]);
+        $attempt = fn (array $overrides) => $this->from($this->reviewUrl())->confirm($this->reviewedItems($overrides));
 
         $attempt([0 => ['name' => '']])->assertSessionHasErrors('items.0.name');
-        $attempt([0 => ['name' => 'Já Existe']])->assertSessionHasErrors(['items.0.name' => 'Já existe um produto com este nome. Escolha-o na lista de produtos.']);
+        $attempt([0 => ['name' => 'Já Existe']])->assertSessionHasErrors(['items.0.name' => 'Já existe um produto com este nome. Escolha-o na lista de produtos ou, se ele estiver inativo, reative-o no cadastro.']);
         $attempt([0 => ['code' => 'JA-1']])->assertSessionHasErrors('items.0.code');
         $attempt([0 => ['category' => 'remedio']])->assertSessionHasErrors('items.0.category');
         $attempt([0 => ['unit' => 'litro']])->assertSessionHasErrors('items.0.unit');
-        $attempt([0 => ['unit_cost' => '-1']])->assertSessionHasErrors('items.0.unit_cost');
+        $attempt([0 => ['total_cost' => '-1']])->assertSessionHasErrors('items.0.total_cost');
         $attempt([0 => ['product_id' => (string) $inactive->id]])->assertSessionHasErrors('items.0.product_id');
         $attempt([0 => ['product_id' => '999999']])->assertSessionHasErrors('items.0.product_id');
         $attempt([0 => ['lots' => [1 => ['quantity' => '0']]]])->assertSessionHasErrors('items.0.lots.1.quantity');
@@ -290,7 +316,7 @@ class StockInvoiceImportTest extends TestCase
         // Pedir a entrada de um item sem lote é recusado.
         $attempt([1 => ['enter' => '1']])->assertSessionHasErrors(['items.1.lots.0.batch_code' => 'Informe o lote, ou desmarque a entrada de estoque deste item.']);
         $attempt([0 => ['import' => '0'], 1 => ['import' => '0']])->assertSessionHasErrors(['items' => 'Marque pelo menos um item da nota para importar.']);
-        $this->put('/estoque/nota-fiscal', [])->assertSessionHasErrors('items');
+        $this->put('/estoque/nota-fiscal', [])->assertSessionHasErrors(['items', 'importacao']);
 
         // Item desmarcado não é validado nem gravado.
         $attempt([0 => ['import' => '0', 'name' => '', 'lots' => [0 => ['quantity' => 'abc']]]])->assertSessionHasNoErrors();
@@ -308,8 +334,8 @@ class StockInvoiceImportTest extends TestCase
         $this->actingAs($this->admin);
         $this->upload($this->sampleInvoice());
 
-        $response = $this->followingRedirects()->from('/estoque/nota-fiscal')
-            ->put('/estoque/nota-fiscal', ['items' => $this->reviewedItems([0 => ['product_id' => (string) $toxin->id]])]);
+        $response = $this->followingRedirects()->from($this->reviewUrl())
+            ->confirm($this->reviewedItems([0 => ['product_id' => (string) $toxin->id]]));
 
         $response->assertOk()
             ->assertSee('O lote L2402 já existe com fabricação não informada.')
@@ -322,20 +348,136 @@ class StockInvoiceImportTest extends TestCase
         $this->assertSame(0, ProductBatch::where('batch_code', 'L2401')->count());
     }
 
-    public function test_review_warns_when_the_same_invoice_was_already_imported_and_can_be_cancelled(): void
+    public function test_the_same_invoice_cannot_be_imported_twice_and_the_review_can_be_cancelled(): void
     {
         $this->actingAs($this->admin);
 
         $this->upload($this->sampleInvoice());
-        $this->put('/estoque/nota-fiscal', ['items' => $this->reviewedItems()])->assertSessionHasNoErrors();
+        $this->confirm($this->reviewedItems())->assertSessionHasNoErrors();
 
+        // A mesma nota de novo: a conferência avisa e não oferece a confirmação.
         $this->upload($this->sampleInvoice());
-        $this->get('/estoque/nota-fiscal')->assertOk()->assertSee('Já existem entradas lançadas com a nota nº 4521 deste fornecedor.');
+        $this->get($this->reviewUrl())->assertOk()
+            ->assertSee('Esta nota fiscal já foi importada em 08/10/2026 13:00 por Ana Admin.')
+            ->assertDontSee('Confirmar importação');
 
-        $this->delete('/estoque/nota-fiscal')->assertRedirect(route('products.index'))->assertSessionHas('success', 'Importação cancelada. Nada foi gravado.');
-        $this->get('/estoque/nota-fiscal')->assertRedirect(route('products.index'));
+        // Mesmo enviada à força, a confirmação é recusada e nada é somado.
+        $this->from($this->reviewUrl())->confirm($this->reviewedItems())->assertSessionHasErrors(['importacao' => 'Esta nota fiscal já foi importada. Nada foi lançado de novo.']);
+        $this->assertSame(2, StockMovement::count());
+        $this->assertSame(2, Product::count());
+
+        // Token malformado não derruba a página nem cancela nada.
+        $this->delete('/estoque/nota-fiscal', ['importacao' => ['x']])->assertRedirect(route('products.index'));
+        $this->get($this->reviewUrl())->assertOk();
+        $this->get('/estoque/nota-fiscal?importacao[]=x')->assertRedirect(route('products.index'));
+
+        $this->delete('/estoque/nota-fiscal', ['importacao' => $this->token])->assertRedirect(route('products.index'))->assertSessionHas('success', 'Importação cancelada. Nada foi gravado.');
+        $this->get($this->reviewUrl())->assertRedirect(route('products.index'));
 
         $this->assertSame(2, StockMovement::count());
+    }
+
+    public function test_an_invoice_without_access_key_only_warns_by_number_and_supplier(): void
+    {
+        $this->actingAs($this->admin);
+        $invoice = $this->invoiceXml([$this->item('LUVA NITRILICA M', 'LV-M', 'CX', '2', '45.00', [['LV01', '2', '2026-01-10', '2029-01-10']])], accessKey: null);
+
+        $this->upload($invoice);
+        $this->confirm([['import' => '1', 'product_id' => '', 'name' => 'Luva', 'code' => 'LV-M', 'category' => 'disposable', 'unit' => 'cx', 'total_cost' => '90', 'enter' => '1',
+            'lots' => [['batch_code' => 'LV01', 'quantity' => '2', 'manufactured_on' => '', 'expires_on' => '2029-01-10']]]])->assertSessionHasNoErrors();
+        $this->assertSame(0, StockInvoice::count());
+
+        $this->upload($invoice);
+        $this->get($this->reviewUrl())->assertOk()
+            ->assertSee('Já existem entradas lançadas com a nota nº 4521 deste fornecedor.')
+            ->assertSee('Confirmar importação');
+    }
+
+    public function test_two_invoices_in_review_at_once_do_not_mix(): void
+    {
+        $this->actingAs($this->admin);
+
+        $this->upload($this->invoiceXml([$this->item('LUVA NITRILICA M', 'LV-M', 'CX', '2', '45.00', [['LV01', '2', '2026-01-10', '2029-01-10']])], '1001', 'Fornecedor A', str_repeat('1', 44)));
+        $first = $this->token;
+        $this->upload($this->invoiceXml([$this->item('GAZE ESTERIL', 'GZ-1', 'UN', '50', '0.80', [['GZ01', '50', '2026-01-10', '2029-01-10']])], '2002', 'Fornecedor B', str_repeat('2', 44)));
+
+        $this->get($this->reviewUrl($first))->assertOk()->assertSee('NF nº 1001')->assertSee('LUVA NITRILICA M')->assertDontSee('GAZE ESTERIL');
+        $this->get($this->reviewUrl())->assertOk()->assertSee('NF nº 2002')->assertSee('GAZE ESTERIL');
+
+        // Confirmar a primeira aba grava os dados da primeira nota.
+        $this->confirm([['import' => '1', 'product_id' => '', 'name' => 'Luva', 'code' => 'LV-M', 'category' => 'disposable', 'unit' => 'cx', 'total_cost' => '90', 'enter' => '1',
+            'lots' => [['batch_code' => 'LV01', 'quantity' => '2', 'manufactured_on' => '', 'expires_on' => '2029-01-10']]]], $first)->assertSessionHasNoErrors();
+
+        $this->assertSame(['1001', 'Fornecedor A'], [StockMovement::sole()->invoice_number, StockMovement::sole()->supplier]);
+        $this->assertSame([str_repeat('1', 44)], StockInvoice::pluck('access_key')->all());
+        // A outra nota segue em conferência; a primeira não pode ser confirmada de novo.
+        $this->get($this->reviewUrl())->assertOk();
+        $this->confirm([], $first)->assertSessionHasErrors('items');
+        $this->from($this->reviewUrl($first))->confirm([['import' => '1', 'product_id' => '', 'name' => 'Luva 2', 'code' => '', 'category' => 'disposable', 'unit' => 'cx', 'total_cost' => '', 'enter' => '0',
+            'lots' => [['batch_code' => '', 'quantity' => '2', 'manufactured_on' => '', 'expires_on' => '']]]], $first)
+            ->assertRedirect(route('products.index'))->assertSessionHas('warning');
+        $this->assertSame(1, StockMovement::count());
+    }
+
+    public function test_fractioned_products_enter_from_the_invoice_in_whole_units_with_the_cost_per_stock_unit(): void
+    {
+        $toxin = Product::factory()->create(['name' => 'Toxina botulínica 100 U', 'code' => 'TX-100', 'unit' => ProductUnit::ToxinUnit, 'unit_content' => 100]);
+
+        $this->actingAs($this->admin);
+        $this->upload($this->sampleInvoice());
+        $this->get($this->reviewUrl())->assertOk()->assertSee('Toxina botulínica 100 U · TX-100 (U, unidade de 100 U)');
+
+        $items = fn (string $first, string $second) => $this->reviewedItems([
+            0 => ['product_id' => (string) $toxin->id, 'lots' => [0 => ['quantity' => $first], 1 => ['quantity' => $second]]],
+            1 => ['import' => '0'],
+        ]);
+
+        // Na unidade da nota (frascos) não forma unidades inteiras de 100 U.
+        $this->from($this->reviewUrl())->confirm($items('2', '1'))->assertSessionHasErrors(['items.0.lots.0.quantity', 'items.0.lots.1.quantity']);
+        $this->assertSame(0, StockMovement::count());
+
+        $this->confirm($items('200', '100'))->assertSessionHasNoErrors();
+
+        // R$ 2.851,50 por 300 U: R$ 9,505 por U, sem perder a fração de centavo.
+        $this->assertSame(['9.5050', '9.5050'], StockMovement::orderBy('id')->pluck('unit_cost')->all());
+        $this->assertSame(['L2401' => '200.000', 'L2402' => '100.000'], ProductBatch::orderBy('batch_code')->pluck('quantity', 'batch_code')->all());
+    }
+
+    public function test_an_inactive_product_with_the_same_name_is_pointed_out_in_the_review(): void
+    {
+        Product::factory()->create(['name' => 'TOXINA BOTULINICA 100U', 'is_active' => false]);
+
+        $this->actingAs($this->admin);
+        $this->upload($this->sampleInvoice());
+
+        $this->get($this->reviewUrl())->assertOk()
+            ->assertSee('Já existe o produto inativo "TOXINA BOTULINICA 100U" com este nome ou código.', false);
+    }
+
+    public function test_new_items_with_the_same_code_and_different_names_are_refused(): void
+    {
+        $this->actingAs($this->admin);
+        $this->upload($this->sampleInvoice());
+
+        $this->from($this->reviewUrl())->confirm($this->reviewedItems([1 => ['code' => 'TX-100']]))
+            ->assertSessionHasErrors(['items.1.code' => 'Outro item novo desta nota já usa este código. Use códigos diferentes ou o mesmo nome.']);
+        $this->assertSame(0, Product::count());
+    }
+
+    public function test_entries_into_an_expired_batch_are_refused_even_without_the_expiry_in_the_invoice(): void
+    {
+        $toxin = Product::factory()->create(['name' => 'Toxina botulínica 100 U']);
+        ProductBatch::factory()->create(['product_id' => $toxin->id, 'batch_code' => 'L2401', 'quantity' => 0, 'manufactured_on' => '2026-05-10', 'expires_on' => '2026-09-30']);
+
+        $this->actingAs($this->admin);
+        $this->upload($this->sampleInvoice());
+
+        $this->from($this->reviewUrl())->confirm($this->reviewedItems([
+            0 => ['product_id' => (string) $toxin->id, 'lots' => [0 => ['manufactured_on' => '', 'expires_on' => '']]],
+            1 => ['import' => '0'],
+        ]))->assertSessionHasErrors(['items.0.lots.0.batch_code' => 'O lote L2401 venceu em 30/09/2026. Não é possível dar entrada em lote vencido.']);
+
+        $this->assertSame(0, StockMovement::count());
     }
 
     public function test_files_that_are_not_an_invoice_are_refused(): void
@@ -390,7 +532,7 @@ class StockInvoiceImportTest extends TestCase
             '<script>alert(3)</script>',
         ))->assertSessionHasNoErrors();
 
-        $this->get('/estoque/nota-fiscal')
+        $this->get($this->reviewUrl())
             ->assertOk()
             ->assertDontSee('<script>alert(1)</script>', false)
             ->assertDontSee('<img src=x onerror=alert(2)>', false)

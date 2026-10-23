@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\StockMovementType;
 use App\Support\ClinicTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -67,24 +66,25 @@ class StockUnit extends Model
     }
 
     /**
-     * Acrescenta "was_consumed": se a unidade já foi usada em algum atendimento.
+     * Acrescenta "was_consumed": se a unidade já foi usada em algum
+     * atendimento que não foi anulado.
      *
      * @param  Builder<StockUnit>  $query
      */
     public function scopeWithConsumption(Builder $query): void
     {
-        $query->withExists(['movements as was_consumed' => fn (Builder $movements) => $movements->where('type', StockMovementType::Consumption->value)]);
+        $query->withExists(['movements as was_consumed' => fn (Builder $movements) => $movements->unreversedConsumption()]);
     }
 
     /**
-     * Já foi usada em algum atendimento. Usa "was_consumed" (withConsumption)
-     * ou consulta na hora.
+     * Já foi usada em algum atendimento que não foi anulado. Usa
+     * "was_consumed" (withConsumption) ou consulta na hora.
      */
     public function wasConsumed(): bool
     {
         return array_key_exists('was_consumed', $this->getAttributes())
             ? (bool) $this->was_consumed
-            : $this->movements()->where('type', StockMovementType::Consumption->value)->exists();
+            : $this->movements()->unreversedConsumption()->exists();
     }
 
     /**
@@ -103,9 +103,10 @@ class StockUnit extends Model
                 ->orWhereRaw('date_add(stock_units.opened_at, interval products.hours_after_opening hour) <= ?', [now()])
                 ->orWhere(fn (Builder $singleUse) => $singleUse
                     ->where('multi_patient_use', false)
-                    ->whereExists(fn ($consumed) => $consumed->selectRaw('1')->from('stock_movements')
-                        ->whereColumn('stock_movements.stock_unit_id', 'stock_units.id')
-                        ->where('stock_movements.type', StockMovementType::Consumption->value)))))));
+                    ->whereExists(function ($consumed): void {
+                        $consumed->selectRaw('1')->from('stock_movements')->whereColumn('stock_movements.stock_unit_id', 'stock_units.id');
+                        StockMovement::whereUnreversedConsumption($consumed);
+                    }))))));
     }
 
     /**

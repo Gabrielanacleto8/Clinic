@@ -311,7 +311,12 @@ class StockTabsTest extends TestCase
         $this->actingAs($this->admin);
 
         $this->move($batch, 'loss', '1', null)->assertSessionHasErrors(['reason' => 'Informe o motivo.']);
-        $this->move($batch, 'exit', '1', 'Empréstimo')->assertSessionHasErrors(['product_batch_id' => 'Este lote está vencido. Registre a baixa como perda.']);
+        $this->move($batch, 'exit', '1', 'Empréstimo')->assertSessionHasErrors(['product_batch_id' => 'O lote VENC está vencido. Registre a baixa como perda.']);
+        // Nem por ajuste nem por inventário: o vencido não aparece para contagem e é recusado se enviado.
+        $this->move($batch, 'adjustment', '0', 'Contagem')->assertSessionHasErrors(['product_batch_id' => 'O lote VENC está vencido. Registre a baixa como perda.']);
+        $this->get('/estoque/inventario')->assertOk()->assertDontSee('VENC');
+        $this->put('/estoque/inventario', ['reason' => 'Inventário', 'counted' => [$batch->id => '0']])
+            ->assertSessionHasErrors(["counted.{$batch->id}" => 'O lote VENC está vencido. Registre a baixa como perda.']);
         $this->move($batch, 'loss', '11', 'Descarte')->assertSessionHasErrors('quantity');
 
         $this->assertSame(0, StockMovement::count());

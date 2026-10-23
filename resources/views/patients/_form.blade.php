@@ -38,6 +38,24 @@
 </section>
 
 <section class="card p-6">
+    <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Uso de imagem</h2>
+    <label class="mt-4 flex items-start gap-2 text-sm">
+        <input type="hidden" name="image_use_consent" value="0">
+        <input type="checkbox" name="image_use_consent" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700"
+               @checked(old('image_use_consent', $patient->image_use_consented_at !== null))>
+        <span>
+            O paciente autoriza o uso das fotos dele em divulgação (redes sociais, portfólio).
+            <span class="block text-xs text-slate-500">
+                Fotos clínicas no prontuário não dependem desta autorização. Guarde o termo assinado como documento do atendimento.
+                @if ($patient->image_use_consented_at)
+                    Autorização registrada em {{ App\Support\ClinicTime::format($patient->image_use_consented_at) }}.
+                @endif
+            </span>
+        </span>
+    </label>
+</section>
+
+<section class="card p-6">
     <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Observações</h2>
     <div class="mt-4">
         <x-form.textarea name="notes" label="Observações gerais" :value="$patient->notes" rows="4" maxlength="5000"

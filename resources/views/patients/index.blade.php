@@ -60,6 +60,9 @@
                         <td data-label="Telefone" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $patient->formattedPhone() ?: '—' }}</td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             @if ($archived)
+                                @can('viewClinicalRecords', $patient)
+                                    <a href="{{ route('patients.record', $patient) }}" class="mr-3 font-medium text-teal-800 hover:underline">Prontuário</a>
+                                @endcan
                                 @can('restore', $patient)
                                     <form method="POST" action="{{ route('patients.restore', $patient) }}" class="inline"
                                           data-confirm="Restaurar o cadastro de {{ $patient->name }}?">
@@ -69,7 +72,9 @@
                                     </form>
                                 @endcan
                             @else
-                                <a href="{{ route('patients.edit', $patient) }}" class="font-medium text-teal-800 hover:underline">Editar</a>
+                                @can('update', $patient)
+                                    <a href="{{ route('patients.edit', $patient) }}" class="font-medium text-teal-800 hover:underline">Editar</a>
+                                @endcan
                             @endif
                         </td>
                     </tr>

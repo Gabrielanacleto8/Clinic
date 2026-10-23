@@ -6,6 +6,9 @@
 @endphp
 <section class="card mt-4 p-6" aria-labelledby="fotos-do-paciente">
     <h2 id="fotos-do-paciente" class="sr-only">Fotos</h2>
+    <p class="mb-4 text-sm text-slate-600">
+        {{ $patient->image_use_consented_at ? 'Paciente autorizou o uso das fotos em divulgação.' : 'Sem autorização para divulgação: as fotos ficam só no prontuário.' }}
+    </p>
     @if ($records->isEmpty())
         <p class="py-6 text-center text-sm text-slate-500">Nenhuma foto deste paciente.</p>
     @else

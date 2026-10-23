@@ -24,7 +24,7 @@ class TreatmentFormOptions
     public const CONFIRMATION = 'Registrar o atendimento? O estoque será baixado e o lançamento financeiro será gerado.';
 
     /**
-     * @return array{professionals: Collection<int, User>, procedures: Collection<int, Procedure>, batches: Collection<int, ProductBatch>, units: Collection<int, StockUnit>, procedureDefaults: array<int, array{amount: string|null, products: list<array{product_batch_id: int, quantity: string}>}>}
+     * @return array{professionals: Collection<int, User>, procedures: Collection<int, Procedure>, batches: Collection<int, ProductBatch>, units: Collection<int, StockUnit>, procedureDefaults: array<int, array{amount: string|null, products: list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>}>}
      */
     public function for(User $user): array
     {
@@ -37,13 +37,15 @@ class TreatmentFormOptions
             ->firstToExpire()
             ->get(['id', 'product_id', 'batch_code', 'expires_on', 'quantity']);
 
+        $units = $this->openUnits($batches);
+
         return [
             // Só o administrador escolhe o profissional; para os demais a lista nem é consultada.
             'professionals' => $user->isAdmin() ? User::query()->attending()->orderBy('name')->get(['id', 'name']) : new Collection,
             'procedures' => $procedures,
             'batches' => $batches,
-            'units' => $this->openUnits($batches),
-            'procedureDefaults' => $this->procedureDefaults($procedures, $batches),
+            'units' => $units,
+            'procedureDefaults' => $this->procedureDefaults($procedures, $batches, $units),
         ];
     }
 
@@ -103,15 +105,19 @@ class TreatmentFormOptions
     /**
      * O que a escolha de cada procedimento preenche no formulário: o valor do
      * catálogo e os produtos que ele normalmente usa, cada um no lote que
-     * vence primeiro. É uma sugestão: o usuário confere antes de registrar.
+     * vence primeiro. No fracionado, a unidade aberta há mais tempo daquele
+     * lote, para não abrir outra à toa. É uma sugestão: o usuário confere
+     * antes de registrar.
      *
      * @param  Collection<int, Procedure>  $procedures
      * @param  Collection<int, ProductBatch>  $batches  Já na ordem de uso dentro de cada produto.
-     * @return array<int, array{amount: string|null, products: list<array{product_batch_id: int, quantity: string}>}>
+     * @param  Collection<int, StockUnit>  $units  Unidades usáveis, da aberta há mais tempo à mais recente.
+     * @return array<int, array{amount: string|null, products: list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>}>
      */
-    private function procedureDefaults(Collection $procedures, Collection $batches): array
+    private function procedureDefaults(Collection $procedures, Collection $batches, Collection $units): array
     {
         $firstBatchIds = $batches->unique('product_id')->pluck('id', 'product_id');
+        $oldestUnitIds = $units->unique('product_batch_id')->pluck('id', 'product_batch_id');
         $typical = DB::table('procedure_product')
             ->whereIn('procedure_id', $procedures->modelKeys())
             ->orderBy('product_id')
@@ -124,6 +130,7 @@ class TreatmentFormOptions
                 ->filter(fn (object $row) => $firstBatchIds->has($row->product_id))
                 ->map(fn (object $row) => [
                     'product_batch_id' => $firstBatchIds[$row->product_id],
+                    'stock_unit_id' => $oldestUnitIds->get($firstBatchIds[$row->product_id]),
                     'quantity' => LocalizedDecimal::quantityInput($row->quantity),
                 ])
                 ->values()

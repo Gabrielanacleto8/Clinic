@@ -17,6 +17,7 @@
         'Administração' => [
             // As permissões ficam numa aba dentro de usuários.
             ['label' => 'Usuários', 'route' => 'users.index', 'active' => 'users.*', 'icon' => 'shield', 'can' => ['viewAny', App\Models\User::class]],
+            ['label' => 'Auditoria', 'route' => 'audit.index', 'active' => 'audit.*', 'icon' => 'eye', 'can' => ['viewAny', App\Models\AuditLog::class]],
         ],
     ];
 

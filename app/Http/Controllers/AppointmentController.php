@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\AuditAction;
 use App\Enums\Permission;
 use App\Http\Requests\AppointmentRequest;
+use App\Http\Requests\AppointmentStatusRequest;
 use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Procedure;
@@ -19,7 +20,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AppointmentController extends Controller
@@ -121,17 +121,9 @@ class AppointmentController extends Controller
      * Confirmar presença, cancelar, marcar falta ou reabrir. "Atendido" não
      * entra aqui: só é definido quando o atendimento é registrado.
      */
-    public function status(Request $request, Appointment $appointment): RedirectResponse
+    public function status(AppointmentStatusRequest $request, Appointment $appointment): RedirectResponse
     {
-        Gate::authorize('changeStatus', $appointment);
-        $this->ensurePatientIsActive($appointment);
-
-        $validated = $request->validate([
-            'status' => ['required', Rule::in(array_map(
-                fn (AppointmentStatus $status) => $status->value,
-                $appointment->status->manualTransitions(),
-            ))],
-        ], ['status.in' => 'Esta mudança de situação não é permitida.']);
+        $validated = $request->validated();
 
         DB::transaction(function () use ($appointment, $validated): void {
             $from = $appointment->status;
