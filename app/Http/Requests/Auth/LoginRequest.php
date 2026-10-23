@@ -17,6 +17,14 @@ class LoginRequest extends FormRequest
 
     private const LOCKOUT_SECONDS = 60;
 
+    /**
+     * Segunda barreira, por e-mail de qualquer origem: muitas falhas seguidas
+     * travam a conta por mais tempo, mesmo com o atacante trocando de IP.
+     */
+    private const ACCOUNT_MAX_ATTEMPTS = 10;
+
+    private const ACCOUNT_LOCKOUT_SECONDS = 900;
+
     public function authorize(): bool
     {
         return true;
@@ -59,6 +67,7 @@ class LoginRequest extends FormRequest
 
         if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey(), self::LOCKOUT_SECONDS);
+            RateLimiter::hit(self::accountKey($credentials['email']), self::ACCOUNT_LOCKOUT_SECONDS);
 
             $audit->log(AuditAction::LoginFailed, User::where('email', $credentials['email'])->first());
 
@@ -66,6 +75,15 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+        RateLimiter::clear(self::accountKey($credentials['email']));
+    }
+
+    /**
+     * Libera o e-mail travado por falhas seguidas (usado ao redefinir a senha).
+     */
+    public static function clearLockout(string $email): void
+    {
+        RateLimiter::clear(self::accountKey($email));
     }
 
     /**
@@ -73,6 +91,17 @@ class LoginRequest extends FormRequest
      */
     private function ensureIsNotRateLimited(AuditLogger $audit): void
     {
+        $accountKey = self::accountKey($this->string('email')->toString());
+
+        if (RateLimiter::tooManyAttempts($accountKey, self::ACCOUNT_MAX_ATTEMPTS)) {
+            $audit->log(AuditAction::LoginLockedOut, null, ['scope' => 'account']);
+
+            throw ValidationException::withMessages([
+                'email' => 'Acesso bloqueado por excesso de tentativas. Tente de novo em '
+                    .(int) ceil(RateLimiter::availableIn($accountKey) / 60).' minuto(s) ou peça ao administrador uma nova senha.',
+            ]);
+        }
+
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), self::MAX_ATTEMPTS)) {
             return;
         }
@@ -82,6 +111,14 @@ class LoginRequest extends FormRequest
         throw ValidationException::withMessages([
             'email' => trans('auth.throttle', ['seconds' => RateLimiter::availableIn($this->throttleKey())]),
         ]);
+    }
+
+    /**
+     * Chave por e-mail, sem o e-mail em claro no cache.
+     */
+    private static function accountKey(string $email): string
+    {
+        return 'login-account:'.hash('sha256', Str::lower(trim($email)));
     }
 
     private function throttleKey(): string

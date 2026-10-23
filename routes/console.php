@@ -1,8 +1,16 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+/*
+| Tarefas periódicas. Em produção rodam no serviço "scheduler" do
+| docker-compose.production.yml (php artisan schedule:work). O backup do banco
+| e dos arquivos fica no serviço "backup", que tem o mysqldump da mesma versão
+| do MySQL (ver docs/deploy.md).
+*/
+
+Schedule::command('clinic:prune')
+    ->dailyAt('04:00')
+    ->timezone((string) config('clinic.timezone'))
+    ->withoutOverlapping()
+    ->onOneServer();

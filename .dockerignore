@@ -1,0 +1,20 @@
+# Nada de segredos, dados de desenvolvimento nem arquivos de pacientes na imagem.
+.env
+.env.*
+!.env.example
+.git
+.claude
+.idea
+.vscode
+node_modules
+vendor
+public/build
+public/hot
+public/storage
+storage
+bootstrap/cache/*.php
+backups
+certbot-www
+tests
+docker/mysql
+*.log

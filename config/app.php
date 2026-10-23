@@ -39,7 +39,9 @@ return [
     |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    // Em produção o modo de depuração fica sempre desligado: a página de erro
+    // detalhada mostraria dados de pacientes e variáveis de ambiente.
+    'debug' => env('APP_ENV', 'production') === 'production' ? false : (bool) env('APP_DEBUG', false),
 
     /*
     |--------------------------------------------------------------------------

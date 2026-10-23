@@ -1,0 +1,98 @@
+# nginx do Clinic. ${CLINIC_DOMAIN} é preenchido na partida do container
+# (envsubst da imagem oficial). O PHP-FPM ("app") não tem porta publicada.
+
+# Host desconhecido (IP direto, domínio alheio) é recusado sem resposta: o
+# sistema só atende pelo domínio configurado.
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    server_tokens off;
+    return 444;
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name _;
+    server_tokens off;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${CLINIC_DOMAIN};
+    server_tokens off;
+
+    # Renovação do certificado Let's Encrypt (certbot --webroot).
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Todo o resto vai para HTTPS: o sistema não funciona sem ele.
+    location / {
+        return 301 https://${CLINIC_DOMAIN}$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${CLINIC_DOMAIN};
+    server_tokens off;
+
+    ssl_certificate /etc/letsencrypt/live/${CLINIC_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CLINIC_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    root /var/www/html/public;
+    index index.php;
+    charset utf-8;
+
+    # Até 5 fotos de 8 MB num envio (o PHP aceita 48 MB por envio).
+    client_max_body_size 50m;
+
+    # Arquivos ocultos (.env, .git) nunca, mesmo que apareçam em public/.
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+
+    # Assets do Vite têm o hash no nome: podem ficar em cache por um ano.
+    location /build/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    location / {
+        try_files $uri /index.php?$query_string;
+    }
+
+    # Só o front controller executa PHP. Fotos e documentos nunca estão em
+    # public/: saem pelo sistema, depois da autorização.
+    location = /index.php {
+        fastcgi_pass app:9000;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /var/www/html/public/index.php;
+        fastcgi_param DOCUMENT_ROOT /var/www/html/public;
+        # O TLS termina aqui: o Laravel enxerga a conexão como HTTPS (cookie seguro, HSTS).
+        fastcgi_param HTTPS on;
+        fastcgi_hide_header X-Powered-By;
+        fastcgi_read_timeout 120s;
+        fastcgi_buffers 16 16k;
+        fastcgi_buffer_size 32k;
+    }
+
+    location ~ \.php$ {
+        return 404;
+    }
+}

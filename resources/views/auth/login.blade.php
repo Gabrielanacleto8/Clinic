@@ -4,6 +4,9 @@
         <p class="mt-1 text-sm text-slate-600">Acesse com seu e-mail e senha</p>
     </div>
 
+    {{-- Ex.: sessão expirada por inatividade (ver bootstrap/app.php). --}}
+    <x-flash />
+
     <form method="POST" action="{{ route('login') }}" class="card space-y-4 p-6" novalidate>
         @csrf
 

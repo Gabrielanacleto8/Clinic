@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AuditAction;
 use App\Enums\UserRole;
+use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
@@ -73,6 +74,8 @@ class UserController extends Controller
                 // derruba as sessões abertas desse usuário.
                 $user->password = $request->validated('password');
                 $user->password_changed_at = null;
+                // Quem estava travado por tentativas erradas entra com a senha nova.
+                LoginRequest::clearLockout($user->email);
 
                 $this->audit->log(AuditAction::UserPasswordReset, $user);
             }

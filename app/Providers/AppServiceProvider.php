@@ -19,6 +19,7 @@ use App\Models\TreatmentNote;
 use App\Models\TreatmentProduct;
 use App\Models\User;
 use App\Services\RolePermissions;
+use App\Support\ProductionConfig;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -83,6 +85,13 @@ class AppServiceProvider extends ServiceProvider
 
         if ($isProduction) {
             URL::forceHttps();
+
+            // Falha cedo, com a causa no log, em vez de quebrar no primeiro
+            // paciente gravado. No console, o comando clinic:check faz a mesma
+            // conferência sem impedir os comandos de instalação.
+            if (! $this->app->runningInConsole() && ($problems = ProductionConfig::problems()) !== []) {
+                throw new RuntimeException('Configuração de produção incompleta. '.implode(' ', $problems));
+            }
         }
 
         // Definir o que cada perfil acessa é exclusivo do administrador e não é delegável.

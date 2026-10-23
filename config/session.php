@@ -47,7 +47,9 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    // A sessão guarda dados de formulário (inclusive de pacientes) entre
+    // requisições: em produção é sempre criptografada.
+    'encrypt' => env('APP_ENV', 'production') === 'production' ? true : (bool) env('SESSION_ENCRYPT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -169,7 +171,9 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // Em produção o sistema só funciona por HTTPS: o cookie de sessão nunca
+    // trafega sem criptografia, mesmo que a variável seja esquecida.
+    'secure' => env('APP_ENV', 'production') === 'production' ? true : env('SESSION_SECURE_COOKIE'),
 
     /*
     |--------------------------------------------------------------------------

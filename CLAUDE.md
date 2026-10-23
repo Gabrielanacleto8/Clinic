@@ -14,6 +14,9 @@ Sistema web de gestão de uma clínica de estética biomédica. Trata dados pess
 - `composer test` roda os testes
 - `./vendor/bin/pint` formata o código
 - `composer audit` verifica vulnerabilidades nas dependências
+- `php artisan clinic:check` confere a configuração de produção (chaves, HTTPS, pasta das fotos)
+- `php artisan clinic:reset-password EMAIL` define senha provisória pelo terminal; `php artisan clinic:prune` limpa cache e sessões expirados (agendado)
+- Produção: `docker-compose.production.yml`, passo a passo em `docs/deploy.md`
 
 ## Domínio
 
