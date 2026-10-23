@@ -1,15 +1,32 @@
 @props(['anamnesis'])
-{{-- Avisos que o profissional precisa ver antes de qualquer procedimento. --}}
-@if ($anamnesis?->allergies || $anamnesis?->pregnant_or_lactating)
-    <div {{ $attributes->class('rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900') }} role="note">
+@php
+    use App\Support\ClinicTime;
+
+    // Avisos que o profissional precisa ver antes de qualquer procedimento.
+    // Ficha não preenchida ou sem revisão há muito tempo também é aviso: o
+    // silêncio não pode parecer "paciente sem contraindicação".
+    $alerts = $anamnesis?->alerts() ?? [];
+    $stale = $anamnesis?->isStale() ?? false;
+    $classes = 'rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900';
+@endphp
+@if ($anamnesis === null)
+    <div {{ $attributes->class($classes) }} role="note" data-health-alerts-static>
+        <p class="font-semibold">Ficha de saúde não preenchida</p>
+        <p class="mt-1">Confira alergias, medicamentos e condições de saúde com o paciente antes do procedimento.</p>
+    </div>
+@elseif ($alerts !== [] || $stale)
+    <div {{ $attributes->class($classes) }} role="note" data-health-alerts-static>
         <p class="font-semibold">Atenção</p>
         <ul class="mt-1 space-y-1">
-            @if ($anamnesis->pregnant_or_lactating)
-                <li>Gestante ou lactante.</li>
+            @if ($stale)
+                <li>Ficha de saúde sem revisão desde {{ ClinicTime::format($anamnesis->updated_at, 'd/m/Y') }}: confira com o paciente se algo mudou.</li>
             @endif
-            @if ($anamnesis->allergies)
-                <li><span class="font-medium">Alergias:</span> <span class="whitespace-pre-line">{{ $anamnesis->allergies }}</span></li>
-            @endif
+            @foreach ($alerts as $alert)
+                <li>
+                    @if ($alert['label'])<span class="font-medium">{{ $alert['label'] }}:</span>@endif
+                    <span class="whitespace-pre-line">{{ $alert['text'] }}</span>
+                </li>
+            @endforeach
         </ul>
     </div>
 @endif

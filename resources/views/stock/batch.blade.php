@@ -5,13 +5,17 @@
 
     $unit = $product->unit->symbol();
     $sum = fn (StockMovementType $type) => LocalizedDecimal::quantity(abs((float) ($totals[$type->value] ?? 0))).' '.$unit;
-    $batchOptions = [$batch->id => $batch->batch_code.($product->isFractioned()
-        ? ' · lacrado '.LocalizedDecimal::quantity($batch->sealedQuantity()).' '.$unit
+    $fractioned = $product->isFractioned();
+    $sealed = $fractioned ? $batch->sealedQuantity() : $batch->quantity;
+    $sealedUnits = $fractioned ? (int) floor((float) $sealed / (float) $product->unit_content) : 0;
+    $batchOptions = [$batch->id => $batch->batch_code.($fractioned
+        ? ' · fechado '.LocalizedDecimal::quantity($sealed).' '.$unit
         : ' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit)];
     $preset = json_encode(['product_batch_id' => $batch->id]);
-    $fractioned = $product->isFractioned();
-    $sealed = $fractioned ? $batch->sealedQuantity() : null;
-    $sealedUnits = $fractioned ? (int) floor((float) $sealed / (float) $product->unit_content) : 0;
+    // O ajuste leva o saldo fechado que a tela mostra: se ele mudar até o envio, o ajuste é recusado.
+    $adjustPreset = json_encode(['product_batch_id' => $batch->id, 'expected' => LocalizedDecimal::quantityInput($sealed)]);
+    $expired = $batch->isExpired();
+    $canDiscard = auth()->user()->can('discard', $product);
 @endphp
 <x-layouts.app :title="'Lote '.$batch->batch_code">
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -26,19 +30,30 @@
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            {{-- Lote vencido não circula: só sai inteiro como perda. Saída e ajuste nem aparecem. --}}
+            @if ($expired && (float) $batch->quantity > 0 && $canDiscard)
+                <button type="button" class="btn btn-danger" data-dialog-open="batch-write-off"
+                        data-dialog-action="{{ route('stock.batches.write-off', $batch) }}"
+                        data-dialog-summary="{{ $product->name }} · lote {{ $batch->batch_code }} · {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $unit }}"
+                        data-dialog-values="{{ json_encode(['reason' => 'Vencido em '.$batch->expires_on->format('d/m/Y')], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}">Baixar vencido como perda</button>
+            @endif
             @can('move', $product)
-                @if ($fractioned && $sealedUnits > 0 && ! $batch->isExpired() && $product->is_active)
-                    <form method="POST" action="{{ route('stock.units.store', $batch) }}" data-confirm="Abrir uma unidade lacrada deste lote?">
+                @if ($fractioned && $sealedUnits > 0 && ! $expired && $product->is_active)
+                    <form method="POST" action="{{ route('stock.units.store', $batch) }}" data-confirm="Abrir uma unidade fechada deste lote?">
                         @csrf
                         <button type="submit" class="btn btn-primary">Abrir unidade</button>
                     </form>
                 @endif
-                <button type="button" class="btn btn-secondary" data-dialog-open="stock-exit" data-dialog-values="{{ $preset }}">Saída</button>
-                <button type="button" class="btn btn-secondary" data-dialog-open="stock-loss" data-dialog-values="{{ $preset }}">Perda</button>
+                @unless ($expired)
+                    <button type="button" class="btn btn-secondary" data-dialog-open="stock-exit" data-dialog-values="{{ $preset }}">Saída</button>
+                    <button type="button" class="btn btn-secondary" data-dialog-open="stock-loss" data-dialog-values="{{ $preset }}">Perda</button>
+                @endunless
             @endcan
             @can('adjust', $product)
-                <button type="button" class="btn btn-secondary" data-dialog-open="stock-adjustment" data-dialog-values="{{ $preset }}">Ajuste</button>
-                <button type="button" class="btn btn-secondary" data-dialog-open="batch-dates">Corrigir datas</button>
+                @unless ($expired)
+                    <button type="button" class="btn btn-secondary" data-dialog-open="stock-adjustment" data-dialog-values="{{ $adjustPreset }}">Ajuste</button>
+                @endunless
+                <button type="button" class="btn btn-secondary" data-dialog-open="batch-dates">Corrigir lote</button>
             @endcan
         </div>
     </div>
@@ -69,6 +84,15 @@
         <p class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{{ $message }}</p>
     @enderror
 
+    @if ($lastCount)
+        <p class="mt-3 text-sm text-slate-600">
+            Última conferência de inventário em {{ ClinicTime::format($lastCount->created_at) }}{{ $lastCount->user ? ' por '.$lastCount->user->name : '' }}
+            {{ in_array($batch->id, $lastCount->metadata['adjusted_batch_ids'] ?? [], true) ? '(saldo ajustado)' : '(saldo conferia)' }}.
+        </p>
+    @else
+        <p class="mt-3 text-sm text-slate-600">Este lote ainda não passou por conferência de inventário.</p>
+    @endif
+
     <p class="mt-3 text-sm text-slate-600">
         Entradas: {{ $sum(StockMovementType::Entry) }} · Saídas: {{ $sum(StockMovementType::Exit) }} · Perdas: {{ $sum(StockMovementType::Loss) }}
         @if ((float) ($totals[StockMovementType::Reversal->value] ?? 0) > 0)
@@ -82,9 +106,9 @@
     @if ($fractioned)
         <section class="card mt-6 relative overflow-x-auto" aria-labelledby="unidades">
             <div class="px-4 pt-5 pb-3">
-                <h2 id="unidades" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Unidades físicas</h2>
+                <h2 id="unidades" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Unidades (frascos, seringas, ampolas)</h2>
                 <p class="mt-1 text-sm text-slate-600">
-                    {{ $sealedUnits }} {{ $sealedUnits === 1 ? 'unidade lacrada' : 'unidades lacradas' }} de {{ LocalizedDecimal::quantity($product->unit_content) }} {{ $unit }}
+                    {{ $sealedUnits }} {{ $sealedUnits === 1 ? 'unidade fechada' : 'unidades fechadas' }} de {{ LocalizedDecimal::quantity($product->unit_content) }} {{ $unit }}
                     · {{ $units->count() }} {{ $units->count() === 1 ? 'aberta com saldo' : 'abertas com saldo' }}.
                     {{ $product->multi_patient_use ? 'A sobra pode ir para outro paciente dentro do prazo.' : 'Uso em um só paciente: a sobra é descartada ao fim do atendimento.' }}
                 </p>
@@ -139,16 +163,22 @@
 
     @include('stock._movement_dialogs', ['product' => $product, 'batchOptions' => $batchOptions])
 
+    @if ($canDiscard && $expired)
+        @include('stock._write_off_dialog')
+    @endif
+
     @can('adjust', $product)
-        <x-dialog id="batch-dates" title="Corrigir datas do lote">
+        <x-dialog id="batch-dates" title="Corrigir lote">
             <form method="POST" action="{{ route('stock.batches.update', $batch) }}" class="space-y-4" novalidate>
                 @csrf
                 @method('PATCH')
                 <input type="hidden" name="_dialog" value="batch-dates">
 
                 <p class="text-sm text-slate-600">
-                    Use para corrigir fabricação ou validade digitadas errado na entrada. A correção fica registrada na auditoria, com as datas antigas e as novas.
+                    Use para corrigir código, fabricação ou validade digitados errado na entrada. A correção fica registrada na auditoria, com os valores antigos e os novos.
                 </p>
+                <x-form.input scope="batch-dates" id="batch-code" name="batch_code" label="Código do lote" required maxlength="60" autocomplete="off"
+                              :value="$batch->batch_code" hint="É o código da rastreabilidade: confira com o rótulo do produto." />
                 <x-form.input scope="batch-dates" id="batch-manufactured" name="manufactured_on" label="Fabricação" type="date"
                               :value="$batch->manufactured_on?->format('Y-m-d')" :max="ClinicTime::today()" />
                 <x-form.input scope="batch-dates" id="batch-expires" name="expires_on" label="Validade" type="date"

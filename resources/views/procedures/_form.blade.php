@@ -17,6 +17,9 @@
                 Ativo
             </label>
             <p class="mt-1 text-xs text-slate-500">Inativos não aparecem em novos agendamentos e atendimentos.</p>
+            @if (($openAppointments ?? 0) > 0)
+                <p class="mt-1 text-xs text-amber-800">Há {{ $openAppointments }} {{ $openAppointments === 1 ? 'agendamento em aberto' : 'agendamentos em aberto' }} com este procedimento. Desativar não os cancela: eles continuam válidos e podem ser registrados.</p>
+            @endif
         </div>
         <x-form.textarea class="md:col-span-6" name="description" label="Descrição" :value="$procedure->description" rows="3" maxlength="2000" />
     </div>
@@ -43,7 +46,7 @@
     @if ($products->isEmpty())
         <p class="mt-4 text-sm text-slate-600">Nenhum produto ativo no estoque ainda.</p>
     @else
-        <div class="mt-4 space-y-3">
+        <div id="procedure-products" class="mt-4 space-y-3">
             @for ($i = 0; $i < $productRows; $i++)
                 @php $row = $savedProducts[$i] ?? []; @endphp
                 <fieldset class="grid grid-cols-3 gap-3">
@@ -74,6 +77,8 @@
                 </fieldset>
             @endfor
         </div>
+        <button type="button" class="btn btn-secondary mt-3" data-rows-add="procedure-products" data-rows-max="{{ App\Http\Requests\ProcedureRequest::MAX_PRODUCTS }}"
+                @disabled($productRows >= App\Http\Requests\ProcedureRequest::MAX_PRODUCTS)>Adicionar produto</button>
     @endif
 </section>
 

@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\View\View;
 
 /**
  * Fotos do paciente. O envio por aqui cria fotos avulsas, com data própria,
@@ -33,8 +34,42 @@ class PatientPhotoController extends Controller
 
         $count = count($request->file('photos'));
 
-        return redirect()->route('patients.show', [$patient, 'aba' => 'fotos'])
+        return redirect()->to(route('patients.show', [$patient, 'aba' => 'fotos']).'#fotos-do-paciente')
             ->with('success', $count === 1 ? 'Foto adicionada.' : "{$count} fotos adicionadas.");
+    }
+
+    /**
+     * Duas fotos lado a lado (antes e depois). As duas são resolvidas pelas
+     * fotos do próprio paciente, e cada uma fica na auditoria como leitura.
+     */
+    public function compare(Request $request, Patient $patient): View
+    {
+        Gate::authorize('viewClinicalRecords', $patient);
+
+        $validated = $request->validate(
+            ['fotos' => ['required', 'array', 'size:2'], 'fotos.*' => ['required', 'integer', 'distinct']],
+            ['fotos.size' => 'Marque exatamente duas fotos para comparar.', 'fotos.*.distinct' => 'Marque duas fotos diferentes.'],
+            ['fotos' => 'fotos'],
+        );
+
+        $photos = $patient->photos()
+            ->with(['treatment:id,patient_id,procedure_id,performed_at,voided_at', 'treatment.procedure:id,name'])
+            ->whereKey($validated['fotos'])
+            ->get()
+            ->sortBy(fn (PatientAttachment $photo) => $photo->takenOn())
+            ->values();
+
+        abort_if($photos->count() !== 2, 404);
+
+        foreach ($photos as $photo) {
+            $this->audit->log(AuditAction::PhotoViewed, $photo, [
+                'patient_id' => $patient->getKey(),
+                'treatment_id' => $photo->treatment_id,
+                'view' => 'compare',
+            ]);
+        }
+
+        return view('patients.photos-compare', ['patient' => $patient, 'photos' => $photos]);
     }
 
     public function show(Request $request, Patient $patient, PatientAttachment $photo): Response

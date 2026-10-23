@@ -11,7 +11,7 @@ class DiscardStockUnitRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('move', $this->route('unit')->batch->product);
+        return $this->user()->can('discard', $this->route('unit')->batch->product);
     }
 
     /**

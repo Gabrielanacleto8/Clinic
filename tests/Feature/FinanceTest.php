@@ -63,16 +63,24 @@ class FinanceTest extends TestCase
 
         $this->get('/financeiro')->assertRedirect('/login');
 
-        // Por padrão só o administrador vê o financeiro.
+        // Por padrão só o administrador vê o financeiro. A recepção recebe de paciente; o profissional, não.
         foreach ([User::factory()->create(), User::factory()->professional()->create()] as $user) {
             $this->actingAs($user);
             $this->get('/financeiro')->assertForbidden();
             $this->get('/financeiro/lancamentos/novo')->assertForbidden();
             $this->post('/financeiro/lancamentos', $this->payload())->assertForbidden();
-            $this->post('/financeiro/pagamentos', ['installment_id' => $installment->id, 'paid_at' => '2026-10-08'])->assertForbidden();
             $this->delete("/financeiro/lancamentos/{$entry->id}")->assertForbidden();
             $this->get('/')->assertDontSee(route('finance.index'), false);
         }
+
+        $this->actingAs(User::factory()->professional()->create())
+            ->post('/financeiro/pagamentos', ['installment_id' => $installment->id, 'paid_at' => '2026-10-08'])->assertForbidden();
+        $this->actingAs(User::factory()->create())
+            ->post('/financeiro/pagamentos', ['installment_id' => $installment->id, 'paid_at' => '2026-10-08'])->assertSessionHasNoErrors();
+        $this->assertNotNull($installment->refresh()->paid_at);
+        // Desfazer continua com o financeiro.
+        $this->delete("/financeiro/pagamentos/{$installment->id}")->assertForbidden();
+        $installment->update(['paid_at' => null]);
 
         // Perfil com permissão só de leitura: vê, mas não lança nem dá baixa.
         app(RolePermissions::class)->sync(UserRole::Receptionist, [Permission::FinanceView]);

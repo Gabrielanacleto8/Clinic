@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AuditAction;
 use App\Enums\ProductCategory;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\StaleStockException;
 use App\Exceptions\UnusableStockException;
 use App\Http\Requests\StockInventoryRequest;
+use App\Models\AuditLog;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Services\AuditLogger;
 use App\Services\StockLedger;
 use App\Support\ClinicTime;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +28,8 @@ use Illuminate\View\View;
  */
 class StockInventoryController extends Controller
 {
+    public function __construct(private readonly AuditLogger $audit) {}
+
     public function edit(Request $request): View
     {
         Gate::authorize('adjust', Product::class);
@@ -54,7 +60,25 @@ class StockInventoryController extends Controller
         return view('stock.inventory', [
             'batches' => $batches,
             'filters' => ['q' => $filters['q'] ?? '', 'categoria' => $filters['categoria'] ?? ''],
+            'countedToday' => $this->countedToday(),
         ]);
+    }
+
+    /**
+     * Lotes já conferidos hoje, pela auditoria das conferências do dia: quem
+     * conta em várias páginas vê o que já fez, sem coluna nova no lote.
+     *
+     * @return array<int, true>
+     */
+    private function countedToday(): array
+    {
+        $ids = AuditLog::query()
+            ->where('action', AuditAction::StockCounted->value)
+            ->where('created_at', '>=', ClinicTime::dayBounds(ClinicTime::today())[0])
+            ->pluck('metadata')
+            ->flatMap(fn (?array $metadata) => $metadata['batch_ids'] ?? []);
+
+        return array_fill_keys($ids->map(fn ($id) => (int) $id)->all(), true);
     }
 
     public function update(StockInventoryRequest $request, StockLedger $ledger): RedirectResponse
@@ -65,31 +89,64 @@ class StockInventoryController extends Controller
             throw ValidationException::withMessages(['counted' => 'Informe a quantidade contada de pelo menos um lote.']);
         }
 
-        $adjusted = DB::transaction(function () use ($request, $ledger, $counts): int {
+        // Lote que se moveu entre abrir a tela e enviar a contagem é recusado
+        // sozinho: os demais são gravados, e só ele precisa ser recontado.
+        $stale = [];
+
+        [$adjusted, $counted] = DB::transaction(function () use ($request, $ledger, $counts, &$stale): array {
             $batches = ProductBatch::query()->whereKey(array_keys($counts))->get();
 
             if ($batches->count() !== count($counts)) {
                 throw ValidationException::withMessages(['counted' => 'Um dos lotes informados não existe mais. Recarregue a página.']);
             }
 
-            return $batches->filter(function (ProductBatch $batch) use ($ledger, $counts, $request): bool {
+            $adjusted = [];
+            $counted = [];
+
+            foreach ($batches as $batch) {
                 try {
-                    return $ledger->adjustTo($batch, $counts[$batch->id], (string) $request->validated('reason'), $request->user()) !== null;
+                    $movement = $ledger->adjustTo($batch, $counts[$batch->id], (string) $request->validated('reason'), $request->user(), $request->expectedFor($batch->id));
+                } catch (StaleStockException $exception) {
+                    $stale["counted.{$batch->id}"] = $exception->getMessage();
+
+                    continue;
                 } catch (UnusableStockException $exception) {
                     // O lote venceu entre abrir a tela e enviar a contagem.
                     throw ValidationException::withMessages(["counted.{$batch->id}" => $exception->getMessage()]);
                 } catch (InsufficientStockException) {
                     throw ValidationException::withMessages(["counted.{$batch->id}" => 'A contagem deixaria o saldo do lote negativo.']);
                 }
-            })->count();
+
+                $counted[] = $batch->id;
+
+                if ($movement !== null) {
+                    $adjusted[] = $batch->id;
+                }
+            }
+
+            // A conferência fica registrada mesmo quando tudo confere: é a prova de que o lote foi contado.
+            if ($counted !== []) {
+                $this->audit->log(AuditAction::StockCounted, null, ['batch_ids' => $counted, 'adjusted_batch_ids' => $adjusted]);
+            }
+
+            return [count($adjusted), count($counted)];
         });
 
-        $matched = count($counts) - $adjusted;
+        $matched = $counted - $adjusted;
+        $response = redirect()->back(fallback: route('stock.inventory.edit'));
 
-        return redirect()->back(fallback: route('stock.inventory.edit'))->with('success', match (true) {
+        if ($stale !== []) {
+            $response->withErrors($stale)->withInput();
+        }
+
+        if ($counted === 0) {
+            return $response->with('warning', 'Nenhuma contagem foi gravada: os lotes se moveram depois que a tela foi aberta. Reconte-os.');
+        }
+
+        return $response->with($stale === [] ? 'success' : 'warning', match (true) {
             $adjusted === 0 => 'Inventário conferido: todas as contagens batem com o saldo.',
             default => "Inventário registrado: {$adjusted} ".($adjusted === 1 ? 'lote ajustado' : 'lotes ajustados')
                 .($matched > 0 ? " e {$matched} ".($matched === 1 ? 'confere' : 'conferem').' com o saldo.' : '.'),
-        });
+        }.($stale === [] ? '' : ' '.count($stale).' '.(count($stale) === 1 ? 'lote se moveu' : 'lotes se moveram').' enquanto você contava: reconte o que está marcado.'));
     }
 }

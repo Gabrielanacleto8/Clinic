@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\AuditAction;
 use App\Enums\Permission;
 use App\Models\Treatment;
+use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\DashboardMetrics;
 use App\Services\TreatmentFormOptions;
@@ -23,17 +24,26 @@ class HomeController extends Controller
         $user = $request->user();
         $seesAgenda = $user->hasPermission(Permission::AgendaView);
         $seesStock = $user->hasPermission(Permission::StockView);
+        $showAll = $request->boolean('todos');
+
+        // Quem atende abre o dia com a própria agenda; "Ver todos" mostra a de todos.
+        $attends = $seesAgenda && User::query()->attending()->whereKey($user->getKey())->exists();
+        $professionalId = $attends && ! $showAll ? $user->getKey() : null;
 
         // Os agendamentos de hoje e dos próximos dias são leitura da agenda.
         if ($seesAgenda) {
-            $audit->log(AuditAction::AgendaViewed, null, ['view' => 'home']);
+            $audit->log(AuditAction::AgendaViewed, null, ['view' => 'home', 'professional_id' => $professionalId]);
         }
 
         return view('home', [
             'today' => ClinicTime::local(now()),
             'totals' => $metrics->totals($user),
-            'todayAppointments' => $seesAgenda ? $metrics->todayAppointments() : null,
+            'attends' => $attends,
+            'showAll' => $showAll,
+            'todayAppointments' => $seesAgenda ? $metrics->todayAppointments($professionalId) : null,
+            'pending' => $seesAgenda ? $metrics->pendingRegistrations($professionalId) : null,
             'upcomingAppointments' => $seesAgenda ? $metrics->upcomingAppointments() : null,
+            'returns' => $seesAgenda && $user->hasPermission(Permission::RecordsView) ? $metrics->returnsToSchedule() : null,
             'lowStockProducts' => $seesStock ? $metrics->lowStockProducts() : null,
             'expiringBatches' => $seesStock ? $metrics->expiringBatches() : null,
             'treatmentForm' => $user->can('create', Treatment::class) ? $options->forDialog($request) : null,

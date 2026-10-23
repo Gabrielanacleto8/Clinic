@@ -65,12 +65,12 @@ Os testes rodam contra MySQL, no banco `clinic_testing`, criado automaticamente 
 
 O fluxo principal é: paciente, agenda, atendimento, procedimento, estoque e financeiro. Cada etapa reutiliza a anterior por relacionamento, sem repetir informação.
 
-- **Início:** indicadores do dia e do mês, agenda de hoje, próximos agendamentos e alertas de estoque. Cada bloco só aparece para quem tem a permissão correspondente.
-- **Agenda:** calendário do mês ou da semana, com a lista do dia escolhido e filtro por profissional. Agendar, remarcar, confirmar presença, marcar falta, cancelar e reabrir. O sistema recusa horários sobrepostos para o mesmo profissional.
-- **Pacientes:** cadastro com foto de identificação e ficha do paciente, só para consulta, com ficha de saúde e abas de atendimentos, produtos utilizados, fotos, evoluções e financeiro. Pela aba de fotos entram fotos retroativas, com a data em que foram feitas, para o acervo anterior ao sistema.
+- **Início:** busca rápida de paciente, agendamentos pendentes de registro, agenda de hoje (quem atende vê só a sua), próximos agendamentos com telefone e WhatsApp, retornos previstos sem agendamento, indicadores do mês (lançado e recebido) e alertas de estoque. Cada bloco só aparece para quem tem a permissão correspondente.
+- **Agenda:** calendário do mês ou da semana, com a lista do dia escolhido, telefone e WhatsApp do paciente e filtro por profissional (quem atende abre na própria agenda). O formulário mostra os horários ocupados do dia e o horário de término; o conflito diz o próximo horário livre. Agendar, remarcar, confirmar presença, marcar falta, cancelar e reabrir. O sistema recusa horários sobrepostos para o mesmo profissional.
+- **Pacientes:** busca por nome, CPF ou telefone; cadastro com CEP que preenche o endereço e responsável legal para menores; foto de identificação e ficha do paciente com avisos de saúde, débito e agendamentos no topo, só para consulta, com ficha de saúde e abas de atendimentos, produtos utilizados, fotos, evoluções e financeiro. Pela aba de fotos entram fotos retroativas, com a data em que foram feitas, para o acervo anterior ao sistema.
 - **Procedimentos:** catálogo com valor, duração, categoria e os produtos normalmente utilizados.
-- **Estoque:** produtos, lotes com validade, entradas (inclusive pela importação do XML da nota fiscal), saídas, perdas, ajustes, inventário, histórico de movimentações e alertas de estoque mínimo e de vencimento. Produto fracionado (frasco, seringa, ampola) é controlado por unidade física aberta, com prazo depois de aberto e descarte da sobra quando o fabricante não permite uso em outro paciente.
-- **Financeiro:** receitas e despesas, parcelas, pagamentos e totais do mês.
+- **Estoque:** produtos, lotes com validade, entradas (inclusive pela importação do XML da nota fiscal), saídas, perdas, ajustes, inventário, histórico de movimentações e alertas de estoque mínimo e de vencimento. Produto fracionado (frasco, seringa, ampola) é controlado por unidade aberta, com prazo depois de aberto e descarte da sobra quando o fabricante não permite uso em outro paciente. A aba "Unidades abertas" reúne o que está em uso e o que deve ser descartado; lote vencido sai inteiro como perda em um clique; o inventário recusa a contagem de lote que se moveu enquanto a tela estava aberta.
+- **Financeiro:** receitas e despesas por período livre (com "Hoje"), recebido por forma de pagamento, vencidas de todos os meses, filtro por paciente, "Repetir" despesa, edição de lançamento manual e "Ajustar cobrança" de atendimento. A recepção recebe pela ficha do paciente (permissão "Registrar o recebimento de cobranças de pacientes").
 - **Usuários e permissões:** três perfis, com o acesso de Profissional e Recepção configurável pelo administrador.
 - **Auditoria:** o administrador consulta quem fez o quê, quando e de onde, com filtro por usuário, ação, período e paciente (o "Ver acessos" da ficha).
 
@@ -103,8 +103,10 @@ O administrador tem sempre acesso total, e só ele gerencia usuários e permiss�
 | Ver o catálogo de procedimentos | Sim | Não |
 | Cadastrar e editar procedimentos | Não | Não |
 | Ver o estoque | Sim | Não |
+| Descartar unidades abertas e lotes vencidos | Sim | Não |
 | Cadastrar produtos e movimentar o estoque | Não | Não |
 | Fazer inventário e ajustar saldos (`stock.adjust`) | Não | Não |
+| Registrar o recebimento de cobranças de pacientes | Não | Sim |
 | Ver e lançar no financeiro | Não | Não |
 
 Além das permissões, vale uma regra fixa: só o administrador registra atendimento em nome de outro profissional.

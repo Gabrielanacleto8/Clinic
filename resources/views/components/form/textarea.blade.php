@@ -4,6 +4,8 @@
     // Ver o comentário sobre "scope" em form/input.blade.php.
     $inScope = $scope === null || old('_dialog') === $scope;
     $hasError = $inScope && $errors->has($name);
+    // Dica e erro são anunciados junto do campo pelo leitor de tela.
+    $describedBy = trim(($hint ? "{$id}-hint " : '').($hasError ? "{$id}-error" : ''));
 @endphp
 <div {{ $attributes->only('class') }}>
     <label for="{{ $id }}" class="label">
@@ -15,11 +17,12 @@
     <textarea
         id="{{ $id }}"
         name="{{ $name }}"
-        @if ($hasError) aria-invalid="true" aria-describedby="{{ $id }}-error" @endif
+        @if ($hasError) aria-invalid="true" @endif
+        @if ($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
         {{ $attributes->except(['class', 'id'])->class(['input', 'input-error' => $hasError]) }}
     >{{ $inScope ? old($name, $value) : $value }}</textarea>
     @if ($hint)
-        <p class="mt-1 text-xs text-slate-500">{{ $hint }}</p>
+        <p id="{{ $id }}-hint" class="mt-1 text-xs text-slate-500">{{ $hint }}</p>
     @endif
     @if ($hasError)
         <p id="{{ $id }}-error" class="mt-1 text-sm text-red-700">{{ $errors->first($name) }}</p>

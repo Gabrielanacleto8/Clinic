@@ -2,7 +2,7 @@
     use App\Support\ClinicTime;
 
     $total = $treatments->total();
-    $filtered = array_filter($filters) !== [];
+    $filtered = array_filter(array_diff_key($filters, ['situacao' => true])) !== [] || $filters['situacao'] !== 'validos';
 @endphp
 <x-layouts.app title="Atendimentos">
     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -30,8 +30,30 @@
             </select>
         </div>
         @include('stock._period_fields', ['span' => 'sm:col-span-2'])
-        <button type="submit" class="btn btn-secondary sm:col-span-2">Filtrar</button>
-        @foreach (['q', 'procedimento', 'de', 'ate'] as $field)
+        <div class="sm:col-span-3">
+            <label for="profissional" class="sr-only">Profissional</label>
+            <select id="profissional" name="profissional" class="input">
+                <option value="">Todos os profissionais</option>
+                @foreach ($professionals as $id => $name)
+                    <option value="{{ $id }}" @selected($filters['profissional'] === (string) $id)>{{ $name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="sm:col-span-3">
+            <label for="situacao" class="sr-only">Situação</label>
+            <select id="situacao" name="situacao" class="input">
+                @foreach (['validos' => 'Só válidos', 'anulados' => 'Só anulados', 'todos' => 'Válidos e anulados'] as $value => $label)
+                    <option value="{{ $value }}" @selected($filters['situacao'] === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="flex gap-2 sm:col-span-6">
+            <button type="submit" class="btn btn-secondary">Filtrar</button>
+            @if ($filtered)
+                <a href="{{ route('treatments.index') }}" class="btn btn-secondary">Limpar</a>
+            @endif
+        </div>
+        @foreach (['q', 'procedimento', 'de', 'ate', 'profissional', 'situacao'] as $field)
             @error($field)
                 <p class="text-sm text-red-700 sm:col-span-12">{{ $message }}</p>
             @enderror

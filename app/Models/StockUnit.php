@@ -96,7 +96,27 @@ class StockUnit extends Model
      */
     public function scopeAwaitingDiscard(Builder $query): void
     {
-        $query->withBalance()->whereHas('batch', fn (Builder $batch) => $batch->where(fn (Builder $inner) => $inner
+        $query->withBalance()->whereHas('batch', self::discardConditions(...));
+    }
+
+    /**
+     * Unidades com conteúdo que ainda podem ir para paciente: o contrário de awaitingDiscard().
+     *
+     * @param  Builder<StockUnit>  $query
+     */
+    public function scopeUsable(Builder $query): void
+    {
+        $query->withBalance()->whereDoesntHave('batch', self::discardConditions(...));
+    }
+
+    /**
+     * Condições, sobre o lote da unidade, que a tornam imprópria para uso.
+     *
+     * @param  Builder<ProductBatch>  $batch
+     */
+    private static function discardConditions(Builder $batch): void
+    {
+        $batch->where(fn (Builder $inner) => $inner
             ->where('expires_on', '<', ClinicTime::today())
             ->orWhereHas('product', fn (Builder $product) => $product->where(fn (Builder $rule) => $rule
                 ->where('is_active', false)
@@ -106,7 +126,15 @@ class StockUnit extends Model
                     ->whereExists(function ($consumed): void {
                         $consumed->selectRaw('1')->from('stock_movements')->whereColumn('stock_movements.stock_unit_id', 'stock_units.id');
                         StockMovement::whereUnreversedConsumption($consumed);
-                    }))))));
+                    })))));
+    }
+
+    /**
+     * Motivo pronto para o descarte, como aparece nos alertas.
+     */
+    public function discardReason(): string
+    {
+        return 'Unidade '.($this->unusableReason() ?? 'descartada').'.';
     }
 
     /**

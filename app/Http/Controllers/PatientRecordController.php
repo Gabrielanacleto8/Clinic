@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AttachmentType;
 use App\Enums\AuditAction;
 use App\Models\Patient;
+use App\Models\PatientAttachment;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -49,10 +51,24 @@ class PatientRecordController extends Controller
             'treatments' => $treatments->count(),
         ], fn ($value) => $value !== null));
 
+        // No prontuário completo, o inventário do que mais a clínica guarda do
+        // paciente: fotos e documentos. As imagens em si são entregues à parte.
+        $attachments = $only === null
+            ? PatientAttachment::query()
+                ->where('patient_id', $patient->getKey())
+                // Anexo de atendimento arquivado fica de fora, como na ficha.
+                ->where(fn ($query) => $query->whereNull('treatment_id')->orWhereHas('treatment'))
+                ->with(['treatment:id,patient_id,procedure_id,performed_at', 'treatment.procedure:id,name'])
+                ->orderBy('id')
+                ->get()
+            : collect();
+
         return view('patients.record', [
             'patient' => $patient->load('anamnesis'),
             'treatments' => $treatments,
             'single' => $only !== null,
+            'photos' => $attachments->filter(fn (PatientAttachment $attachment) => $attachment->type === AttachmentType::Photo)->values(),
+            'documents' => $attachments->filter(fn (PatientAttachment $attachment) => $attachment->type === AttachmentType::Document)->values(),
             'printedBy' => $request->user(),
         ]);
     }

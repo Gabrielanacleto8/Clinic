@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'name', 'cpf', 'birth_date', 'sex', 'phone', 'email',
     'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state', 'notes',
+    'guardian_name', 'guardian_cpf', 'guardian_relationship', 'guardian_phone',
 ])]
 class Patient extends Model
 {
@@ -29,7 +30,7 @@ class Patient extends Model
      *
      * @var list<string>
      */
-    protected $hidden = ['cpf', 'cpf_hash', 'notes', 'avatar_path'];
+    protected $hidden = ['cpf', 'cpf_hash', 'notes', 'avatar_path', 'guardian_cpf'];
 
     /**
      * @return array<string, string>
@@ -39,6 +40,7 @@ class Patient extends Model
         return [
             'cpf' => 'encrypted',
             'notes' => 'encrypted',
+            'guardian_cpf' => 'encrypted',
             'birth_date' => 'immutable_date',
             'image_use_consented_at' => 'immutable_datetime',
             'sex' => Sex::class,
@@ -95,6 +97,14 @@ class Patient extends Model
     }
 
     /**
+     * @return HasMany<Appointment, $this>
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
+    /**
      * Fotos do paciente, avulsas ou de atendimentos que não foram arquivados.
      * É por aqui que a rota /pacientes/{patient}/fotos/{photo} resolve a foto.
      *
@@ -108,7 +118,9 @@ class Patient extends Model
     }
 
     /**
-     * Busca por nome (parcial) ou por CPF completo (via índice cego).
+     * Busca por nome (parcial), por telefone (parcial, só dígitos) ou por CPF
+     * completo (via índice cego). Onze dígitos podem ser um CPF ou um celular
+     * com DDD: os dois são tentados.
      *
      * @param  Builder<Patient>  $query
      */
@@ -121,15 +133,43 @@ class Patient extends Model
         }
 
         $digits = Cpf::digits($term);
+        $numeric = ! preg_match('/[a-z]/iu', $term) && $digits !== '';
 
-        if (strlen($digits) === 11 && ! preg_match('/[a-z]/i', $term)) {
-            $query->where('cpf_hash', BlindIndex::for($digits));
+        if ($numeric && strlen($digits) >= 8 && strlen($digits) <= 11) {
+            $query->where(function (Builder $inner) use ($digits): void {
+                $inner->where('phone', 'like', '%'.$digits.'%');
+
+                if (strlen($digits) === 11) {
+                    $inner->orWhere('cpf_hash', BlindIndex::for($digits));
+                }
+            });
 
             return;
         }
 
         // Escapa curingas para o termo ser tratado como texto literal.
         $query->where('name', 'like', '%'.addcslashes($term, '\\%_').'%');
+    }
+
+    /**
+     * Menor de 18 anos: exige responsável legal no cadastro.
+     */
+    public function isMinor(): bool
+    {
+        return $this->age() < 18;
+    }
+
+    public function formattedGuardianPhone(): string
+    {
+        return self::formatPhone((string) $this->guardian_phone);
+    }
+
+    /**
+     * Telefone só com dígitos, para links de ligação e WhatsApp.
+     */
+    public function phoneDigits(): string
+    {
+        return (string) $this->phone;
     }
 
     public function formattedCpf(): string
@@ -144,8 +184,11 @@ class Patient extends Model
 
     public function formattedPhone(): string
     {
-        $phone = (string) $this->phone;
+        return self::formatPhone((string) $this->phone);
+    }
 
+    private static function formatPhone(string $phone): string
+    {
         return match (strlen($phone)) {
             11 => sprintf('(%s) %s-%s', substr($phone, 0, 2), substr($phone, 2, 5), substr($phone, 7)),
             10 => sprintf('(%s) %s-%s', substr($phone, 0, 2), substr($phone, 2, 4), substr($phone, 6)),

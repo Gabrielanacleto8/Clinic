@@ -2,13 +2,16 @@
     use App\Support\LocalizedDecimal;
 
     $unit = $product->unit->symbol();
-    $batchOptions = $batches->mapWithKeys(fn ($batch) => [
+    // Lote vencido não entra nos diálogos de saída e ajuste: só sai como perda, pelo botão da linha.
+    $batchOptions = $batches->reject(fn ($batch) => $batch->isExpired())->mapWithKeys(fn ($batch) => [
         $batch->id => $batch->batch_code.($product->isFractioned()
-            ? ' · lacrado '.LocalizedDecimal::quantity($batch->sealedQuantity()).' '.$unit
-            : ' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit).($batch->isExpired() ? ' · vencido' : ''),
+            ? ' · fechado '.LocalizedDecimal::quantity($batch->sealedQuantity()).' '.$unit
+            : ' · saldo '.LocalizedDecimal::quantity($batch->quantity).' '.$unit),
     ])->all();
     $canMove = auth()->user()->can('move', $product);
     $canAdjust = auth()->user()->can('adjust', $product);
+    $canDiscard = auth()->user()->can('discard', $product);
+    $discarding = (float) ($product->discard_quantity ?? 0) > 0;
     $action = 'cursor-pointer font-medium text-teal-800 hover:underline';
 @endphp
 <x-layouts.app :title="$product->name">
@@ -39,24 +42,32 @@
 
     <dl class="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         @foreach ([
-            'Disponível' => LocalizedDecimal::quantity($product->available_quantity ?? 0).' '.$unit,
-            'Estoque mínimo' => (float) $product->minimum_stock > 0 ? LocalizedDecimal::quantity($product->minimum_stock).' '.$unit : '—',
-            'Custo unitário' => $product->cost !== null ? LocalizedDecimal::money($product->cost) : '—',
-            'Preço unitário' => $product->price !== null ? LocalizedDecimal::money($product->price) : '—',
-        ] as $label => $value)
+            'Disponível' => [LocalizedDecimal::quantity($product->available_quantity ?? 0).' '.$unit, $discarding ? '+ '.LocalizedDecimal::quantity($product->discard_quantity).' '.$unit.' a descartar' : null],
+            'Estoque mínimo' => [(float) $product->minimum_stock > 0 ? LocalizedDecimal::quantity($product->minimum_stock).' '.$unit : '—', null],
+            // Custo médio do que está em estoque, pelas entradas de cada lote com saldo. É o custo usado nas baixas.
+            'Custo médio em estoque' => [$averageCost !== null ? LocalizedDecimal::unitMoney($averageCost) : '—', $averageCost !== null ? 'por '.$unit.', pelas entradas dos lotes com saldo' : 'nenhuma entrada com custo'],
+            'Custo de referência' => [$product->cost !== null ? LocalizedDecimal::unitMoney($product->cost) : '—', 'usado quando a entrada não informa custo'],
+        ] as $label => [$value, $note])
             <div class="card px-4 py-3">
                 <dt class="text-xs text-slate-500">{{ $label }}</dt>
                 <dd class="mt-0.5 text-lg font-semibold tabular-nums">{{ $value }}</dd>
+                @if ($note)
+                    <dd class="text-xs text-slate-500">{{ $note }}</dd>
+                @endif
             </div>
         @endforeach
     </dl>
 
     @if ($product->isFractioned())
         <p class="mt-3 text-sm text-slate-600">
-            Fracionado: {{ LocalizedDecimal::quantity($product->unit_content) }} {{ $unit }} por unidade física
+            Fracionado: {{ LocalizedDecimal::quantity($product->unit_content) }} {{ $unit }} por unidade (frasco, seringa ou ampola)
             · {{ $product->hours_after_opening ? 'usar até '.$product->hours_after_opening.' h depois de aberta' : 'sem prazo depois de aberta além da validade do lote' }}
             · {{ $product->multi_patient_use ? 'sobra pode ir para outro paciente' : 'uso em um só paciente' }}.
-            As unidades abertas ficam na página de cada lote.
+            @if ($product->open_units_count > 0)
+                <a href="{{ route('stock.units.index', ['produto' => $product->id]) }}" class="font-medium text-teal-800 hover:underline">{{ $product->open_units_count }} {{ $product->open_units_count === 1 ? 'unidade aberta' : 'unidades abertas' }}</a>{{ $discarding ? ', com sobra a descartar' : '' }}.
+            @else
+                Nenhuma unidade aberta no momento.
+            @endif
         </p>
     @endif
 
@@ -97,12 +108,22 @@
                             </td>
                             <td data-label="Saldo" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::quantity($batch->quantity) }} {{ $unit }}</td>
                             <td class="px-4 py-3 text-right whitespace-nowrap sm:px-6">
-                                @if ($canMove)
-                                    <button type="button" class="{{ $action }}" data-dialog-open="stock-exit" data-dialog-values="{{ $preset }}">Saída</button>
-                                    <button type="button" class="{{ $action }} ml-3" data-dialog-open="stock-loss" data-dialog-values="{{ $preset }}">Perda</button>
-                                @endif
-                                @if ($canAdjust)
-                                    <button type="button" class="{{ $action }} ml-3" data-dialog-open="stock-adjustment" data-dialog-values="{{ $preset }}">Ajuste</button>
+                                @if ($batch->isExpired())
+                                    @if ($canDiscard && (float) $batch->quantity > 0)
+                                        <button type="button" class="cursor-pointer font-medium text-red-700 hover:underline" data-dialog-open="batch-write-off"
+                                                data-dialog-action="{{ route('stock.batches.write-off', $batch) }}"
+                                                data-dialog-summary="{{ $product->name }} · lote {{ $batch->batch_code }} · {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $unit }}"
+                                                data-dialog-values="{{ json_encode(['reason' => 'Vencido em '.$batch->expires_on->format('d/m/Y')], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}">Baixar vencido</button>
+                                    @endif
+                                @else
+                                    @if ($canMove)
+                                        <button type="button" class="{{ $action }}" data-dialog-open="stock-exit" data-dialog-values="{{ $preset }}">Saída</button>
+                                        <button type="button" class="{{ $action }} ml-3" data-dialog-open="stock-loss" data-dialog-values="{{ $preset }}">Perda</button>
+                                    @endif
+                                    @if ($canAdjust)
+                                        <button type="button" class="{{ $action }} ml-3" data-dialog-open="stock-adjustment"
+                                                data-dialog-values="{{ json_encode(['product_batch_id' => $batch->id, 'expected' => LocalizedDecimal::quantityInput($product->isFractioned() ? $batch->sealedQuantity() : $batch->quantity)]) }}">Ajuste</button>
+                                    @endif
                                 @endif
                             </td>
                         </tr>
@@ -130,4 +151,7 @@
         @include('stock._entry_dialog', ['product' => $product, 'batches' => $batches])
     @endif
     @include('stock._movement_dialogs', ['product' => $product, 'batchOptions' => $batchOptions])
+    @if ($canDiscard && $batches->contains(fn ($batch) => $batch->isExpired() && (float) $batch->quantity > 0))
+        @include('stock._write_off_dialog')
+    @endif
 </x-layouts.app>

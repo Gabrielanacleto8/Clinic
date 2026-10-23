@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AuditAction;
 use App\Enums\ProductCategory;
+use App\Enums\StockMovementType;
 use App\Http\Requests\ProductRequest;
 use App\Models\Product;
 use App\Models\StockMovement;
@@ -22,7 +23,10 @@ class ProductController extends Controller
 
     public function __construct(private readonly AuditLogger $audit) {}
 
-    private const FILTERS = ['ativos' => 'Ativos', 'baixo' => 'Estoque baixo', 'vencendo' => 'Vencendo ou vencidos', 'inativos' => 'Inativos', 'todos' => 'Todos'];
+    private const FILTERS = ['ativos' => 'Ativos', 'baixo' => 'Estoque baixo', 'vencendo' => 'Vencendo ou vencidos', 'parados' => 'Sem movimento há 90 dias', 'inativos' => 'Inativos', 'todos' => 'Todos'];
+
+    /** Dias sem movimentação para um produto com saldo contar como parado. */
+    public const IDLE_DAYS = 90;
 
     /**
      * Aba Produtos: o cadastro, com o saldo disponível e os alertas de cada item.
@@ -55,6 +59,11 @@ class ProductController extends Controller
                 fn ($inner) => $inner->whereHas('batches', fn ($batches) => $batches->expiringSoon())
                     ->orWhereHas('batches', fn ($batches) => $batches->expiredWithStock()),
             ))
+            // Parado: ativo, com saldo e sem nenhuma movimentação nos últimos dias. Capital imobilizado.
+            ->when($status === 'parados', fn ($query) => $query
+                ->where('is_active', true)
+                ->whereHas('batches', fn ($batches) => $batches->where('quantity', '>', 0))
+                ->whereDoesntHave('batches.movements', fn ($movements) => $movements->where('stock_movements.created_at', '>=', now()->subDays(self::IDLE_DAYS))))
             ->orderBy('name')
             ->paginate(15)
             ->withQueryString();
@@ -102,10 +111,15 @@ class ProductController extends Controller
     {
         Gate::authorize('view', $product);
 
-        $product->loadSum(['batches as available_quantity' => fn ($query) => $query->usable()], 'quantity');
+        // Saldo disponível e a descartar, pela mesma regra da listagem.
+        $quantities = Product::query()->withAvailableQuantity()->whereKey($product->getKey())->first(['products.id']);
+        $product->setAttribute('available_quantity', $quantities->available_quantity);
+        $product->setAttribute('discard_quantity', $quantities->discard_quantity);
+        $product->loadCount(['units as open_units_count' => fn ($query) => $query->withBalance()]);
 
         return view('products.show', [
             'product' => $product,
+            'averageCost' => $this->averageCost($product),
             // Lotes com saldo primeiro, do vencimento mais próximo ao mais distante.
             'batches' => $product->batches()->withOpenQuantity()->orderByRaw('quantity = 0')->firstToExpire()->get(),
             'movements' => StockMovement::query()
@@ -114,6 +128,29 @@ class ProductController extends Controller
                 ->latest('id')
                 ->paginate(15),
         ]);
+    }
+
+    /**
+     * Custo médio por unidade de medida do que está em estoque: a média das
+     * entradas de cada lote com saldo, ponderada pelo saldo. Calculado na
+     * hora, em uma consulta; nulo sem entrada com custo.
+     */
+    private function averageCost(Product $product): ?string
+    {
+        $rows = DB::table('stock_movements')
+            ->join('product_batches', 'product_batches.id', '=', 'stock_movements.product_batch_id')
+            ->where('product_batches.product_id', $product->getKey())
+            ->where('product_batches.quantity', '>', 0)
+            ->where('stock_movements.type', StockMovementType::Entry->value)
+            ->whereNotNull('stock_movements.unit_cost')
+            ->where('stock_movements.quantity', '>', 0)
+            ->groupBy('product_batches.id', 'product_batches.quantity')
+            ->selectRaw('product_batches.quantity as balance, sum(stock_movements.quantity * stock_movements.unit_cost) / sum(stock_movements.quantity) as average')
+            ->get();
+
+        $balance = (float) $rows->sum('balance');
+
+        return $balance > 0 ? number_format($rows->sum(fn ($row) => (float) $row->balance * (float) $row->average) / $balance, 4, '.', '') : null;
     }
 
     public function edit(Product $product): View

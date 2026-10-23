@@ -63,6 +63,15 @@ final class LocalizedDecimal
     }
 
     /**
+     * Custo por unidade para preencher um campo de formulário: centavos
+     * sempre, e até quatro casas quando há fração de centavo.
+     */
+    public static function unitMoneyInput(int|float|string|null $value): ?string
+    {
+        return $value === null ? null : preg_replace('/(,\d{2}\d*?)0+$/', '$1', number_format((float) $value, 4, ',', ''));
+    }
+
+    /**
      * Quantidade com até três casas, sem zeros à direita (2,5 em vez de 2,500).
      */
     public static function quantity(int|float|string|null $value): string

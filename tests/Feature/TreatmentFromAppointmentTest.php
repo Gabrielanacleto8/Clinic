@@ -77,7 +77,7 @@ class TreatmentFromAppointmentTest extends TestCase
             ->assertSee('selected>Preenchimento labial</option>', false)
             // O procedimento já vem escolhido, então o valor e os produtos dele também.
             ->assertSee('value="1800,00"', false)
-            ->assertSee('<option value="'.$filler->id.'" selected>', false)
+            ->assertSee('<option value="'.$filler->id.'" data-unit="', false)
             ->assertSee('value="1,5"', false);
     }
 
@@ -85,7 +85,7 @@ class TreatmentFromAppointmentTest extends TestCase
     {
         $this->actingAs($this->professional);
 
-        $this->get('/')->assertSee('Registrar atendimento')->assertSee("agendamento={$this->appointment->id}", false);
+        $this->get('/?todos=1')->assertSee('Registrar atendimento')->assertSee("agendamento={$this->appointment->id}", false);
 
         $this->post($this->url, $this->payload())->assertSessionHasNoErrors();
 
@@ -110,7 +110,7 @@ class TreatmentFromAppointmentTest extends TestCase
 
         $this->actingAs($this->professional);
 
-        $this->get('/agenda')->assertSee("agendamento={$this->appointment->id}", false)->assertSee("agendamento={$confirmed->id}", false);
+        $this->get('/agenda?profissional=todos')->assertSee("agendamento={$this->appointment->id}", false)->assertSee("agendamento={$confirmed->id}", false);
 
         $this->post($this->url, $this->payload(['appointment_id' => $confirmed->id]))->assertSessionHasNoErrors();
 

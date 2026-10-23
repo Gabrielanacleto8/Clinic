@@ -28,9 +28,11 @@ enum Permission: string
     case StockView = 'stock.view';
     case StockManage = 'stock.manage';
     case StockAdjust = 'stock.adjust';
+    case StockDiscard = 'stock.discard';
 
     case FinanceView = 'finance.view';
     case FinanceManage = 'finance.manage';
+    case FinanceReceive = 'finance.receive';
 
     public function label(): string
     {
@@ -48,8 +50,10 @@ enum Permission: string
             self::StockView => 'Ver produtos, lotes e movimentações',
             self::StockManage => 'Cadastrar produtos e lançar entradas, saídas e perdas',
             self::StockAdjust => 'Fazer inventário e ajustar saldos de estoque',
-            self::FinanceView => 'Ver lançamentos e totais financeiros',
-            self::FinanceManage => 'Lançar receitas e despesas e registrar pagamentos',
+            self::StockDiscard => 'Descartar unidades abertas e lotes vencidos',
+            self::FinanceView => 'Ver todo o financeiro, inclusive despesas e salários',
+            self::FinanceManage => 'Lançar e excluir receitas e despesas, registrar e desfazer pagamentos',
+            self::FinanceReceive => 'Registrar o recebimento de cobranças de pacientes',
         };
     }
 
@@ -63,8 +67,8 @@ enum Permission: string
             self::RecordsView, self::RecordsManage, self::RecordsVoid => 'Prontuário',
             self::AgendaView, self::AgendaManage => 'Agenda',
             self::ProceduresView, self::ProceduresManage => 'Procedimentos',
-            self::StockView, self::StockManage, self::StockAdjust => 'Estoque',
-            self::FinanceView, self::FinanceManage => 'Financeiro',
+            self::StockView, self::StockManage, self::StockAdjust, self::StockDiscard => 'Estoque',
+            self::FinanceView, self::FinanceManage, self::FinanceReceive => 'Financeiro',
         };
     }
 
@@ -86,7 +90,10 @@ enum Permission: string
             self::ProceduresManage => [self::ProceduresView],
             self::StockManage => [self::StockView],
             self::StockAdjust => [self::StockManage],
-            self::FinanceManage => [self::FinanceView],
+            self::StockDiscard => [self::StockView],
+            self::FinanceManage => [self::FinanceView, self::FinanceReceive],
+            // Receber é dar baixa na cobrança de um paciente: não exige ver o financeiro.
+            self::FinanceReceive => [self::PatientsView],
             default => [],
         };
     }
@@ -104,11 +111,12 @@ enum Permission: string
                 self::RecordsView, self::RecordsManage,
                 self::AgendaView, self::AgendaManage,
                 self::ProceduresView,
-                self::StockView,
+                self::StockView, self::StockDiscard,
             ],
             UserRole::Receptionist => [
                 self::PatientsView, self::PatientsManage,
                 self::AgendaView, self::AgendaManage,
+                self::FinanceReceive,
             ],
             UserRole::Admin => self::cases(),
         };

@@ -35,7 +35,11 @@
         <div class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="note">
             <p class="font-semibold">Registro anulado em {{ ClinicTime::format($treatment->voided_at) }} por {{ $treatment->voidedBy?->name ?? 'usuário removido' }}.</p>
             <p class="mt-1 whitespace-pre-line">Motivo: {{ $treatment->void_reason }}</p>
-            <p class="mt-1">O estoque foi devolvido e a cobrança, excluída. O registro fica no prontuário só como histórico.</p>
+            <p class="mt-1">O estoque foi devolvido e a cobrança, excluída. O registro fica no prontuário só como histórico e não recebe fotos, documentos nem evoluções.</p>
+            @can('create', App\Models\Treatment::class)
+                {{-- Pelo agendamento reaberto, se houver; senão, registro avulso deste paciente. Nada é copiado: o erro pode ter sido o paciente. --}}
+                <a href="{{ route('patients.treatments.create', $reopenedAppointment ? [$patient, 'agendamento' => $reopenedAppointment->id] : [$patient]) }}" class="btn btn-primary mt-3">Registrar o atendimento correto</a>
+            @endcan
         </div>
     @endif
 
@@ -180,7 +184,14 @@
                     Use só para registro feito com erro: paciente, lote, quantidade ou valor errados. O registro continua no prontuário, marcado como anulado;
                     o estoque baixado volta, a cobrança é excluída e o agendamento volta para a agenda. Depois, registre o atendimento certo.
                 </p>
-                <p class="text-sm text-slate-600">Se a cobrança já tem pagamento registrado, desfaça o pagamento no financeiro antes.</p>
+                @if ($paidInstallments > 0)
+                    <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="note">
+                        A cobrança deste atendimento tem {{ $paidInstallments === 1 ? 'uma parcela recebida' : $paidInstallments.' parcelas recebidas' }}.
+                        Desfaça o pagamento no financeiro antes de anular.
+                    </p>
+                @else
+                    <p class="text-sm text-slate-600">Se a cobrança já tiver pagamento registrado, a anulação é recusada.</p>
+                @endif
                 <x-form.textarea scope="treatment-void" name="reason" label="Motivo" required rows="3" maxlength="1000"
                                  hint="Ex.: registrado no paciente errado. Gravado com criptografia." />
                 <div class="flex justify-end gap-2 pt-2">

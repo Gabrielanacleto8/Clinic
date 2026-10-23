@@ -194,11 +194,14 @@ class TreatmentDialogTest extends TestCase
 
         $this->getJson("/pacientes/{$this->patient->id}/alertas-de-saude")
             ->assertOk()
-            ->assertExactJson(['pregnant_or_lactating' => true, 'allergies' => 'Lidocaína']);
+            ->assertExactJson(['missing' => false, 'stale_since' => null, 'alerts' => [
+                ['label' => null, 'text' => 'Gestante ou lactante.'],
+                ['label' => 'Alergias', 'text' => 'Lidocaína'],
+            ]]);
 
         $this->getJson("/pacientes/{$withoutRecord->id}/alertas-de-saude")
             ->assertOk()
-            ->assertExactJson(['pregnant_or_lactating' => false, 'allergies' => null]);
+            ->assertExactJson(['missing' => true, 'stale_since' => null, 'alerts' => []]);
 
         $log = AuditLog::where('action', AuditAction::PatientViewed->value)->where('auditable_id', $this->patient->id)->sole();
         $this->assertSame($this->professional->id, $log->user_id);

@@ -1,4 +1,5 @@
 @php
+    use App\Support\AuditDescription;
     use App\Support\ClinicTime;
 
     $total = $logs->total();
@@ -73,13 +74,16 @@
                         <td data-label="Usuário" class="px-4 py-3">{{ $log->user?->name ?? '—' }}</td>
                         <td data-label="Ação" class="px-4 py-3 font-medium">{{ $log->action->label() }}</td>
                         <td data-label="Registro" class="px-4 py-3 whitespace-nowrap text-slate-600">
-                            {{ $log->auditable_type ? $log->auditable_type.' #'.$log->auditable_id : '—' }}
+                            {{ AuditDescription::subject($log) }}
                         </td>
                         {{-- Na auditoria entram só nomes de campos e identificadores: é seguro listar. --}}
                         <td data-label="Detalhes" class="px-4 py-3 text-xs text-slate-600">
-                            @foreach ($log->metadata ?? [] as $key => $value)
-                                <span class="block">{{ $key }}: {{ is_scalar($value) || $value === null ? var_export($value, true) : json_encode($value, JSON_UNESCAPED_UNICODE) }}</span>
+                            @foreach (AuditDescription::details($log->metadata) as $label => $text)
+                                <span class="block"><span class="text-slate-500">{{ $label }}:</span> {{ $text }}</span>
                             @endforeach
+                            @if (isset($log->metadata['patient_id']) && ! $patient)
+                                <a href="{{ route('audit.index', ['paciente' => $log->metadata['patient_id']]) }}" class="mt-0.5 block text-teal-800 hover:underline">Ver tudo deste paciente</a>
+                            @endif
                         </td>
                         <td data-label="Origem" class="px-4 py-3 text-xs text-slate-500">
                             <span class="block tabular-nums">{{ $log->ip_address ?? '—' }}</span>

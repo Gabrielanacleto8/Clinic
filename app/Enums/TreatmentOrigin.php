@@ -42,7 +42,7 @@ enum TreatmentOrigin: string
     public function url(?Appointment $appointment = null): string
     {
         return $this === self::Agenda && $appointment !== null
-            ? route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')])
+            ? route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')]).'#dia'
             : route($this->menuRoute());
     }
 }

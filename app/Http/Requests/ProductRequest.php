@@ -58,9 +58,12 @@ class ProductRequest extends FormRequest
             'hours_after_opening' => ['nullable', 'integer', 'min:1', 'max:8760'],
             'multi_patient_use' => ['required', 'boolean'],
             'minimum_stock' => ['required', 'numeric', 'decimal:0,3', 'min:0', 'max:999999'],
-            'cost' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
+            // Custo de referência com 4 casas, como o custo das entradas.
+            'cost' => ['nullable', 'numeric', 'decimal:0,4', 'min:0', 'max:999999.9999'],
             'price' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
             'is_active' => ['required', 'boolean'],
+            // Confirmação para desativar produto com saldo (ver after()).
+            'confirm_deactivate' => ['nullable', 'boolean'],
         ];
     }
 
@@ -81,7 +84,33 @@ class ProductRequest extends FormRequest
             },
             $this->checkUnitChange(...),
             $this->checkSealedStockFitsUnits(...),
+            $this->checkDeactivationWithStock(...),
         ];
+    }
+
+    /**
+     * Desativar um produto com saldo o tira do registro de atendimento na
+     * hora e manda as unidades abertas para descarte. Um clique errado não
+     * pode fazer isso sem aviso.
+     */
+    private function checkDeactivationWithStock(Validator $validator): void
+    {
+        $product = $this->route('product');
+
+        if (! $product instanceof Product || ! $product->is_active || $this->boolean('is_active') || $this->boolean('confirm_deactivate')) {
+            return;
+        }
+
+        $stock = $product->batches()->usable()->sum('quantity');
+        $openUnits = StockUnit::query()->withBalance()->whereIn('product_batch_id', $product->batches()->select('id'))->count();
+
+        if ((float) $stock <= 0 && $openUnits === 0) {
+            return;
+        }
+
+        $validator->errors()->add('is_active', 'Este produto tem '.LocalizedDecimal::quantity($stock).' '.$product->unit->symbol().' em estoque'
+            .($openUnits > 0 ? ' e '.$openUnits.' '.($openUnits === 1 ? 'unidade aberta' : 'unidades abertas') : '')
+            .'. Desativado, ele some do registro de atendimento e as unidades abertas passam a "descartar". Marque "Confirmo a desativação" para continuar.');
     }
 
     /**
@@ -133,7 +162,7 @@ class ProductRequest extends FormRequest
      */
     public function productData(): array
     {
-        $data = $this->validated();
+        $data = $this->safe()->except(['confirm_deactivate']);
 
         if (blank($data['unit_content'] ?? null)) {
             $data['hours_after_opening'] = null;

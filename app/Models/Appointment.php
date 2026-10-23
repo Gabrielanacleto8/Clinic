@@ -62,6 +62,34 @@ class Appointment extends Model
     }
 
     /**
+     * Dia do agendamento no calendário da clínica (Y-m-d).
+     */
+    public function localDay(): string
+    {
+        return ClinicTime::format($this->scheduled_at, 'Y-m-d');
+    }
+
+    /**
+     * Falta só a partir do dia do agendamento: antes disso o paciente ainda pode vir.
+     */
+    public function canBeMarkedMissed(): bool
+    {
+        return $this->isOpen() && $this->localDay() <= ClinicTime::today();
+    }
+
+    /**
+     * Reaberto, o agendamento volta a ocupar o horário e a aceitar registro:
+     * só de hoje em diante e com o profissional ainda ativo (relação carregada).
+     */
+    public function canBeReopened(): bool
+    {
+        return ! $this->isOpen()
+            && $this->status !== AppointmentStatus::Completed
+            && $this->localDay() >= ClinicTime::today()
+            && (bool) ($this->professional?->is_active ?? false);
+    }
+
+    /**
      * Pode receber o registro do atendimento: segue em aberto, ainda sem
      * atendimento e não é de um dia futuro.
      */

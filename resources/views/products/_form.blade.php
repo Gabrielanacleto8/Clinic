@@ -26,10 +26,10 @@
         <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('minimum_stock')" name="minimum_stock" label="Estoque mínimo" :value="LocalizedDecimal::quantityInput($product->minimum_stock ?? 0)"
                       required inputmode="decimal" autocomplete="off" hint="Zero desliga o alerta de estoque baixo." />
 
-        <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('cost')" name="cost" label="Custo unitário (R$)" :value="LocalizedDecimal::moneyInput($product->cost)"
-                      inputmode="decimal" autocomplete="off" placeholder="0,00" />
-        <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('price')" name="price" label="Preço unitário (R$)" :value="LocalizedDecimal::moneyInput($product->price)"
-                      inputmode="decimal" autocomplete="off" placeholder="0,00" />
+        {{-- Preço de venda não é usado em nenhuma tela: fica fora do formulário até ter uso. --}}
+        <x-form.input :scope="$scope" class="md:col-span-4" :id="$id('cost')" name="cost" label="Custo de referência (R$)" :value="LocalizedDecimal::unitMoneyInput($product->cost)"
+                      inputmode="decimal" autocomplete="off" placeholder="0,00"
+                      hint="Por unidade de medida, usado só quando a entrada não informa custo. Nas baixas vale o custo médio das entradas do lote." />
         <div class="md:col-span-2 md:pt-7">
             <label class="flex items-center gap-2 text-sm">
                 <input type="hidden" name="is_active" value="0">
@@ -37,13 +37,22 @@
                        @checked($inScope ? old('is_active', $product->is_active) : $product->is_active)>
                 Ativo
             </label>
+            @if ($inScope && $errors->has('is_active'))
+                <p class="mt-1 text-sm text-red-700">{{ $errors->first('is_active') }}</p>
+                {{-- Só aparece ao desativar produto com saldo: um clique errado não tira o produto do atendimento sem aviso. --}}
+                <label class="mt-2 flex items-start gap-2 text-sm">
+                    <input type="hidden" name="confirm_deactivate" value="0">
+                    <input type="checkbox" name="confirm_deactivate" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700" @checked(old('confirm_deactivate'))>
+                    Confirmo a desativação
+                </label>
+            @endif
         </div>
     </div>
 
     <fieldset class="mt-6 border-t border-slate-200 pt-5">
         <legend class="text-sm font-semibold text-slate-700">Produto fracionado</legend>
         <p class="mt-1 text-sm text-slate-600">
-            Para frasco, seringa ou ampola usados aos poucos. Cada unidade física é aberta e controlada à parte. Deixe em branco se o produto sai inteiro do lote.
+            Para frasco, seringa ou ampola usados aos poucos. Cada unidade é aberta e controlada à parte. Deixe em branco se o produto sai inteiro do lote.
         </p>
         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
             <x-form.input :scope="$scope" class="md:col-span-2" :id="$id('unit_content')" name="unit_content" label="Conteúdo de cada unidade" :value="LocalizedDecimal::quantityInput($product->unit_content)"

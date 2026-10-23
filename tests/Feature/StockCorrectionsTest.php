@@ -124,11 +124,11 @@ class StockCorrectionsTest extends TestCase
         $this->assertSame('-100.000', StockMovement::where('type', StockMovementType::Adjustment->value)->sole()->quantity);
 
         $move('loss', '100')->assertSessionHasNoErrors();
-        $move('loss', '100')->assertSessionHasErrors(['quantity' => 'Saldo lacrado insuficiente no lote TX1. Disponível: 0.']);
+        $move('loss', '100')->assertSessionHasErrors(['quantity' => 'Saldo fechado insuficiente no lote TX1. Disponível: 0 U.']);
         $this->assertSame('100.000', $batch->refresh()->quantity);
 
         // O diálogo de ajuste explica o que se conta.
-        $this->get("/estoque/lotes/{$batch->id}")->assertOk()->assertSee('Quantidade lacrada contada (U)')->assertSee('TX1 · lacrado 0 U');
+        $this->get("/estoque/lotes/{$batch->id}")->assertOk()->assertSee('Unidades fechadas contadas')->assertSee('TX1 · fechado 0 U');
     }
 
     public function test_inventory_of_fractioned_products_requires_whole_units(): void
@@ -136,7 +136,7 @@ class StockCorrectionsTest extends TestCase
         $batch = $this->receive($this->toxin(), 'TX1', '300');
 
         $this->actingAs($this->admin)->put('/estoque/inventario', ['reason' => 'Inventário', 'counted' => [$batch->id => '250']])
-            ->assertSessionHasErrors(["counted.{$batch->id}" => 'Conte só o lacrado, em unidades inteiras de 100 U.']);
+            ->assertSessionHasErrors(["counted.{$batch->id}" => 'Conte só o fechado, em unidades inteiras de 100 U.']);
 
         $this->actingAs($this->admin)->put('/estoque/inventario', ['reason' => 'Inventário', 'counted' => [$batch->id => '200']])->assertSessionHasNoErrors();
         $this->assertSame('200.000', $batch->refresh()->quantity);
@@ -206,15 +206,15 @@ class StockCorrectionsTest extends TestCase
         // Movimentar estoque não basta: corrigir datas exige a permissão de ajuste.
         $this->grant(UserRole::Professional, 'stock.manage');
         $professional = User::factory()->professional()->create();
-        $this->actingAs($professional)->get($url)->assertOk()->assertDontSee('Corrigir datas');
+        $this->actingAs($professional)->get($url)->assertOk()->assertDontSee('Corrigir lote');
         $this->actingAs($professional)->patch($url, ['expires_on' => '2027-07-30'])->assertForbidden();
 
-        $this->actingAs($this->admin)->get($url)->assertOk()->assertSee('Corrigir datas');
+        $this->actingAs($this->admin)->get($url)->assertOk()->assertSee('Corrigir lote');
         $this->actingAs($this->admin)->patch($url, ['manufactured_on' => '2026-11-01'])->assertSessionHasErrors('manufactured_on');
         $this->actingAs($this->admin)->patch($url, ['manufactured_on' => '2026-01-10', 'expires_on' => '2026-01-01'])->assertSessionHasErrors('expires_on');
 
         $this->actingAs($this->admin)->patch($url, ['manufactured_on' => '2026-01-10', 'expires_on' => '2027-07-30'])
-            ->assertRedirect($url)->assertSessionHas('success', 'Datas do lote corrigidas.');
+            ->assertRedirect($url)->assertSessionHas('success', 'Dados do lote corrigidos.');
 
         $batch->refresh();
         $this->assertSame(['2026-01-10', '2027-07-30'], [$batch->manufactured_on->format('Y-m-d'), $batch->expires_on->format('Y-m-d')]);
@@ -228,7 +228,7 @@ class StockCorrectionsTest extends TestCase
 
         // Nada mudou: nada a registrar.
         $this->actingAs($this->admin)->patch($url, ['manufactured_on' => '2026-01-10', 'expires_on' => '2027-07-30'])
-            ->assertSessionHas('success', 'As datas já estavam assim. Nada foi alterado.');
+            ->assertSessionHas('success', 'Os dados já estavam assim. Nada foi alterado.');
         $this->assertSame(1, AuditLog::where('action', AuditAction::ProductBatchUpdated->value)->count());
         // O saldo não muda por aqui.
         $this->assertSame('5.000', $batch->refresh()->quantity);

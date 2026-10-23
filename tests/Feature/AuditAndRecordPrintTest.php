@@ -93,12 +93,49 @@ class AuditAndRecordPrintTest extends TestCase
         $this->assertLessThanOrEqual(10, $queries);
     }
 
+    public function test_audit_list_with_varied_entries_keeps_a_fixed_number_of_queries(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin);
+        $audit = app(AuditLogger::class);
+
+        // Ações, autores e tipos de registro variados, com detalhes traduzidos (AuditDescription).
+        $populate = function (int $count) use ($audit): void {
+            foreach (range(1, $count) as $_) {
+                $author = User::factory()->professional()->create();
+                $patient = Patient::factory()->create();
+                $audit->log(AuditAction::PatientViewed, $patient, ['tab' => 'fotos'], $author);
+                $audit->log(AuditAction::AppointmentStatusChanged, Appointment::factory()->create(['patient_id' => $patient->id]), ['from' => 'scheduled', 'to' => 'no_show', 'patient_id' => $patient->id], $author);
+                $audit->log(AuditAction::FinancialEntryDeleted, null, ['type' => 'income', 'payment_method' => 'pix', 'total' => '10.00', 'patient_id' => $patient->id], $author);
+                $audit->log(AuditAction::StockMoved, ProductBatch::factory()->create(), ['type' => 'loss'], $author);
+            }
+        };
+
+        $count = function (string $url): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->get($url)->assertOk();
+            DB::disableQueryLog();
+
+            return count(DB::getQueryLog());
+        };
+
+        $populate(1);
+        $count('/auditoria');
+        $few = [$count('/auditoria'), $count('/auditoria?de=2026-01-01&ate=2027-12-31')];
+
+        $populate(8);
+        $many = [$count('/auditoria'), $count('/auditoria?de=2026-01-01&ate=2027-12-31')];
+
+        $this->assertSame($few, $many);
+    }
+
     public function test_finance_and_permission_reads_are_audited(): void
     {
         $this->actingAs(User::factory()->admin()->create());
 
         $this->get('/financeiro?mes=2026-10')->assertOk();
-        $this->assertEquals(['month' => '2026-10', 'type' => 'todos', 'status' => 'todas'], AuditLog::where('action', AuditAction::FinanceViewed->value)->sole()->metadata);
+        $this->assertEquals(['from' => '2026-10-01', 'to' => '2026-10-31', 'type' => 'todos', 'status' => 'todas', 'patient_filter' => false], AuditLog::where('action', AuditAction::FinanceViewed->value)->sole()->metadata);
 
         $this->get('/usuarios/permissoes')->assertOk();
         $this->assertSame(1, AuditLog::where('action', AuditAction::PermissionsViewed->value)->count());
@@ -156,8 +193,9 @@ class AuditAndRecordPrintTest extends TestCase
 
         // A agenda do dia no Início também é leitura auditada.
         Appointment::factory()->at('2026-10-08 15:00')->create(['patient_id' => $patient->id]);
+        // Quem atende abre só a própria agenda: o filtro entra na auditoria (só o id).
         $this->get('/')->assertOk();
-        $this->assertEquals(['view' => 'home'], AuditLog::where('action', AuditAction::AgendaViewed->value)->latest('id')->first()->metadata);
+        $this->assertEquals(['view' => 'home', 'professional_id' => auth()->id()], AuditLog::where('action', AuditAction::AgendaViewed->value)->latest('id')->first()->metadata);
     }
 
     public function test_audit_filters_by_user_action_and_period(): void

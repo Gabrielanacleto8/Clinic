@@ -28,7 +28,7 @@ class StockInvoiceImporter
     /**
      * @param  array{access_key?: ?string, number: string, supplier: string, items: list<array<string, mixed>>}  $invoice  Nota lida do XML.
      * @param  array<int, array<string, mixed>>  $items  Itens conferidos, indexados pela posição no formulário.
-     * @return array{products: int, entries: int}
+     * @return array{products: int, entries: int, created: list<Product>}
      *
      * @throws ValidationException
      */
@@ -43,8 +43,17 @@ class StockInvoiceImporter
 
             foreach ($items as $index => $item) {
                 $lots = $item['enter'] ? $item['lots'] : [];
-                $unitCost = $this->unitCost($item, $lots, $invoice['items'][$index]['quantity'] ?? null);
                 $productId = $item['product_id'] ?? null;
+
+                // Produto novo fracionado: a nota traz frascos; o estoque controla o conteúdo deles.
+                if ($productId === null && ($item['unit_content'] ?? null) !== null) {
+                    $lots = array_map(fn (array $lot) => [
+                        ...$lot,
+                        'quantity' => Quantity::fromThousandths((int) round(Quantity::toThousandths((string) $lot['quantity']) / Quantity::SCALE) * Quantity::toThousandths((string) $item['unit_content'])),
+                    ], $lots);
+                }
+
+                $unitCost = $this->unitCost($item, $lots, $invoice['items'][$index]['quantity'] ?? null);
 
                 if ($productId === null) {
                     $key = mb_strtolower(trim((string) $item['name']));
@@ -71,7 +80,7 @@ class StockInvoiceImporter
                 }
             }
 
-            return ['products' => count($created), 'entries' => $entries];
+            return ['products' => count($created), 'entries' => $entries, 'created' => array_values($created)];
         });
     }
 
@@ -132,8 +141,11 @@ class StockInvoiceImporter
                 'code' => filled($item['code'] ?? null) ? trim((string) $item['code']) : null,
                 'category' => $item['category'],
                 'unit' => $item['unit'],
+                'unit_content' => $item['unit_content'] ?? null,
+                'hours_after_opening' => ($item['unit_content'] ?? null) === null ? null : ($item['hours_after_opening'] ?? null),
+                'multi_patient_use' => ($item['unit_content'] ?? null) !== null && ($item['multi_patient_use'] ?? false),
                 'supplier' => $supplier ?: null,
-                'cost' => $unitCost === null ? null : number_format((float) $unitCost, 2, '.', ''),
+                'cost' => $unitCost,
                 'minimum_stock' => 0,
                 'is_active' => true,
             ]);

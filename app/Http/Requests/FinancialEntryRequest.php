@@ -6,6 +6,7 @@ use App\Enums\FinancialCategory;
 use App\Enums\FinancialEntryType;
 use App\Enums\PaymentMethod;
 use App\Models\FinancialEntry;
+use App\Models\Patient;
 use App\Support\ClinicTime;
 use App\Support\InstallmentPlan;
 use App\Support\LocalizedDecimal;
@@ -47,6 +48,8 @@ class FinancialEntryRequest extends FormRequest
             'installments' => ['required', 'integer', 'min:1', 'max:'.InstallmentPlan::MAX_INSTALLMENTS],
             'first_due_date' => ['required', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
             'first_installment_paid' => ['required', 'boolean'],
+            // Receita de paciente fora do atendimento (venda de produto, pacote): aparece na ficha dele.
+            'patient_id' => [$type === FinancialEntryType::Income ? 'nullable' : 'prohibited', 'integer', Rule::exists(Patient::class, 'id')->withoutTrashed()],
         ];
     }
 
@@ -80,6 +83,7 @@ class FinancialEntryRequest extends FormRequest
             'installments' => 'número de parcelas',
             'first_due_date' => 'primeiro vencimento',
             'first_installment_paid' => 'primeira parcela paga',
+            'patient_id' => 'paciente',
         ];
     }
 
@@ -92,6 +96,7 @@ class FinancialEntryRequest extends FormRequest
             'category.in' => 'Escolha uma categoria compatível com o tipo do lançamento.',
             'total.gt' => 'O valor deve ser maior que zero.',
             'issued_on.before_or_equal' => 'A data do lançamento não pode estar no futuro.',
+            'patient_id.exists' => 'Busque e selecione um paciente na lista.',
         ];
     }
 }

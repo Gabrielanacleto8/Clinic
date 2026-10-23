@@ -68,7 +68,7 @@ class PatientPhotoTest extends TestCase
     {
         $this->actingAs($this->author)
             ->post("{$this->url}/fotos", $this->payload())
-            ->assertRedirect(route('patients.show', [$this->patient, 'aba' => 'fotos']))
+            ->assertRedirect(route('patients.show', [$this->patient, 'aba' => 'fotos']).'#fotos-do-paciente')
             ->assertSessionHas('success', 'Foto adicionada.');
 
         $photo = PatientAttachment::firstOrFail();

@@ -63,4 +63,18 @@ class FinancialRecorder
             return $entry;
         });
     }
+
+    /**
+     * Refaz as parcelas de um lançamento sem pagamento: nova forma, número de
+     * parcelas e primeiro vencimento, mesmo total. Chamado com o lançamento
+     * já travado pelo chamador, dentro da transação dele.
+     */
+    public function reschedule(FinancialEntry $entry, PaymentMethod $paymentMethod, int $installments, string $firstDueDate): void
+    {
+        $total = $entry->total();
+
+        $entry->update(['payment_method' => $paymentMethod]);
+        $entry->installments()->delete();
+        $entry->installments()->createMany(InstallmentPlan::split($total, $installments, $firstDueDate));
+    }
 }

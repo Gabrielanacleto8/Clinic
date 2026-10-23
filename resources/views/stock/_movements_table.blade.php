@@ -1,7 +1,9 @@
 @php
+    use App\Enums\StockMovementType;
     use App\Support\ClinicTime;
     use App\Support\LocalizedDecimal;
 
+    $canCorrectCost = auth()->user()->can('adjust', App\Models\Product::class);
 @endphp
 {{-- Linhas do livro de estoque. Espera $movements com user e treatment.professional
      carregados. $product e $batch são sempre informados: na página de um produto
@@ -61,6 +63,12 @@
                 {{-- Entrada: valor da compra. Saída, consumo e perda: custo médio do lote na baixa. --}}
                 <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap text-slate-600 tabular-nums">
                     {{ $movement->value() !== null ? LocalizedDecimal::money($movement->value()) : '—' }}
+                    @if ($canCorrectCost && $movement->type === StockMovementType::Entry)
+                        <button type="button" class="block w-full cursor-pointer text-right text-xs text-teal-800 hover:underline" data-dialog-open="entry-cost"
+                                data-dialog-action="{{ route('stock.movements.cost', $movement) }}"
+                                data-dialog-summary="Entrada de {{ ClinicTime::format($movement->created_at) }} · {{ $rowProduct->name }} · lote {{ $rowBatch->batch_code }}"
+                                data-dialog-values="{{ json_encode(['unit_cost' => LocalizedDecimal::unitMoneyInput($movement->unit_cost)]) }}">Corrigir custo</button>
+                    @endif
                 </td>
                 <td data-label="Motivo ou origem" class="px-4 py-3 text-slate-600">
                     @if ($treatment)
@@ -91,3 +99,9 @@
         @endforeach
     </tbody>
 </table>
+
+@if ($canCorrectCost)
+    @once
+        @include('stock._entry_cost_dialog')
+    @endonce
+@endif

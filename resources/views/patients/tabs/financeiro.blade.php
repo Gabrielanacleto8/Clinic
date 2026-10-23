@@ -1,17 +1,23 @@
 @php
+    use App\Enums\FinancialEntryType;
     use App\Support\LocalizedDecimal;
 
     // Quem vê o financeiro sem ver o prontuário não ganha link para o atendimento.
     $canSeeRecords = auth()->user()->can('viewClinicalRecords', $patient);
+    $canReceive = auth()->user()->hasPermission(App\Enums\Permission::FinanceReceive);
 @endphp
-<dl class="mt-4 grid grid-cols-2 gap-4">
+<dl class="mt-4 grid grid-cols-3 gap-4">
     <div class="card px-4 py-3">
-        <dt class="text-xs text-slate-500">Total pago</dt>
+        <dt class="text-xs text-slate-500">Pago</dt>
         <dd class="mt-0.5 text-xl font-semibold tabular-nums">{{ LocalizedDecimal::money($financialTotals->paid) }}</dd>
     </div>
     <div class="card px-4 py-3">
-        <dt class="text-xs text-slate-500">Total pendente</dt>
-        <dd @class(['mt-0.5 text-xl font-semibold tabular-nums', 'text-amber-700' => (float) $financialTotals->pending > 0])>{{ LocalizedDecimal::money($financialTotals->pending) }}</dd>
+        <dt class="text-xs text-slate-500">Vencido</dt>
+        <dd @class(['mt-0.5 text-xl font-semibold tabular-nums', 'text-red-700' => (float) $financialTotals->overdue > 0])>{{ LocalizedDecimal::money($financialTotals->overdue) }}</dd>
+    </div>
+    <div class="card px-4 py-3">
+        <dt class="text-xs text-slate-500">A vencer</dt>
+        <dd @class(['mt-0.5 text-xl font-semibold tabular-nums', 'text-amber-700' => (float) $financialTotals->upcoming > 0])>{{ LocalizedDecimal::money($financialTotals->upcoming) }}</dd>
     </div>
 </dl>
 
@@ -27,6 +33,9 @@
                     <th scope="col" class="px-4 py-3 font-medium">Descrição</th>
                     <th scope="col" class="px-4 py-3 text-right font-medium">Valor</th>
                     <th scope="col" class="px-4 py-3 font-medium">Situação</th>
+                    @if ($canReceive)
+                        <th scope="col" class="px-4 py-3"><span class="sr-only">Ações</span></th>
+                    @endif
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -54,6 +63,13 @@
                                 <span class="ml-1 text-xs text-slate-500">em {{ $installment->paid_at->format('d/m/Y') }}</span>
                             @endif
                         </td>
+                        @if ($canReceive)
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                @if (! $installment->isPaid() && $entry->type === FinancialEntryType::Income)
+                                    @include('finance._receive_button')
+                                @endif
+                            </td>
+                        @endif
                     </tr>
                 @endforeach
             </tbody>
@@ -62,3 +78,7 @@
 </section>
 
 <div class="mt-4">{{ $records->links() }}</div>
+
+@if ($canReceive)
+    @include('finance._payment_dialog')
+@endif

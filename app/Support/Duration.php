@@ -7,7 +7,7 @@ namespace App\Support;
  */
 final class Duration
 {
-    public const OPTIONS = [15, 30, 45, 60, 90, 120, 180];
+    public const OPTIONS = [10, 15, 20, 30, 45, 60, 90, 120, 180];
 
     public static function label(int $minutes): string
     {

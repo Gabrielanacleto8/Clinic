@@ -25,6 +25,12 @@ return [
         'invoice_max_upload_kilobytes' => 1024,
     ],
 
+    /*
+    | Depois de quantos meses sem revisão a ficha de saúde passa a ser
+    | destacada como desatualizada, na ficha e antes do registro do atendimento.
+    */
+    'anamnesis_review_months' => (int) env('CLINIC_ANAMNESIS_REVIEW_MONTHS', 12),
+
     'documents' => [
         'max_upload_kilobytes' => 10240,
     ],

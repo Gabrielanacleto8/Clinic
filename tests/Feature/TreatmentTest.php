@@ -311,7 +311,9 @@ class TreatmentTest extends TestCase
             $defaults[$procedure->id]['products'],
         );
         // Procedimento sem produtos típicos sugere só o valor.
-        $this->assertSame(['amount' => '1200,00', 'products' => []], $defaults[$plain->id]);
+        $this->assertSame(['amount' => '1200,00', 'products' => [], 'missing' => []], $defaults[$plain->id]);
+        // Produto típico sem lote utilizável é avisado, não silenciado.
+        $this->assertSame(['Sem estoque'], $defaults[$procedure->id]['missing']);
     }
 
     public function test_products_are_never_added_behind_the_users_back(): void

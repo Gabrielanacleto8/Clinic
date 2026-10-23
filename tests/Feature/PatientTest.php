@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AuditAction;
 use App\Enums\UserRole;
+use App\Http\Requests\PatientRequest;
 use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\User;
@@ -153,7 +154,11 @@ class PatientTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->post('/pacientes', $this->payload())
-            ->assertSessionHasErrors(['cpf' => 'Já existe um paciente cadastrado com este CPF.']);
+            ->assertSessionHasErrors(['cpf' => PatientRequest::CPF_HIDDEN_MESSAGE]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post('/pacientes', $this->payload())
+            ->assertSessionHasErrors(['cpf' => PatientRequest::CPF_ARCHIVED_MESSAGE]);
 
         $this->assertSame(1, Patient::withTrashed()->count());
     }
@@ -266,7 +271,8 @@ class PatientTest extends TestCase
 
     public function test_update_audit_records_field_names_but_never_values(): void
     {
-        $patient = Patient::factory()->create(['cpf' => self::CPF, 'name' => 'Nome Antigo']);
+        // Adulto: menor de idade exigiria o responsável legal, que não é o assunto aqui.
+        $patient = Patient::factory()->create(['cpf' => self::CPF, 'name' => 'Nome Antigo', 'birth_date' => '1985-03-20']);
 
         $this->actingAs(User::factory()->create())
             ->put("/pacientes/{$patient->id}", [

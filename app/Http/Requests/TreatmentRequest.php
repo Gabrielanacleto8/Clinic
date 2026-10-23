@@ -68,7 +68,10 @@ class TreatmentRequest extends FormRequest
 
         return [
             'performed_at' => ['required', 'date_format:'.ClinicTime::INPUT_FORMAT],
-            'procedure_id' => ['required', 'integer', Rule::exists(Procedure::class, 'id')->where('is_active', true)],
+            // Procedimento desativado depois de agendado continua válido para aquele agendamento.
+            'procedure_id' => ['required', 'integer', Rule::exists(Procedure::class, 'id')->where(
+                fn ($query) => $query->where('is_active', true)->when($this->appointmentProcedureId(), fn ($inner, int $id) => $inner->orWhere('id', $id)),
+            )],
             'treated_areas' => ['nullable', 'string', 'max:255'],
             'assessment' => ['nullable', 'string', 'max:5000'],
             'description' => ['required', 'string', 'max:10000'],
@@ -118,6 +121,23 @@ class TreatmentRequest extends FormRequest
     }
 
     /**
+     * Procedimento do agendamento informado, se ele é deste paciente.
+     */
+    private function appointmentProcedureId(): ?int
+    {
+        $id = $this->input('appointment_id');
+        $patient = $this->route('patient');
+
+        if (! is_numeric($id) || ! $patient) {
+            return null;
+        }
+
+        $procedureId = Appointment::query()->whereKey((int) $id)->where('patient_id', $patient->getKey())->value('procedure_id');
+
+        return $procedureId === null ? null : (int) $procedureId;
+    }
+
+    /**
      * Agendamento que o atendimento encerra: tem de ser deste paciente e
      * estar aberto para receber o registro.
      *
@@ -164,6 +184,16 @@ class TreatmentRequest extends FormRequest
 
                 if ($performedAt->year < 2000) {
                     $validator->errors()->add('performed_at', 'Informe uma data de atendimento válida.');
+                }
+
+                // O registro é imutável: a data tem de ser a do agendamento que ele encerra.
+                // Se o paciente veio em outro dia, remarque antes.
+                if ($this->filled('appointment_id') && ! $validator->errors()->has('appointment_id')) {
+                    $appointment = Appointment::query()->whereKey((int) $this->input('appointment_id'))->first(['id', 'scheduled_at']);
+
+                    if ($appointment !== null && $appointment->localDay() !== ClinicTime::local($performedAt)->format('Y-m-d')) {
+                        $validator->errors()->add('performed_at', 'A data do atendimento não é a do agendamento ('.ClinicTime::format($appointment->scheduled_at, 'd/m/Y').'). Se o paciente veio em outro dia, remarque o agendamento antes de registrar.');
+                    }
                 }
 
                 if ($this->hasCharge() && ! $validator->errors()->hasAny(['amount', 'installments'])
@@ -255,7 +285,7 @@ class TreatmentRequest extends FormRequest
             'installments' => (int) $this->validated('installments'),
             'first_due_date' => $this->validated('first_due_date'),
             // Dar o pagamento por recebido é registrar um pagamento: só com a permissão do financeiro.
-            'first_installment_paid' => $this->boolean('first_installment_paid') && $this->user()->hasPermission(Permission::FinanceManage),
+            'first_installment_paid' => $this->boolean('first_installment_paid') && $this->user()->hasPermission(Permission::FinanceReceive),
         ];
     }
 

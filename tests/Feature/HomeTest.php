@@ -30,9 +30,9 @@ class HomeTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-08 13:00', 'America/Sao_Paulo'));
     }
 
-    private function appointmentFor(string $patientName, string $localDateTime, array $attributes = []): Appointment
+    private function appointmentFor(string $patientName, string $localDateTime, array $attributes = [], int $minutes = 30): Appointment
     {
-        return Appointment::factory()->at($localDateTime)->create([
+        return Appointment::factory()->at($localDateTime, $minutes)->create([
             'patient_id' => Patient::factory()->create(['name' => $patientName])->id,
             ...$attributes,
         ]);
@@ -51,16 +51,16 @@ class HomeTest extends TestCase
         $this->actingAs(User::factory()->create())->get('/')
             ->assertOk()
             ->assertSee('Quinta-feira, 8 de outubro de 2026')
-            ->assertSee('Atendimentos do dia')->assertSee('Pacientes cadastrados')->assertSee('Paciente de Hoje')->assertSee('Próximos agendamentos')
-            ->assertDontSee('Faturamento do período')->assertDontSee('Atendimentos realizados')->assertDontSee('Estoque baixo')->assertDontSee('Próximos do vencimento');
+            ->assertSee('Agendamentos de hoje')->assertSee('Paciente de Hoje')->assertSee('Próximos agendamentos')
+            ->assertDontSee('Faturamento do mês')->assertDontSee('Atendimentos registrados')->assertDontSee('Estoque baixo')->assertDontSee('Vencimento');
 
         // Profissional: soma prontuário e estoque, mas não o financeiro.
         $this->actingAs(User::factory()->professional()->create())->get('/')
-            ->assertSee('Atendimentos realizados')->assertSee('Estoque baixo')->assertSee('Próximos do vencimento')
-            ->assertDontSee('Faturamento do período');
+            ->assertSee('Atendimentos registrados')->assertSee('Estoque baixo')->assertSee('Vencimento')
+            ->assertDontSee('Faturamento do mês');
 
         $this->actingAs(User::factory()->admin()->create())->get('/')
-            ->assertSee('Faturamento do período')->assertSee('Atendimentos realizados')->assertSee('Estoque baixo');
+            ->assertSee('Faturamento do mês')->assertSee('Recebido no mês')->assertSee('Atendimentos registrados')->assertSee('Estoque baixo');
     }
 
     public function test_a_role_without_any_permission_gets_an_empty_home_and_no_data(): void
@@ -70,7 +70,7 @@ class HomeTest extends TestCase
 
         $response = $this->actingAs(User::factory()->create())->get('/');
 
-        $response->assertOk()->assertSee('Seu perfil ainda não tem acesso a nenhum módulo')->assertDontSee('Não Deve Aparecer')->assertDontSee('Atendimentos do dia');
+        $response->assertOk()->assertSee('Seu perfil ainda não tem acesso a nenhum módulo')->assertDontSee('Não Deve Aparecer')->assertDontSee('Agendamentos de hoje');
         $this->assertSame([], $response->viewData('totals'));
         $this->assertNull($response->viewData('todayAppointments'));
     }
@@ -102,12 +102,13 @@ class HomeTest extends TestCase
         $this->assertSame(3, $totals['patients']);                 // arquivado não conta
         $this->assertSame(2, $totals['treatments']);     // só os feitos neste mês
         $this->assertEquals(750.0, $totals['revenue']);            // receitas lançadas em outubro, todas as parcelas
+        $this->assertEquals(0.0, $totals['received']);             // nada pago ainda
         $this->assertSame(1, $totals['low_stock']);
         $this->assertSame(2, $totals['expiring_batches']);         // o que vence logo e o vencido; o zerado não
 
         $response->assertSee('R$ 750,00')
             ->assertSee('Ácido hialurônico')->assertSee('2 de 5 un')
-            ->assertSee('lote VENCE-LOGO')->assertSee('Vence em 01/11/2026')->assertSee('Venceu em 01/10/2026')->assertDontSee('ZERADO');
+            ->assertSee('lote VENCE-LOGO')->assertSee('01/11/2026')->assertSee('Vencido')->assertSee('01/10/2026')->assertDontSee('ZERADO');
     }
 
     public function test_today_agenda_uses_the_clinic_calendar_day_not_utc(): void
@@ -120,9 +121,10 @@ class HomeTest extends TestCase
 
         $response = $this->actingAs(User::factory()->create())->get('/');
 
-        $response->assertSeeInOrder(['Agenda de hoje', 'Manhã de Hoje', 'Cancelado de Hoje', 'Fim de Hoje'])->assertDontSee('Ontem');
-        // O cancelado aparece na lista, mas não conta nos atendimentos do dia.
-        $response->assertSeeInOrder(['Atendimentos do dia', '2', '1 aguardando']);
+        // O de ontem, ainda em aberto, aparece como pendente de registro, não na agenda de hoje.
+        $response->assertSeeInOrder(['Pendentes de registro', 'Ontem', 'Agenda de hoje', 'Manhã de Hoje', 'Cancelado de Hoje', 'Fim de Hoje']);
+        // O cancelado aparece na lista, mas não conta nos agendamentos do dia.
+        $response->assertSeeInOrder(['Agendamentos de hoje', '2', '1 em aberto']);
     }
 
     public function test_upcoming_appointments_lists_the_next_open_ones_after_today(): void
@@ -153,12 +155,15 @@ class HomeTest extends TestCase
             ->assertDontSee('Registrar atendimento')->assertDontSee($registerUrl, false);
 
         // O profissional registra direto do agendamento, com ou sem a presença confirmada.
+        // Por padrão vê só a própria agenda: o agendamento é de outro profissional.
         $this->actingAs(User::factory()->professional()->create())->get('/')
-            ->assertSee('Confirmar presença')->assertSee('Registrar atendimento')->assertSee(e($registerUrl), false);
+            ->assertSee('Registrar atendimento')->assertDontSee(e($registerUrl), false)->assertSee('Ver todos os profissionais');
+        $this->get('/?todos=1')
+            ->assertSee('Confirmar presença')->assertSee('Registrar atendimento')->assertSee(e($registerUrl), false)->assertSee('Só os meus');
 
         $this->patch("/agendamentos/{$appointment->id}/situacao", ['status' => 'confirmed'])->assertSessionHasNoErrors();
 
-        $this->get('/')->assertSee(e($registerUrl), false);
+        $this->get('/?todos=1')->assertSee(e($registerUrl), false);
     }
 
     public function test_closed_appointments_show_the_right_actions(): void
@@ -171,8 +176,12 @@ class HomeTest extends TestCase
 
         $treatmentUrl = route('patients.treatments.show', [$treatment->patient_id, $treatment->id]);
 
-        $this->actingAs(User::factory()->professional()->create())->get('/')
+        // Quem atende vê só a própria agenda por padrão; aqui a de todos.
+        // Falta de hoje pode ser reaberta; de dia anterior, não.
+        $this->actingAs(User::factory()->professional()->create())->get('/?todos=1')
             ->assertSee('Atendido')->assertSee($treatmentUrl, false)->assertSee('Reabrir');
+        $this->appointmentFor('Faltou Ontem', '2026-10-07 10:00', ['status' => AppointmentStatus::NoShow]);
+        $this->get('/agenda?data=2026-10-07&profissional=todos')->assertSee('Faltou Ontem')->assertDontSee('Reabrir');
 
         // A recepção vê a situação, mas não o link para o prontuário.
         $this->actingAs(User::factory()->create())->get('/')->assertSee('Atendido')->assertDontSee($treatmentUrl, false);
@@ -194,8 +203,56 @@ class HomeTest extends TestCase
         $this->get('/')->assertOk();
 
         // 16 agendamentos e 6 produtos em tela, com número fixo de consultas. Quatro
-        // delas são as listas do diálogo "Registrar atendimento" (ver TreatmentDialogTest).
-        $this->assertLessThanOrEqual(20, count(DB::getQueryLog()));
+        // delas são as listas do diálogo "Registrar atendimento" (ver TreatmentDialogTest);
+        // pendentes de registro e retornos a agendar somam uma lista e uma contagem cada.
+        $this->assertLessThanOrEqual(25, count(DB::getQueryLog()));
+    }
+
+    public function test_home_with_pending_registrations_returns_and_alerts_keeps_a_fixed_number_of_queries(): void
+    {
+        $professional = User::factory()->professional()->create();
+        $round = 0;
+
+        // Cada rodada soma, para o mesmo profissional: agendamento de hoje, pendente de
+        // registro, retorno sem agendamento, próximo agendamento e produto em alerta.
+        $populate = function (int $count) use ($professional, &$round): void {
+            foreach (range(1, $count) as $_) {
+                $round++;
+                $minute = str_pad((string) ($round * 2 % 60), 2, '0', STR_PAD_LEFT);
+                $hour = str_pad((string) (8 + intdiv($round, 30)), 2, '0', STR_PAD_LEFT);
+                $this->appointmentFor("Hoje {$round}", "2026-10-08 {$hour}:{$minute}", ['professional_id' => $professional->id], 1);
+                $this->appointmentFor("Pendente {$round}", '2026-10-0'.(1 + $round % 6)." {$hour}:{$minute}", ['professional_id' => $professional->id], 1);
+                $this->appointmentFor("Futuro {$round}", "2026-10-09 {$hour}:{$minute}", ['professional_id' => $professional->id], 1);
+                Treatment::factory()->create([
+                    'patient_id' => Patient::factory()->create(['name' => "Retorno {$round}"])->id,
+                    'professional_id' => $professional->id,
+                    'performed_at' => '2026-09-20 15:00:00',
+                    'return_date' => '2026-10-1'.($round % 9),
+                ]);
+                $product = Product::factory()->create(['minimum_stock' => 5]);
+                ProductBatch::factory()->create(['product_id' => $product->id, 'quantity' => 1, 'expires_on' => '2026-10-20']);
+            }
+        };
+
+        $count = function (string $url) use ($professional): int {
+            $this->actingAs($professional);
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->get($url)->assertOk();
+            DB::disableQueryLog();
+
+            return count(DB::getQueryLog());
+        };
+
+        $populate(1);
+        $count('/');
+        $few = ['own' => $count('/'), 'all' => $count('/?todos=1')];
+
+        $populate(7);
+        $many = ['own' => $count('/'), 'all' => $count('/?todos=1')];
+
+        $this->get('/')->assertSee('Pendentes de registro')->assertSee('Retornos previstos sem agendamento');
+        $this->assertSame($few, $many);
     }
 
     public function test_output_is_escaped(): void

@@ -30,6 +30,19 @@
             {{ $patient->formattedPhone() ?: 'Sem telefone' }} · {{ $patient->email ?: 'sem e-mail' }}
             @if ($address) · {{ $address }} @endif
         </p>
+        @if ($patient->guardian_name)
+            <p class="mt-1 text-slate-600">
+                Responsável legal: {{ $patient->guardian_name }}{{ $patient->guardian_relationship ? ' ('.$patient->guardian_relationship.')' : '' }}
+                @if ($patient->guardian_cpf) · CPF {{ App\Support\Cpf::format($patient->guardian_cpf) }} @endif
+                @if ($patient->guardian_phone) · {{ $patient->formattedGuardianPhone() }} @endif
+            </p>
+        @elseif ($patient->isMinor())
+            <p class="mt-1 text-amber-800">Menor de idade sem responsável legal cadastrado.</p>
+        @endif
+        <p class="mt-1 text-slate-600">
+            Uso de imagem em divulgação:
+            {{ $patient->image_use_consented_at ? 'autorizado em '.ClinicTime::format($patient->image_use_consented_at, 'd/m/Y') : 'não autorizado' }}.
+        </p>
     </header>
 
     <section class="mt-5 break-inside-avoid">
@@ -123,6 +136,41 @@
     @empty
         <p class="mt-2 text-slate-600">Nenhum atendimento registrado.</p>
     @endforelse
+
+    @unless ($single)
+        <section class="mt-6 break-inside-avoid">
+            <h2 class="{{ $heading }}">Fotos guardadas ({{ $photos->count() }})</h2>
+            @if ($photos->isEmpty())
+                <p class="mt-2 text-slate-600">Nenhuma foto.</p>
+            @else
+                <ul class="mt-2 columns-2 text-xs">
+                    @foreach ($photos as $photo)
+                        <li>
+                            {{ $photo->takenOn()->format('d/m/Y') }} · {{ $photo->stage->label() }}{{ $photo->caption ? ' · '.$photo->caption : '' }}
+                            · {{ $photo->treatment ? $photo->treatment->procedure->name : 'foto avulsa' }}
+                        </li>
+                    @endforeach
+                </ul>
+                <p class="mt-1 text-xs text-slate-500">As imagens são entregues à parte, em mídia própria.</p>
+            @endif
+        </section>
+
+        <section class="mt-6 break-inside-avoid">
+            <h2 class="{{ $heading }}">Documentos guardados ({{ $documents->count() }})</h2>
+            @if ($documents->isEmpty())
+                <p class="mt-2 text-slate-600">Nenhum documento.</p>
+            @else
+                <ul class="mt-2 text-xs">
+                    @foreach ($documents as $document)
+                        <li>
+                            {{ ClinicTime::format($document->created_at, 'd/m/Y') }} · {{ $document->caption }}
+                            @if ($document->treatment) · {{ $document->treatment->procedure->name }} de {{ ClinicTime::format($document->treatment->performed_at, 'd/m/Y') }} @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </section>
+    @endunless
 
     <footer class="mt-8 border-t border-slate-300 pt-3 text-xs text-slate-500">
         Emitido em {{ ClinicTime::format(now()) }} por {{ $printedBy->name }}. Documento com dados pessoais e de saúde: guarde e entregue somente ao paciente ou a quem ele autorizar.

@@ -24,11 +24,12 @@ class TreatmentFormOptions
     public const CONFIRMATION = 'Registrar o atendimento? O estoque será baixado e o lançamento financeiro será gerado.';
 
     /**
-     * @return array{professionals: Collection<int, User>, procedures: Collection<int, Procedure>, batches: Collection<int, ProductBatch>, units: Collection<int, StockUnit>, procedureDefaults: array<int, array{amount: string|null, products: list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>}>}
+     * @return array{professionals: Collection<int, User>, procedures: Collection<int, Procedure>, batches: Collection<int, ProductBatch>, units: Collection<int, StockUnit>, procedureDefaults: array<int, array{amount: string|null, products: list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>, missing: list<string>}>}
      */
-    public function for(User $user): array
+    public function for(User $user, ?int $currentProcedureId = null): array
     {
-        $procedures = Procedure::query()->selectable()->orderBy('name')->get(['id', 'name', 'price']);
+        // O procedimento do agendamento continua na lista mesmo que tenha sido desativado.
+        $procedures = Procedure::query()->selectable($currentProcedureId)->orderBy('name')->get(['id', 'name', 'price']);
         // Lotes que podem ser usados. Dentro de cada produto, o que vence primeiro aparece primeiro.
         $batches = ProductBatch::query()
             ->with('product:id,name,unit,unit_content,hours_after_opening,multi_patient_use,is_active')
@@ -112,29 +113,45 @@ class TreatmentFormOptions
      * @param  Collection<int, Procedure>  $procedures
      * @param  Collection<int, ProductBatch>  $batches  Já na ordem de uso dentro de cada produto.
      * @param  Collection<int, StockUnit>  $units  Unidades usáveis, da aberta há mais tempo à mais recente.
-     * @return array<int, array{amount: string|null, products: list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>}>
+     * @return array<int, array{amount: string|null, products: list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>, missing: list<string>}>
      */
     private function procedureDefaults(Collection $procedures, Collection $batches, Collection $units): array
     {
         $firstBatchIds = $batches->unique('product_id')->pluck('id', 'product_id');
         $oldestUnitIds = $units->unique('product_batch_id')->pluck('id', 'product_batch_id');
+        // Produto com frasco já aberto em algum lote: esse lote vem antes do que
+        // vence primeiro, para não abrir outro frasco à toa.
+        $batchProducts = $batches->pluck('product_id', 'id');
+        $openBatchIds = $units->mapWithKeys(fn (StockUnit $unit) => [$batchProducts[$unit->product_batch_id] => $unit->product_batch_id])
+            ->filter(fn ($batchId, $productId) => $batchProducts->search($batchId) !== false);
         $typical = DB::table('procedure_product')
+            ->join('products', 'products.id', '=', 'procedure_product.product_id')
             ->whereIn('procedure_id', $procedures->modelKeys())
-            ->orderBy('product_id')
-            ->get(['procedure_id', 'product_id', 'quantity'])
+            ->orderBy('products.name')
+            ->get(['procedure_id', 'product_id', 'procedure_product.quantity', 'products.name'])
             ->groupBy('procedure_id');
 
-        return $procedures->mapWithKeys(fn (Procedure $procedure) => [$procedure->id => [
-            'amount' => LocalizedDecimal::moneyInput($procedure->price),
-            'products' => collect($typical->get($procedure->id))
-                ->filter(fn (object $row) => $firstBatchIds->has($row->product_id))
-                ->map(fn (object $row) => [
-                    'product_batch_id' => $firstBatchIds[$row->product_id],
-                    'stock_unit_id' => $oldestUnitIds->get($firstBatchIds[$row->product_id]),
-                    'quantity' => LocalizedDecimal::quantityInput($row->quantity),
-                ])
-                ->values()
-                ->all(),
-        ]])->all();
+        return $procedures->mapWithKeys(function (Procedure $procedure) use ($typical, $firstBatchIds, $openBatchIds, $oldestUnitIds) {
+            $rows = collect($typical->get($procedure->id));
+
+            return [$procedure->id => [
+                'amount' => LocalizedDecimal::moneyInput($procedure->price),
+                'products' => $rows
+                    ->filter(fn (object $row) => $firstBatchIds->has($row->product_id))
+                    ->map(function (object $row) use ($firstBatchIds, $openBatchIds, $oldestUnitIds) {
+                        $batchId = $openBatchIds[$row->product_id] ?? $firstBatchIds[$row->product_id];
+
+                        return [
+                            'product_batch_id' => $batchId,
+                            'stock_unit_id' => $oldestUnitIds->get($batchId),
+                            'quantity' => LocalizedDecimal::quantityInput($row->quantity),
+                        ];
+                    })
+                    ->values()
+                    ->all(),
+                // Produtos típicos sem lote utilizável: o usuário precisa saber que não foram sugeridos.
+                'missing' => $rows->reject(fn (object $row) => $firstBatchIds->has($row->product_id))->pluck('name')->values()->all(),
+            ]];
+        })->all();
     }
 }

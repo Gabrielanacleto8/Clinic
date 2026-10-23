@@ -13,7 +13,9 @@ use LogicException;
 
 /**
  * Linha do livro de estoque. Só é inserida, nunca alterada: um erro se
- * corrige com uma nova movimentação.
+ * corrige com uma nova movimentação. A única exceção é o custo unitário de
+ * uma entrada, corrigido por StockLedger::correctEntryCost() com auditoria,
+ * porque dele sai o custo médio de todo consumo e perda do lote.
  */
 class StockMovement extends Model
 {
@@ -41,7 +43,7 @@ class StockMovement extends Model
     }
 
     /**
-     * Busca por produto, lote, fornecedor ou nota fiscal.
+     * Busca por produto, lote, fornecedor, nota fiscal ou motivo.
      *
      * @param  Builder<StockMovement>  $query
      */
@@ -52,6 +54,7 @@ class StockMovement extends Model
         $query->where(fn (Builder $inner) => $inner
             ->where('supplier', 'like', $like)
             ->orWhere('invoice_number', 'like', $like)
+            ->orWhere('reason', 'like', $like)
             ->orWhereHas('batch', fn (Builder $batch) => $batch->search($term)));
     }
 

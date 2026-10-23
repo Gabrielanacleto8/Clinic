@@ -11,7 +11,6 @@ use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\Treatment;
 use App\Models\User;
-use App\Services\AppointmentScheduler;
 use App\Services\RolePermissions;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -167,11 +166,52 @@ class AgendaTest extends TestCase
         $this->actingAs(User::factory()->professional()->create());
         DB::enableQueryLog();
 
-        $this->get('/agenda')->assertOk()->assertSee('Ver atendimento')->assertSee('Registrar atendimento');
+        // Quem atende abre a própria agenda por padrão; aqui a de todos.
+        $this->get('/agenda?profissional=todos')->assertOk()->assertSee('Ver atendimento')->assertSee('Registrar atendimento');
 
         // Uma consulta para o mês, uma por relação carregada e uma para os
         // atendimentos do dia, mais sessão e permissões.
         $this->assertLessThanOrEqual(8, count(DB::getQueryLog()));
+    }
+
+    public function test_month_view_of_a_professional_opening_their_own_agenda_keeps_a_fixed_number_of_queries(): void
+    {
+        $helena = User::factory()->professional()->create();
+        $bruno = User::factory()->professional()->create();
+        $round = 0;
+
+        $schedule = function (int $count) use ($helena, $bruno, &$round): void {
+            foreach (range(1, $count) as $_) {
+                $round++;
+                $time = str_pad((string) (8 + intdiv($round, 30)), 2, '0', STR_PAD_LEFT).':'.str_pad((string) ($round * 2 % 60), 2, '0', STR_PAD_LEFT);
+                $day = '2026-10-'.str_pad((string) (1 + $round % 20), 2, '0', STR_PAD_LEFT);
+                Appointment::factory()->at("{$day} {$time}", 1)->create(['professional_id' => $helena->id]);
+                Appointment::factory()->at("{$day} {$time}", 1)->create(['professional_id' => $bruno->id]);
+                // No dia escolhido, um atendido com o link para o registro.
+                $attended = Appointment::factory()->at("2026-10-08 {$time}", 1)->status(AppointmentStatus::Completed)->create(['professional_id' => $helena->id]);
+                $attended->treatment_id = Treatment::factory()->create(['patient_id' => $attended->patient_id])->id;
+                $attended->save();
+            }
+        };
+
+        $count = function () use ($helena): int {
+            $this->actingAs($helena);
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            // Sem escolha: a agenda dela mesma (filtro padrão de quem atende).
+            $this->get('/agenda?data=2026-10-08')->assertOk();
+            DB::disableQueryLog();
+
+            return count(DB::getQueryLog());
+        };
+
+        $schedule(1);
+        $count();
+        $few = $count();
+
+        $schedule(15);
+
+        $this->assertSame($few, $count());
     }
 
     public function test_invalid_dates_are_rejected_and_the_week_view_opens_the_chosen_week(): void
@@ -197,7 +237,7 @@ class AgendaTest extends TestCase
     {
         $this->appointmentFor('Paciente de Amanhã', '2026-10-09 10:00');
 
-        $this->actingAs(User::factory()->professional()->create())->get('/agenda?data=2026-10-09')
+        $this->actingAs(User::factory()->professional()->create())->get('/agenda?data=2026-10-09&profissional=todos')
             ->assertSee('Paciente de Amanhã')->assertSee('Remarcar')->assertDontSee('Iniciar atendimento');
     }
 
@@ -209,7 +249,7 @@ class AgendaTest extends TestCase
         $this->actingAs(User::factory()->create());
         $this->get('/agenda')->assertSee('Confirmar presença');
 
-        $this->patch($url, ['status' => 'confirmed'])->assertRedirect(route('agenda.index', ['data' => '2026-10-08']))->assertSessionHasNoErrors();
+        $this->patch($url, ['status' => 'confirmed'])->assertRedirect(route('agenda.index', ['data' => '2026-10-08']).'#dia')->assertSessionHasNoErrors();
         $this->assertSame(AppointmentStatus::Confirmed, $appointment->refresh()->status);
         $this->assertTrue($appointment->isOpen());
 
@@ -243,7 +283,7 @@ class AgendaTest extends TestCase
         // O horário confirmado continua ocupado.
         $this->post('/agendamentos', [
             'patient_id' => $other->id, 'professional_id' => $professional->id, 'scheduled_at' => '2026-10-08T15:10', 'duration_minutes' => 30,
-        ])->assertSessionHasErrors(['scheduled_at' => AppointmentScheduler::CONFLICT_MESSAGE]);
+        ])->assertSessionHasErrors('scheduled_at');
 
         // E pode ser remarcado e receber o atendimento como qualquer agendamento em aberto.
         $this->get("/agendamentos/{$appointment->id}/editar")->assertOk();

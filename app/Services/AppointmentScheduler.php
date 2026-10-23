@@ -5,13 +5,13 @@ namespace App\Services;
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\User;
+use App\Support\ClinicTime;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AppointmentScheduler
 {
-    public const CONFLICT_MESSAGE = 'Este profissional já tem um agendamento nesse horário.';
-
     /**
      * Grava o agendamento garantindo que o profissional não fique com dois
      * horários sobrepostos, mesmo com duas pessoas agendando ao mesmo tempo.
@@ -33,13 +33,67 @@ class AppointmentScheduler
                 ->where('scheduled_at', '<', $appointment->ends_at)
                 ->where('ends_at', '>', $appointment->scheduled_at)
                 ->when($appointment->exists, fn ($query) => $query->whereKeyNot($appointment->getKey()))
-                ->exists();
+                ->with('procedure:id,name')
+                ->orderBy('scheduled_at')
+                ->first();
 
-            if ($conflict && $appointment->isOpen()) {
-                throw ValidationException::withMessages(['scheduled_at' => self::CONFLICT_MESSAGE]);
+            if ($conflict !== null && $appointment->isOpen()) {
+                throw ValidationException::withMessages(['scheduled_at' => $this->conflictMessage($appointment, $conflict)]);
             }
 
             $appointment->save();
         });
+    }
+
+    /**
+     * Diz qual horário está ocupado e o próximo livre no mesmo dia com a
+     * mesma duração, para a recepção não ter de tentar às cegas. Sem o nome
+     * do paciente: a mensagem de erro não leva dado pessoal.
+     */
+    private function conflictMessage(Appointment $appointment, Appointment $conflict): string
+    {
+        $message = sprintf(
+            'Este profissional já tem um agendamento das %s às %s%s.',
+            ClinicTime::format($conflict->scheduled_at, 'H:i'),
+            ClinicTime::format($conflict->ends_at, 'H:i'),
+            $conflict->procedure ? ' ('.$conflict->procedure->name.')' : '',
+        );
+
+        $free = $this->nextFreeSlot($appointment);
+
+        return $free === null
+            ? $message.' Não há outro horário livre com essa duração neste dia.'
+            : $message.' Próximo horário livre com essa duração: '.ClinicTime::format($free, 'H:i').'.';
+    }
+
+    /**
+     * Primeiro início, a partir do horário pedido, em que a duração cabe entre
+     * os agendamentos em aberto do profissional no mesmo dia da clínica.
+     */
+    private function nextFreeSlot(Appointment $appointment): ?CarbonImmutable
+    {
+        [, $dayEnd] = ClinicTime::dayBounds(ClinicTime::format($appointment->scheduled_at, 'Y-m-d'));
+        $duration = $appointment->duration_minutes;
+
+        $busy = Appointment::query()
+            ->where('professional_id', $appointment->professional_id)
+            ->whereIn('status', AppointmentStatus::open())
+            ->where('ends_at', '>', $appointment->scheduled_at)
+            ->where('scheduled_at', '<=', $dayEnd)
+            ->when($appointment->exists, fn ($query) => $query->whereKeyNot($appointment->getKey()))
+            ->orderBy('scheduled_at')
+            ->get(['scheduled_at', 'ends_at']);
+
+        $start = CarbonImmutable::instance($appointment->scheduled_at);
+
+        foreach ($busy as $other) {
+            if ($start->addMinutes($duration)->lessThanOrEqualTo($other->scheduled_at)) {
+                break;
+            }
+
+            $start = $start->max(CarbonImmutable::instance($other->ends_at));
+        }
+
+        return $start->addMinutes($duration)->lessThanOrEqualTo($dayEnd->addSecond()) ? $start : null;
     }
 }

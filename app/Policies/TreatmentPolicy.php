@@ -38,7 +38,7 @@ class TreatmentPolicy
      */
     public function attach(User $user, Treatment $treatment): bool
     {
-        return $user->hasPermission(Permission::RecordsManage);
+        return $user->hasPermission(Permission::RecordsManage) && ! $treatment->isVoided();
     }
 
     /**
@@ -63,6 +63,6 @@ class TreatmentPolicy
      */
     public function addNote(User $user, Treatment $treatment): bool
     {
-        return $user->hasPermission(Permission::RecordsManage);
+        return $user->hasPermission(Permission::RecordsManage) && ! $treatment->isVoided();
     }
 }

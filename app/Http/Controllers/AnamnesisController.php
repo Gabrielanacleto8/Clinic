@@ -15,6 +15,8 @@ use Illuminate\View\View;
 
 class AnamnesisController extends Controller
 {
+    private bool $reviewed = false;
+
     public function __construct(private readonly AuditLogger $audit) {}
 
     public function edit(Patient $patient): View
@@ -36,19 +38,25 @@ class AnamnesisController extends Controller
             $anamnesis->fill($request->validated());
 
             $changed = array_keys($anamnesis->getDirty());
+            $anamnesis->updated_by = $request->user()->getKey();
 
+            // Salvar sem mudar nada é a revisão com o paciente: fica registrado quem conferiu e quando.
             if ($changed === [] && $anamnesis->exists) {
+                $anamnesis->touch();
+                $this->audit->log(AuditAction::AnamnesisReviewed, $patient);
+                $this->reviewed = true;
+
                 return;
             }
 
-            $anamnesis->updated_by = $request->user()->getKey();
             $anamnesis->save();
 
             // Só os nomes dos campos entram na auditoria, nunca os valores.
             $this->audit->log(AuditAction::AnamnesisUpdated, $patient, ['fields' => array_values(array_diff($changed, ['patient_id']))]);
         });
 
-        return redirect()->route('patients.show', $patient)->with('success', 'Ficha de saúde atualizada.');
+        return redirect()->route('patients.show', $patient)
+            ->with('success', $this->reviewed ? 'Ficha de saúde revisada: nada mudou.' : 'Ficha de saúde atualizada.');
     }
 
     /**
@@ -61,9 +69,13 @@ class AnamnesisController extends Controller
 
         $this->audit->log(AuditAction::PatientViewed, $patient, ['context' => 'health_alerts']);
 
+        $anamnesis = $patient->anamnesis;
+
         return response()->json([
-            'pregnant_or_lactating' => (bool) $patient->anamnesis?->pregnant_or_lactating,
-            'allergies' => $patient->anamnesis?->allergies,
+            // Sem ficha, o diálogo avisa; com ficha antiga, pede revisão.
+            'missing' => $anamnesis === null,
+            'stale_since' => $anamnesis?->isStale() ? $anamnesis->updated_at->format('d/m/Y') : null,
+            'alerts' => $anamnesis?->alerts() ?? [],
         ]);
     }
 }

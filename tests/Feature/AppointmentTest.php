@@ -9,7 +9,6 @@ use App\Models\AuditLog;
 use App\Models\Patient;
 use App\Models\Treatment;
 use App\Models\User;
-use App\Services\AppointmentScheduler;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +30,8 @@ class AppointmentTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-08 13:00', 'America/Sao_Paulo'));
 
         $this->professional = User::factory()->professional()->create(['name' => 'Dra. Helena']);
-        $this->patient = Patient::factory()->create(['name' => 'Marina Albuquerque', 'cpf' => '52998224725']);
+        // Data fixa: a busca devolve a data de nascimento e se o paciente é menor.
+        $this->patient = Patient::factory()->create(['name' => 'Marina Albuquerque', 'cpf' => '52998224725', 'birth_date' => '1990-05-20']);
     }
 
     /**
@@ -81,7 +81,7 @@ class AppointmentTest extends TestCase
         $this->get('/agendamentos/novo')->assertOk()->assertSee('Dra. Helena');
 
         $this->post('/agendamentos', $this->payload())
-            ->assertRedirect(route('agenda.index', ['data' => '2026-10-09']))
+            ->assertRedirect(route('agenda.index', ['data' => '2026-10-09']).'#dia')
             ->assertSessionHasNoErrors();
 
         $appointment = Appointment::firstOrFail();
@@ -125,7 +125,7 @@ class AppointmentTest extends TestCase
             'patient_id' => [null, 999999, $archived->id, 'abc'],
             'professional_id' => [null, User::factory()->create()->id, User::factory()->professional()->inactive()->create()->id],
             'scheduled_at' => [null, '09/10/2026 14:30', '2026-10-07T14:30', '2029-01-01T10:00'],
-            'duration_minutes' => [null, 20, 0, 600, 'x'],
+            'duration_minutes' => [null, 25, 0, 600, 'x'],
             'procedure_id' => [999999, 'abc', $this->procedure('Descontinuado', ['is_active' => false])->id],
             'notes' => [str_repeat('a', 501)],
         ];
@@ -156,7 +156,7 @@ class AppointmentTest extends TestCase
 
         foreach (['2026-10-09T14:00', '2026-10-09T14:30', '2026-10-09T13:45', '2026-10-09T14:59'] as $overlapping) {
             $this->post('/agendamentos', $this->payload(['scheduled_at' => $overlapping, 'duration_minutes' => 30]))
-                ->assertSessionHasErrors(['scheduled_at' => AppointmentScheduler::CONFLICT_MESSAGE]);
+                ->assertSessionHasErrors('scheduled_at');
         }
 
         // Um horário que engloba o existente por inteiro também conflita.
@@ -207,7 +207,7 @@ class AppointmentTest extends TestCase
             'scheduled_at' => '2026-10-12T16:00',
             'duration_minutes' => 60,
             'procedure_id' => $this->procedure('Preenchimento labial')->id,
-        ])->assertRedirect(route('agenda.index', ['data' => '2026-10-12']))->assertSessionHasNoErrors();
+        ])->assertRedirect(route('agenda.index', ['data' => '2026-10-12']).'#dia')->assertSessionHasNoErrors();
 
         $appointment->refresh();
 
@@ -230,7 +230,7 @@ class AppointmentTest extends TestCase
         $this->actingAs(User::factory()->create());
 
         $this->put("/agendamentos/{$appointment->id}", $this->payload(['patient_id' => null, 'scheduled_at' => '2026-10-09T14:30']))
-            ->assertSessionHasErrors(['scheduled_at' => AppointmentScheduler::CONFLICT_MESSAGE]);
+            ->assertSessionHasErrors('scheduled_at');
 
         $this->put("/agendamentos/{$appointment->id}", $this->payload(['patient_id' => $otherPatient->id, 'scheduled_at' => '2026-10-09T11:00']))
             ->assertSessionHasErrors('patient_id');
@@ -261,7 +261,7 @@ class AppointmentTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->patch($url, ['status' => 'no_show'])->assertRedirect(route('agenda.index', ['data' => '2026-10-08']))->assertSessionHasNoErrors();
+        $this->patch($url, ['status' => 'no_show'])->assertRedirect(route('agenda.index', ['data' => '2026-10-08']).'#dia')->assertSessionHasNoErrors();
         $this->assertSame(AppointmentStatus::NoShow, $appointment->refresh()->status);
 
         $this->patch($url, ['status' => 'scheduled'])->assertSessionHasNoErrors();
@@ -313,7 +313,7 @@ class AppointmentTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->patch("/agendamentos/{$cancelled->id}/situacao", ['status' => 'scheduled'])
-            ->assertSessionHasErrors(['scheduled_at' => AppointmentScheduler::CONFLICT_MESSAGE]);
+            ->assertSessionHasErrors('scheduled_at');
 
         $this->assertSame(AppointmentStatus::Cancelled, $cancelled->refresh()->status);
     }
@@ -372,6 +372,8 @@ class AppointmentTest extends TestCase
             'name' => 'Marina Albuquerque',
             'cpf' => '***.982.247-**',
             'birth_date' => $this->patient->birth_date->format('d/m/Y'),
+            'phone' => $this->patient->formattedPhone(),
+            'minor' => false,
         ]]);
         $this->assertStringNotContainsString('52998224725', $response->getContent());
 

@@ -7,7 +7,7 @@
     $total = fn (StockMovementType $type) => abs((float) ($totals->get($type->value)?->total ?? 0));
     $lostValue = abs((float) ($totals->get(StockMovementType::Loss->value)?->value ?? 0));
     $usableUntil = $unit->usableUntil();
-    $canDiscard = (float) $unit->quantity > 0 && auth()->user()->can('move', $product);
+    $canDiscard = (float) $unit->quantity > 0 && auth()->user()->can('discard', $product);
 @endphp
 <x-layouts.app :title="$unit->label()">
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -74,7 +74,7 @@
                     Registra como perda tudo o que resta: {{ LocalizedDecimal::quantity($unit->quantity) }} {{ $symbol }}.
                 </p>
                 <x-form.input scope="unit-discard" id="discard-reason" name="reason" label="Motivo" required maxlength="255" autocomplete="off"
-                              placeholder="Ex.: prazo depois de aberto vencido, contaminação" />
+                              :value="$unit->isUsable() ? null : $unit->discardReason()" placeholder="Ex.: prazo depois de aberto vencido, contaminação" />
 
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" class="btn btn-secondary" data-dialog-close>Cancelar</button>

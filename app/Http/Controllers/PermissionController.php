@@ -33,16 +33,33 @@ class PermissionController extends Controller
 
     public function update(UpdatePermissionsRequest $request, RolePermissions $rolePermissions, AuditLogger $audit): RedirectResponse
     {
-        DB::transaction(function () use ($request, $rolePermissions, $audit): void {
+        $implied = [];
+
+        DB::transaction(function () use ($request, $rolePermissions, $audit, &$implied): void {
             foreach (UserRole::configurable() as $role) {
-                $changes = $rolePermissions->sync($role, $request->permissionsFor($role));
+                $requested = $request->permissionsFor($role);
+                $changes = $rolePermissions->sync($role, $requested);
 
                 if ($changes['added'] !== [] || $changes['removed'] !== []) {
                     $audit->log(AuditAction::PermissionsUpdated, null, ['role' => $role->value, ...$changes]);
                 }
+
+                // O que entrou por dependência, sem a caixa marcada, é dito na mensagem.
+                $requestedValues = array_map(fn (Permission $permission) => $permission->value, $requested);
+                $extra = array_values(array_diff($changes['added'], $requestedValues));
+
+                if ($extra !== []) {
+                    $implied[] = $role->label().': '.implode(', ', array_map(fn (string $value) => Permission::from($value)->label(), $extra));
+                }
             }
         });
 
-        return redirect()->route('users.permissions.edit')->with('success', 'Permissões atualizadas.');
+        $message = 'Permissões atualizadas.';
+
+        if ($implied !== []) {
+            $message .= ' Incluídas automaticamente por dependência: '.implode('; ', $implied).'.';
+        }
+
+        return redirect()->route('users.permissions.edit')->with('success', $message);
     }
 }

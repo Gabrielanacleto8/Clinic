@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AuditAction;
+use App\Enums\Permission;
 use App\Enums\ProductUnit;
 use App\Enums\StockMovementType;
 use App\Enums\UserRole;
@@ -16,6 +17,7 @@ use App\Models\StockMovement;
 use App\Models\StockUnit;
 use App\Models\Treatment;
 use App\Models\User;
+use App\Services\RolePermissions;
 use App\Services\StockAlerts;
 use App\Services\StockLedger;
 use App\Services\StockReceiver;
@@ -254,7 +256,7 @@ class FractionedStockTest extends TestCase
 
         // Sem frasco lacrado, não há o que abrir.
         $this->actingAs($this->admin)->post("/estoque/lotes/{$this->toxin->id}/unidades")
-            ->assertSessionHasErrors(['unit' => 'Não há unidade lacrada de Toxina botulínica, lote TX01 para abrir. Lacrado: 0 U.']);
+            ->assertSessionHasErrors(['unit' => 'Não há unidade fechada de Toxina botulínica, lote TX01 para abrir. Fechado: 0 U.']);
         $this->assertSame(1, StockUnit::count());
     }
 
@@ -320,10 +322,11 @@ class FractionedStockTest extends TestCase
         $unit = app(StockLedger::class)->openUnit($this->toxin, $this->admin);
         $receptionist = User::factory()->role(UserRole::Receptionist)->create();
 
-        // O profissional vê o estoque, mas não abre nem descarta pelo estoque.
+        // O profissional vê o estoque e descarta, mas não abre unidade pelo estoque.
         $this->actingAs($this->professional)->get("/estoque/unidades/{$unit->id}")->assertOk();
         $this->actingAs($this->professional)->post("/estoque/lotes/{$this->toxin->id}/unidades")->assertForbidden();
-        $this->actingAs($this->professional)->post("/estoque/unidades/{$unit->id}/descarte", ['reason' => 'x'])->assertForbidden();
+        app(RolePermissions::class)->sync(UserRole::Professional, [Permission::StockView]);
+        $this->actingAs($this->professional->fresh())->post("/estoque/unidades/{$unit->id}/descarte", ['reason' => 'x'])->assertForbidden();
 
         $this->actingAs($receptionist)->get("/estoque/unidades/{$unit->id}")->assertForbidden();
 
@@ -588,9 +591,9 @@ class FractionedStockTest extends TestCase
             ->assertSee('BIOINAT')
             ->assertDontSee('AH01')
             ->assertDontSee('TXVAZIO')
-            // O alerta leva para este mesmo filtro.
+            // O alerta leva para a lista de unidades abertas, onde o descarte é feito na linha.
             ->assertSee('3 unidades abertas a descartar')
-            ->assertSee(route('stock.batches.index', ['situacao' => 'descartar']), false);
+            ->assertSee(route('stock.units.index'), false);
 
         // Descartadas as unidades, o filtro fica vazio.
         StockUnit::withBalance()->get()->each(fn (StockUnit $unit) => $ledger->discard($unit, 'Prazo', $this->admin));
@@ -622,9 +625,9 @@ class FractionedStockTest extends TestCase
     {
         $unit = app(StockLedger::class)->openUnit($this->toxin, $this->admin);
 
-        // 300 U: 100 na unidade aberta e 200 lacradas. A contagem é só do lacrado.
+        // 300 U: 100 na unidade aberta e 200 fechadas. A contagem é só do fechado.
         $this->actingAs($this->admin)->get('/estoque/inventario')->assertOk()
-            ->assertSee('200 U lacrado')->assertSee('+ 100 U em unidades abertas');
+            ->assertSee('2 unidades fechadas')->assertSee('= 200 U')->assertSee('+ 100 U em unidades abertas');
 
         $this->actingAs($this->admin)->put('/estoque/inventario', ['reason' => 'Inventário', 'counted' => [$this->toxin->id => '0']])
             ->assertSessionHasNoErrors();

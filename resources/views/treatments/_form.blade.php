@@ -9,7 +9,7 @@
     // Vindo da agenda o procedimento já está escolhido, então o valor e os
     // produtos que ele sugere também. Nos demais casos quem preenche é o
     // app.js, quando o procedimento é escolhido.
-    $suggested = $procedureDefaults[$treatment->procedure_id] ?? ['amount' => null, 'products' => []];
+    $suggested = $procedureDefaults[$treatment->procedure_id] ?? ['amount' => null, 'products' => [], 'missing' => []];
     $filled = old('products', $suggested['products']);
 
     // Linhas preenchidas mais algumas em branco, sempre dentro do limite
@@ -25,6 +25,10 @@
     $section = $scope ? 'border-t border-slate-200 pt-5' : 'card p-6';
 @endphp
 @csrf
+
+@if ($scope)
+    <x-form-errors :scope="$scope" />
+@endif
 
 @if ($appointment ?? null)
     <input type="hidden" name="appointment_id" value="{{ $appointment->id }}">
@@ -106,6 +110,11 @@
     @error('products')
         <p class="mt-2 text-sm text-red-700">{{ $message }}</p>
     @enderror
+    {{-- Produtos típicos do procedimento sem lote no estoque: não entram na sugestão, e isso precisa ser dito. --}}
+    <p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-treatment-missing role="note"
+       @if ($suggested['missing'] === []) hidden @endif>
+        Sem lote disponível no estoque, não sugeridos: <span data-treatment-missing-list>{{ implode(', ', $suggested['missing']) }}</span>.
+    </p>
 
     @if ($batches->isEmpty())
         <p class="mt-4 text-sm text-slate-600">Nenhum lote com saldo e dentro da validade no estoque.</p>
@@ -124,7 +133,7 @@
                                 @php $product = $productBatches->first()->product; @endphp
                                 <optgroup label="{{ $product->name }}">
                                     @foreach ($productBatches as $batch)
-                                        <option value="{{ $batch->id }}"{{ $product->isFractioned() ? ' data-fractioned' : '' }} @selected((string) ($row['product_batch_id'] ?? '') === (string) $batch->id)>
+                                        <option value="{{ $batch->id }}"{{ $product->isFractioned() ? ' data-fractioned' : '' }} data-unit="{{ $product->unit->symbol() }}" @selected((string) ($row['product_batch_id'] ?? '') === (string) $batch->id)>
                                             {{ $product->name }} · lote {{ $batch->batch_code }}
                                             · {{ $batch->expires_on ? 'val. '.$batch->expires_on->format('d/m/Y') : 'sem validade' }}
                                             · saldo {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $product->unit->symbol() }}
@@ -160,8 +169,12 @@
                     </div>
                     <div>
                         <label for="products-{{ $i }}-quantity" class="label @if ($i > 0) sm:sr-only @endif">Quantidade</label>
-                        <input id="products-{{ $i }}-quantity" name="products[{{ $i }}][quantity]" type="text" inputmode="decimal" autocomplete="off" data-treatment-quantity
-                               value="{{ $row['quantity'] ?? '' }}" @class(['input', 'input-error' => $errors->has("products.$i.quantity")])>
+                        {{-- A unidade de medida (U, mL, un) acompanha o lote escolhido (app.js). --}}
+                        <div class="flex items-center gap-2">
+                            <input id="products-{{ $i }}-quantity" name="products[{{ $i }}][quantity]" type="text" inputmode="decimal" autocomplete="off" data-treatment-quantity
+                                   value="{{ $row['quantity'] ?? '' }}" @class(['input', 'input-error' => $errors->has("products.$i.quantity")])>
+                            <span class="shrink-0 text-sm text-slate-500" data-treatment-unit-symbol aria-live="polite"></span>
+                        </div>
                         @error("products.$i.quantity")
                             <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
                         @enderror
@@ -193,11 +206,12 @@
         <x-form.input :scope="$scope" class="md:col-span-2" name="first_due_date" label="Primeiro vencimento" type="date" :value="ClinicTime::today()"
                       hint="As demais parcelas vencem de mês em mês." />
         <div class="md:col-span-4 md:pt-7">
-            @if ($user->hasPermission(App\Enums\Permission::FinanceManage))
+            @if ($user->hasPermission(App\Enums\Permission::FinanceReceive))
                 <label class="flex items-center gap-2 text-sm">
                     <input type="hidden" name="first_installment_paid" value="0">
+                    {{-- Desmarcado por padrão: dar por recebido o que ainda não entrou bloquearia a anulação e inflaria o caixa. --}}
                     <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
-                           @checked(old('first_installment_paid', true))>
+                           @checked(old('first_installment_paid', false))>
                     Pagamento (ou primeira parcela) já recebido
                 </label>
                 <p class="mt-1 text-xs text-slate-500">No cartão de crédito, todas as parcelas ficam como recebidas: a maquininha repassa o valor inteiro.</p>

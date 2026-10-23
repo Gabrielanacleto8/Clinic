@@ -113,11 +113,12 @@ class FinanceAndCatalogRulesTest extends TestCase
         $this->delete("/financeiro/pagamentos/{$installment->id}")->assertSessionHasNoErrors();
         $this->post('/financeiro/pagamentos', ['installment_id' => $expense->installments()->sole()->id, 'paid_at' => '2026-10-08'])->assertSessionHasNoErrors();
 
-        $expected = ['financial_entry_id' => $entry->id, 'patient_id' => $patient->id];
+        // Valor e data do pagamento ficam na trilha: são do lançamento, não dados pessoais.
+        $expected = ['financial_entry_id' => $entry->id, 'patient_id' => $patient->id, 'amount' => '300.00', 'paid_at' => '2026-10-08'];
         $this->assertEquals($expected, AuditLog::where('action', AuditAction::InstallmentPaid->value)->where('auditable_id', $installment->id)->sole()->metadata);
         $this->assertEquals($expected, AuditLog::where('action', AuditAction::InstallmentReopened->value)->sole()->metadata);
         // Lançamento sem paciente não leva a chave.
-        $this->assertEquals(['financial_entry_id' => $expense->id], AuditLog::where('action', AuditAction::InstallmentPaid->value)->latest('id')->first()->metadata);
+        $this->assertEquals(['financial_entry_id' => $expense->id, 'amount' => $expense->installments()->sole()->amount, 'paid_at' => '2026-10-08'], AuditLog::where('action', AuditAction::InstallmentPaid->value)->latest('id')->first()->metadata);
         $this->assertStringNotContainsString('Paciente Pagante', (string) json_encode(AuditLog::all()->pluck('metadata')));
 
         // A trilha do paciente reúne o pagamento e o estorno.

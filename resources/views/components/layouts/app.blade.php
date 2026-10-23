@@ -140,11 +140,25 @@
                         <x-icon name="sidebar" />
                     </button>
                     <span class="truncate text-sm font-medium">{{ $title ?? config('app.name') }}</span>
+
+                    {{-- Quem está conectado, sempre à vista: no computador compartilhado da recepção,
+                         evita agendar ou receber com a conta de outra pessoa. --}}
+                    <div class="ml-auto flex shrink-0 items-center gap-1">
+                        <a href="{{ route('password.edit') }}" class="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 hover:bg-slate-100" title="Minha conta">
+                            <span class="flex size-7 items-center justify-center rounded-lg bg-slate-200 text-xs font-semibold text-slate-700" aria-hidden="true">{{ $initials }}</span>
+                            <span class="max-sm:sr-only">{{ Str::of($user->name)->before(' ') }}</span>
+                        </a>
+                        <form method="POST" action="{{ route('logout') }}" class="max-lg:hidden">
+                            @csrf
+                            <button type="submit" class="btn btn-secondary px-2.5 py-1 text-xs">Sair</button>
+                        </form>
+                    </div>
                 </header>
 
                 {{-- "wide" libera a largura para telas que aproveitam o monitor inteiro, como a agenda. --}}
                 <main id="conteudo" @class(['w-full flex-1 px-4 py-6 lg:px-6', 'max-w-6xl' => ! $wide, 'max-w-[96rem]' => $wide])>
                     <x-flash />
+                    <x-form-errors class="mb-6" />
 
                     {{ $slot }}
                 </main>

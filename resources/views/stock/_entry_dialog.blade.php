@@ -6,8 +6,9 @@
     $scope = 'stock-entry';
 @endphp
 {{-- Diálogo de entrada manual de estoque. --}}
-<x-dialog :id="$scope" title="Nova entrada de estoque" size="lg">
-    <form method="POST" action="{{ route('stock.entries.store') }}" novalidate>
+{{-- $autoshow: a página abre já com o diálogo (atalho "Nova entrada" da aba Produtos). --}}
+<x-dialog :id="$scope" title="Nova entrada de estoque" size="lg" :data-dialog-autoshow="($autoshow ?? false) ?: null">
+    <form method="POST" action="{{ route('stock.entries.store') }}" novalidate data-dialog-reset>
         @csrf
         <input type="hidden" name="_dialog" value="{{ $scope }}">
 
@@ -33,7 +34,16 @@
             <x-form.input :scope="$scope" id="entry-manufactured" name="manufactured_on" label="Fabricação" type="date" :max="ClinicTime::today()" />
             <x-form.input :scope="$scope" id="entry-expires" name="expires_on" label="Validade" type="date" :min="ClinicTime::today()" />
 
-            <x-form.input :scope="$scope" id="entry-cost" name="unit_cost" label="Custo unitário (R$)" inputmode="decimal" autocomplete="off" placeholder="0,00" />
+            <x-form.input :scope="$scope" id="entry-cost" name="unit_cost" label="Custo unitário (R$)" inputmode="decimal" autocomplete="off" placeholder="0,00"
+                          hint="Por unidade de medida do produto (no fracionado, por U ou mL, não por frasco)." />
+            @if (old('_dialog') === $scope && $errors->has('unit_cost'))
+                {{-- Só aparece quando o custo foge muito do da última entrada: o usuário confirma que não é erro de digitação. --}}
+                <label class="flex items-start gap-2 text-sm sm:col-span-2">
+                    <input type="hidden" name="confirm_cost" value="0">
+                    <input type="checkbox" name="confirm_cost" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700" @checked(old('confirm_cost'))>
+                    Confirmo o custo: o valor está certo, mesmo diferente das entradas anteriores.
+                </label>
+            @endif
             <x-form.input :scope="$scope" id="entry-invoice" name="invoice_number" label="Nota fiscal" maxlength="60" autocomplete="off" />
 
             <x-form.input :scope="$scope" class="sm:col-span-2" id="entry-supplier" name="supplier" label="Fornecedor" maxlength="150" autocomplete="off" :value="$product?->supplier" />

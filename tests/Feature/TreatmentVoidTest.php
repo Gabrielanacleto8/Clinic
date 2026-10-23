@@ -262,7 +262,9 @@ class TreatmentVoidTest extends TestCase
         $treatment = $this->record();
         $this->actingAs($this->admin)->post($this->voidUrl($treatment), ['reason' => 'Registrado em duplicidade.'])->assertSessionHasNoErrors();
 
-        $this->actingAs($this->professional)->get('/atendimentos')->assertOk()->assertSee('Anulado');
+        // A lista mostra só os válidos por padrão; os anulados entram pelo filtro.
+        $this->actingAs($this->professional)->get('/atendimentos')->assertOk()->assertDontSee('Anulado');
+        $this->get('/atendimentos?situacao=todos')->assertOk()->assertSee('Anulado');
         $this->get("/pacientes/{$this->patient->id}/atendimentos/{$treatment->id}/resumo")->assertOk()
             ->assertSee('Registro anulado em 08/10/2026')->assertSee('Registrado em duplicidade.');
     }

@@ -2,15 +2,20 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AuditAction;
 use App\Enums\Sex;
 use App\Models\Patient;
 use App\Rules\Cpf;
+use App\Services\AuditLogger;
 use App\Support\BlindIndex;
 use App\Support\BrazilianStates;
 use App\Support\Cpf as CpfSupport;
+use Carbon\CarbonImmutable;
+use Carbon\Exceptions\InvalidFormatException;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Usado tanto no cadastro quanto na edição de pacientes.
@@ -18,6 +23,17 @@ use Illuminate\Validation\Rule;
 class PatientRequest extends FormRequest
 {
     public const CPF_TAKEN_MESSAGE = 'Já existe um paciente cadastrado com este CPF.';
+
+    public const CPF_ARCHIVED_MESSAGE = 'Este CPF pertence a um cadastro arquivado.';
+
+    /**
+     * Para quem não vê arquivados: não diz que o cadastro está arquivado, mas
+     * não deixa a recepção sem saída quando ele não aparece na busca.
+     */
+    public const CPF_HIDDEN_MESSAGE = 'Já existe um paciente cadastrado com este CPF. Se ele não aparece na busca de pacientes, peça ao administrador.';
+
+    /** Idade a partir da qual o paciente responde por si no cadastro. */
+    public const ADULT_AGE = 18;
 
     public function authorize(): bool
     {
@@ -37,6 +53,8 @@ class PatientRequest extends FormRequest
         $this->merge([
             'cpf' => $digitsOnly('cpf'),
             'phone' => $digitsOnly('phone'),
+            'guardian_cpf' => $digitsOnly('guardian_cpf'),
+            'guardian_phone' => $digitsOnly('guardian_phone'),
             'zip_code' => $digitsOnly('zip_code'),
             'state' => is_string($this->input('state')) ? strtoupper($this->input('state')) : $this->input('state'),
         ]);
@@ -64,7 +82,52 @@ class PatientRequest extends FormRequest
             'notes' => ['nullable', 'string', 'max:5000'],
             // Ausente: a autorização fica como está.
             'image_use_consent' => ['nullable', 'boolean'],
+            // Obrigatórios para menor de idade; ver after().
+            'guardian_name' => ['nullable', 'string', 'min:3', 'max:150'],
+            'guardian_cpf' => ['nullable', 'string', new Cpf],
+            'guardian_relationship' => ['nullable', 'string', 'max:50'],
+            'guardian_phone' => ['nullable', 'string', 'regex:/^\\d{10,11}$/'],
         ];
+    }
+
+    /**
+     * @return list<callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->has('birth_date') || ! $this->isMinor()) {
+                    return;
+                }
+
+                foreach (['guardian_name' => 'Informe o nome do responsável legal: o paciente é menor de idade.',
+                    'guardian_relationship' => 'Informe o parentesco do responsável legal.',
+                    'guardian_phone' => 'Informe o telefone do responsável legal.'] as $field => $message) {
+                    if (! $this->filled($field) && ! $validator->errors()->has($field)) {
+                        $validator->errors()->add($field, $message);
+                    }
+                }
+            },
+        ];
+    }
+
+    /**
+     * Menor de idade pela data de nascimento enviada.
+     */
+    public function isMinor(): bool
+    {
+        $birthDate = $this->input('birth_date');
+
+        if (! is_string($birthDate) || ! preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $birthDate)) {
+            return false;
+        }
+
+        try {
+            return CarbonImmutable::createFromFormat('Y-m-d', $birthDate)->age < self::ADULT_AGE;
+        } catch (InvalidFormatException) {
+            return false;
+        }
     }
 
     /**
@@ -107,6 +170,10 @@ class PatientRequest extends FormRequest
             'state' => 'UF',
             'notes' => 'observações',
             'image_use_consent' => 'autorização de uso de imagem',
+            'guardian_name' => 'nome do responsável',
+            'guardian_cpf' => 'CPF do responsável',
+            'guardian_relationship' => 'parentesco do responsável',
+            'guardian_phone' => 'telefone do responsável',
         ];
     }
 
@@ -121,12 +188,15 @@ class PatientRequest extends FormRequest
             'birth_date.before_or_equal' => 'A data de nascimento não pode estar no futuro.',
             'phone.regex' => 'Informe o telefone com DDD (10 ou 11 dígitos).',
             'zip_code.regex' => 'O CEP deve ter 8 dígitos.',
+            'guardian_phone.regex' => 'Informe o telefone do responsável com DDD (10 ou 11 dígitos).',
         ];
     }
 
     /**
      * O CPF é criptografado, então a unicidade é checada pelo índice cego.
-     * Pacientes arquivados também contam.
+     * Pacientes arquivados também contam. Quando o CPF já existe, a tela
+     * recebe o caminho para o cadastro (abrir ou restaurar), em vez de um
+     * beco sem saída; o paciente encontrado fica na auditoria só pelo id.
      */
     private function uniqueCpf(): Closure
     {
@@ -135,14 +205,30 @@ class PatientRequest extends FormRequest
                 return;
             }
 
-            $taken = Patient::withTrashed()
+            $owner = Patient::withTrashed()
                 ->where('cpf_hash', BlindIndex::for($value))
                 ->when($this->route('patient'), fn ($query, Patient $patient) => $query->whereKeyNot($patient->getKey()))
-                ->exists();
+                ->first(['id', 'deleted_at']);
 
-            if ($taken) {
-                $fail(self::CPF_TAKEN_MESSAGE);
+            if ($owner === null) {
+                return;
             }
+
+            app(AuditLogger::class)->log(AuditAction::PatientLookup, $owner, ['archived' => $owner->trashed()]);
+
+            // Que o cadastro está arquivado só é dito a quem pode ver arquivados.
+            $revealArchived = $owner->trashed() && $this->user()->can('viewArchived', Patient::class);
+
+            if (! $owner->trashed() || $revealArchived) {
+                // Vai junto com o redirecionamento de volta ao formulário.
+                $this->session()->flash('cpf_owner', ['id' => $owner->getKey(), 'archived' => $owner->trashed()]);
+            }
+
+            $fail(match (true) {
+                $revealArchived => self::CPF_ARCHIVED_MESSAGE,
+                $owner->trashed() => self::CPF_HIDDEN_MESSAGE,
+                default => self::CPF_TAKEN_MESSAGE,
+            });
         };
     }
 }

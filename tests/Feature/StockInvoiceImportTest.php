@@ -208,16 +208,18 @@ class StockInvoiceImportTest extends TestCase
 
         $this->confirm($this->reviewedItems())
             ->assertRedirect(route('stock.entries.index'))
-            ->assertSessionHas('success', 'Nota fiscal importada: 2 produtos cadastrados e 2 entradas lançadas.');
+            ->assertSessionHas('success', 'Nota fiscal importada: 2 produtos cadastrados e 2 entradas lançadas. Complete o cadastro (estoque mínimo, marca) de: Toxina botulínica 100 U, Agulha 30G 13 mm.');
 
         $toxin = Product::where('name', 'Toxina botulínica 100 U')->sole();
+        // Um atalho por produto novo, para completar o cadastro.
+        $this->assertSame([route('products.edit', $toxin)], array_column(array_slice(session('success_links'), 0, 1), 'url'));
         $needle = Product::where('name', 'Agulha 30G 13 mm')->sole();
 
         $this->assertSame(
-            ['TX-100', ProductCategory::Injectable, ProductUnit::Vial, '950.50', 'Distribuidora Alfa Ltda', true],
+            ['TX-100', ProductCategory::Injectable, ProductUnit::Vial, '950.5000', 'Distribuidora Alfa Ltda', true],
             [$toxin->code, $toxin->category, $toxin->unit, $toxin->cost, $toxin->supplier, $toxin->is_active],
         );
-        $this->assertSame(['7891234567895', ProductUnit::Box, '18.90'], [$needle->code, $needle->unit, $needle->cost]);
+        $this->assertSame(['7891234567895', ProductUnit::Box, '18.9000'], [$needle->code, $needle->unit, $needle->cost]);
 
         // Um lote por linha de rastreabilidade, com fabricação e validade.
         $batches = ProductBatch::orderBy('batch_code')->get();
@@ -260,7 +262,7 @@ class StockInvoiceImportTest extends TestCase
         ]))->assertSessionHas('success', 'Nota fiscal importada: 0 produtos cadastrados e 2 entradas lançadas.');
 
         $this->assertSame(1, Product::count());
-        $this->assertSame(['Toxina botulínica 100 U', 'TX-100', '800.00', 'Fornecedor antigo'], [$toxin->refresh()->name, $toxin->code, $toxin->cost, $toxin->supplier]);
+        $this->assertSame(['Toxina botulínica 100 U', 'TX-100', '800.0000', 'Fornecedor antigo'], [$toxin->refresh()->name, $toxin->code, $toxin->cost, $toxin->supplier]);
         // O lote que já existia soma; o novo é criado.
         $this->assertSame(['L2401' => '6.000', 'L2402' => '1.000'], ProductBatch::orderBy('batch_code')->pluck('quantity', 'batch_code')->all());
     }
@@ -283,7 +285,7 @@ class StockInvoiceImportTest extends TestCase
             ['import' => '1', 'product_id' => '', 'name' => 'Gaze estéril', 'code' => '', 'category' => 'disposable', 'unit' => 'un', 'total_cost' => '', 'enter' => '0', 'lots' => $lot('', '50', '')],
         ])
             ->assertRedirect(route('stock.entries.index'))
-            ->assertSessionHas('success', 'Nota fiscal importada: 2 produtos cadastrados e 2 entradas lançadas.');
+            ->assertSessionHas('success', 'Nota fiscal importada: 2 produtos cadastrados e 2 entradas lançadas. Complete o cadastro (estoque mínimo, marca) de: Luva nitrílica M, Gaze estéril.');
 
         $this->assertSame(['Gaze estéril', 'Luva nitrílica M'], Product::orderBy('name')->pluck('name')->all());
         $this->assertSame(['LV01' => '200.000', 'LV02' => '300.000'], ProductBatch::orderBy('batch_code')->pluck('quantity', 'batch_code')->all());

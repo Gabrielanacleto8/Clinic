@@ -3,6 +3,8 @@
     use App\Support\LocalizedDecimal;
 
     $canEnter = auth()->user()->can('move', App\Models\Product::class);
+    $canCorrectCost = auth()->user()->can('adjust', App\Models\Product::class);
+    $filtered = array_filter($filters) !== [];
 @endphp
 <x-stock.page active="entradas" :alerts="$alerts" :subtitle="$entries->total().' '.($entries->total() === 1 ? 'entrada' : 'entradas')">
     @if ($canEnter)
@@ -37,6 +39,7 @@
                     <th scope="col" class="px-4 py-3 font-medium">Validade</th>
                     <th scope="col" class="px-4 py-3 text-right font-medium">Quantidade</th>
                     <th scope="col" class="px-4 py-3 text-right font-medium">Custo unit.</th>
+                    <th scope="col" class="px-4 py-3 text-right font-medium">Valor</th>
                     <th scope="col" class="px-4 py-3 font-medium">Fornecedor</th>
                     <th scope="col" class="px-4 py-3 font-medium">Nota fiscal</th>
                     <th scope="col" class="px-4 py-3 font-medium">Usuário</th>
@@ -61,14 +64,30 @@
                         <td data-label="Quantidade" class="px-4 py-3 text-right font-medium whitespace-nowrap text-emerald-700 tabular-nums">
                             +{{ LocalizedDecimal::quantity($entry->quantity) }} {{ $product->unit->symbol() }}
                         </td>
-                        <td data-label="Custo unit." class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ $entry->unit_cost !== null ? LocalizedDecimal::unitMoney($entry->unit_cost) : '—' }}</td>
+                        <td data-label="Custo unit." class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                            {{ $entry->unit_cost !== null ? LocalizedDecimal::unitMoney($entry->unit_cost) : '—' }}
+                            @if ($canCorrectCost)
+                                <button type="button" class="block w-full cursor-pointer text-right text-xs text-teal-800 hover:underline" data-dialog-open="entry-cost"
+                                        data-dialog-action="{{ route('stock.movements.cost', $entry) }}"
+                                        data-dialog-summary="Entrada de {{ ClinicTime::format($entry->created_at) }} · {{ $product->name }} · lote {{ $batch->batch_code }}"
+                                        data-dialog-values="{{ json_encode(['unit_cost' => LocalizedDecimal::unitMoneyInput($entry->unit_cost)]) }}">Corrigir custo</button>
+                            @endif
+                        </td>
+                        <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap text-slate-600 tabular-nums">{{ $entry->value() !== null ? LocalizedDecimal::money($entry->value()) : '—' }}</td>
                         <td data-label="Fornecedor" class="px-4 py-3 text-slate-600">{{ $entry->supplier ?: '—' }}</td>
                         <td data-label="Nota fiscal" class="px-4 py-3 text-slate-600 tabular-nums">{{ $entry->invoice_number ?: '—' }}</td>
                         <td data-label="Usuário" class="px-4 py-3 text-slate-600">{{ $entry->user?->name ?? '—' }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" class="px-4 py-10 text-center text-slate-500">Nenhuma entrada encontrada.</td>
+                        <td colspan="11" class="px-4 py-10 text-center text-slate-500">
+                            Nenhuma entrada encontrada.
+                            @if ($filtered)
+                                <a href="{{ route('stock.entries.index') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                            @elseif ($canEnter)
+                                <button type="button" class="cursor-pointer font-medium text-teal-800 hover:underline" data-dialog-open="stock-entry">Lançar a primeira entrada</button>
+                            @endif
+                        </td>
                     </tr>
                 @endforelse
             </tbody>
@@ -81,7 +100,10 @@
 
     @if ($canEnter)
         {{-- "product" nulo de propósito: aqui o produto é escolhido no formulário. --}}
-        @include('stock._entry_dialog', ['products' => $products, 'product' => null])
+        @include('stock._entry_dialog', ['products' => $products, 'product' => null, 'autoshow' => request()->boolean('nova')])
         @include('stock._invoice_dialog')
+    @endif
+    @if ($canCorrectCost)
+        @include('stock._entry_cost_dialog')
     @endif
 </x-stock.page>

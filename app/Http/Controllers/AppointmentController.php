@@ -20,10 +20,14 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AppointmentController extends Controller
 {
+    /** Remarcar desfez a presença confirmada: a mensagem avisa. */
+    private bool $unconfirmed = false;
+
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly AppointmentScheduler $scheduler,
@@ -53,6 +57,8 @@ class AppointmentController extends Controller
         return view('appointments.create', [
             'appointment' => $appointment,
             'patient' => is_numeric($patientId) ? Patient::find((int) $patientId) : null,
+            // Vindo do botão "Agendar" da ficha: cancelar volta para ela.
+            'fromPatient' => isset($query['paciente']),
             'professionals' => $this->professionals(),
             'procedures' => $this->procedures(),
         ]);
@@ -102,6 +108,12 @@ class AppointmentController extends Controller
             $appointment->schedule(ClinicTime::fromInput($request->validated('scheduled_at')), (int) $request->validated('duration_minutes'));
             $appointment->professional_id = (int) $request->validated('professional_id');
 
+            // Horário ou profissional novos: a presença confirmada era para o anterior.
+            if ($appointment->status === AppointmentStatus::Confirmed && $appointment->isDirty(['scheduled_at', 'professional_id'])) {
+                $appointment->status = AppointmentStatus::Scheduled;
+                $this->unconfirmed = true;
+            }
+
             // Só os nomes dos campos entram na auditoria, nunca os valores.
             $changed = array_values(array_diff(array_keys($appointment->getDirty()), ['ends_at']));
 
@@ -114,7 +126,9 @@ class AppointmentController extends Controller
             $this->audit->log(AuditAction::AppointmentUpdated, $appointment, ['patient_id' => $appointment->patient_id, 'fields' => $changed]);
         });
 
-        return $this->backToAgenda($appointment, 'Agendamento atualizado.');
+        return $this->backToAgenda($appointment, $this->unconfirmed
+            ? 'Agendamento atualizado. A presença voltou a "Agendado": confirme de novo com o paciente.'
+            : 'Agendamento atualizado.');
     }
 
     /**
@@ -150,10 +164,19 @@ class AppointmentController extends Controller
         abort_unless($appointment->patient()->exists(), 404);
     }
 
+    /**
+     * Volta ao dia do agendamento, mantendo a visão e o filtro de
+     * profissional que a agenda tinha, e já no painel do dia.
+     */
     private function backToAgenda(Appointment $appointment, string $message): RedirectResponse
     {
+        $context = request()->validate([
+            'visao' => ['nullable', Rule::in(['mes', 'semana'])],
+            'profissional' => ['nullable', 'integer'],
+        ]);
+
         return redirect()
-            ->route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')])
+            ->to(route('agenda.index', [...array_filter($context), 'data' => $appointment->localDay()]).'#dia')
             ->with('success', $message);
     }
 

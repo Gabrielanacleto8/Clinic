@@ -1,5 +1,11 @@
 @php
-    $stamp = fn ($date) => App\Support\ClinicTime::format($date, 'd/m/Y').' às '.App\Support\ClinicTime::format($date, 'H:i');
+    use App\Support\ClinicTime;
+    use App\Support\LocalizedDecimal;
+
+    $stamp = fn ($date) => ClinicTime::format($date, 'd/m/Y').' às '.ClinicTime::format($date, 'H:i');
+    $clinical = auth()->user()->can('viewClinicalRecords', $patient);
+    $pending = $financialSummary ? (float) $financialSummary->pending : 0.0;
+    $overdue = $financialSummary ? (float) $financialSummary->overdue : 0.0;
     $address = collect([
         trim(($patient->street ?? '').($patient->number ? ', '.$patient->number : '')),
         $patient->complement,
@@ -15,10 +21,20 @@
             <div class="mt-2 flex items-center gap-4">
                 <x-patients.avatar :patient="$patient" size="lg" />
                 <div>
-                    <h1 class="text-xl font-semibold tracking-tight">{{ $patient->name }}</h1>
+                    <h1 class="text-xl font-semibold tracking-tight">
+                        {{ $patient->name }}
+                        @if ($patient->isMinor())
+                            <span class="badge ml-1 bg-sky-100 align-middle text-sky-800">Menor de idade</span>
+                        @endif
+                    </h1>
                     <p class="mt-1 text-sm text-slate-600">
                         {{ $patient->age() }} {{ $patient->age() === 1 ? 'ano' : 'anos' }}
                         @if ($patient->sex) · {{ $patient->sex->label() }} @endif
+                        @if ($pending > 0)
+                            · <span @class(['badge', 'bg-red-100 text-red-800' => $overdue > 0, 'bg-amber-100 text-amber-800' => $overdue <= 0])>
+                                Pendente {{ LocalizedDecimal::money($pending) }}@if ($overdue > 0) · vencido {{ LocalizedDecimal::money($overdue) }}@endif
+                            </span>
+                        @endif
                     </p>
                     @can('update', $patient)
                         <button type="button" class="mt-1 cursor-pointer text-sm font-medium text-teal-800 hover:underline" data-dialog-open="patient-avatar">
@@ -32,25 +48,67 @@
             @can('create', App\Models\Appointment::class)
                 <a href="{{ route('appointments.create', ['paciente' => $patient->id]) }}" class="btn btn-primary">Agendar</a>
             @endcan
-            @can('viewClinicalRecords', $patient)
-                <a href="{{ route('patients.record', $patient) }}" class="btn btn-secondary">Imprimir prontuário</a>
-            @endcan
-            @can('viewAny', App\Models\AuditLog::class)
-                <a href="{{ route('audit.index', ['paciente' => $patient->id]) }}" class="btn btn-secondary">Ver acessos</a>
-            @endcan
             @can('update', $patient)
                 <a href="{{ route('patients.edit', $patient) }}" class="btn btn-secondary">Editar</a>
             @endcan
-            @can('delete', $patient)
-                <form method="POST" action="{{ route('patients.destroy', $patient) }}"
-                      data-confirm="Arquivar o cadastro de {{ $patient->name }}? Ele sai da listagem, mas não é apagado. Os agendamentos em aberto dele serão cancelados.">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger">Arquivar</button>
-                </form>
-            @endcan
+            @if ($clinical || auth()->user()->can('viewAny', App\Models\AuditLog::class))
+                {{-- Ações de consulta menos frequentes ficam num menu: o arquivamento está no fim da edição. --}}
+                <details class="relative" data-menu>
+                    <summary class="btn btn-secondary cursor-pointer list-none">Mais <x-icon name="chevron-down" class="size-4" /></summary>
+                    <div class="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                        @if ($clinical)
+                            <a href="{{ route('patients.record', $patient) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Imprimir prontuário</a>
+                        @endif
+                        @can('viewAny', App\Models\AuditLog::class)
+                            <a href="{{ route('audit.index', ['paciente' => $patient->id]) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Ver acessos</a>
+                        @endcan
+                    </div>
+                </details>
+            @endif
         </div>
     </div>
+
+    @if ($clinical)
+        {{-- Alergias e contraindicações antes de tudo: é o que o profissional procura ao abrir a ficha. --}}
+        <x-health-alerts :anamnesis="$patient->anamnesis" class="mt-4" />
+    @endif
+
+    @isset($upcomingAppointments)
+        <section class="card mt-6 p-6" aria-labelledby="agendamentos-do-paciente">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 id="agendamentos-do-paciente" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Agendamentos</h2>
+                <p class="text-xs text-slate-500">
+                    {{ $noShowCount === 0 ? 'Nenhuma falta' : $noShowCount.' '.($noShowCount === 1 ? 'falta' : 'faltas') }}
+                    · <a href="{{ route('patients.show', [$patient, 'aba' => 'agendamentos']) }}#historico" class="text-teal-800 hover:underline">Ver todos</a>
+                </p>
+            </div>
+            @if ($upcomingAppointments->isNotEmpty())
+                <ul class="mt-3 divide-y divide-slate-100">
+                    @foreach ($upcomingAppointments as $appointment)
+                        <li class="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-sm">
+                            <span class="font-medium tabular-nums">{{ ClinicTime::format($appointment->scheduled_at) }}</span>
+                            <span class="min-w-0 flex-1">{{ $appointment->procedure?->name ?? 'Sem procedimento definido' }} · {{ $appointment->professional->name }}</span>
+                            <span class="badge {{ $appointment->status->badgeClasses() }}">{{ $appointment->status->label() }}</span>
+                            @can('viewAny', App\Models\Appointment::class)
+                                <a href="{{ route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')]) }}" class="text-teal-800 hover:underline">Agenda</a>
+                            @endcan
+                        </li>
+                    @endforeach
+                </ul>
+            @elseif ($pendingReturn)
+                <p class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                    <span @class(['font-medium', 'text-amber-800' => $pendingReturn->lessThan(ClinicTime::today())])>
+                        Retorno previsto em {{ $pendingReturn->format('d/m/Y') }}{{ $pendingReturn->lessThan(ClinicTime::today()) ? ', ainda não agendado' : '' }}
+                    </span>
+                    @can('create', App\Models\Appointment::class)
+                        <a href="{{ route('appointments.create', ['paciente' => $patient->id, 'data' => $pendingReturn->format('Y-m-d')]) }}" class="btn btn-secondary">Agendar retorno</a>
+                    @endcan
+                </p>
+            @else
+                <p class="mt-3 text-sm text-slate-600">Nenhum agendamento em aberto.</p>
+            @endif
+        </section>
+    @endisset
 
     <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section class="card p-6">
@@ -72,14 +130,57 @@
             <dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <dt class="text-xs text-slate-500">Telefone</dt>
-                    <dd class="mt-0.5 text-sm tabular-nums">{{ $patient->formattedPhone() ?: '—' }}</dd>
+                    <dd class="mt-0.5 text-sm tabular-nums">
+                        @if ($patient->phone)
+                            <a href="tel:+55{{ $patient->phoneDigits() }}" class="text-teal-800 hover:underline">{{ $patient->formattedPhone() }}</a>
+                            · <a href="https://wa.me/55{{ $patient->phoneDigits() }}" target="_blank" rel="noopener" class="text-teal-800 hover:underline">WhatsApp</a>
+                        @else
+                            —
+                        @endif
+                    </dd>
                 </div>
                 <div class="min-w-0">
                     <dt class="text-xs text-slate-500">E-mail</dt>
-                    <dd class="mt-0.5 text-sm break-words">{{ $patient->email ?: '—' }}</dd>
+                    <dd class="mt-0.5 text-sm break-words">
+                        @if ($patient->email)
+                            <a href="mailto:{{ $patient->email }}" class="text-teal-800 hover:underline">{{ $patient->email }}</a>
+                        @else
+                            —
+                        @endif
+                    </dd>
                 </div>
             </dl>
         </section>
+
+        @if ($patient->isMinor() || $patient->guardian_name)
+            <section class="card p-6 lg:col-span-2">
+                <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Responsável legal</h2>
+                @if ($patient->guardian_name)
+                    <dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
+                        <div class="sm:col-span-2">
+                            <dt class="text-xs text-slate-500">Nome</dt>
+                            <dd class="mt-0.5 text-sm">{{ $patient->guardian_name }}{{ $patient->guardian_relationship ? ' ('.$patient->guardian_relationship.')' : '' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">CPF</dt>
+                            <dd class="mt-0.5 text-sm tabular-nums">{{ $patient->guardian_cpf ? App\Support\Cpf::format($patient->guardian_cpf) : '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">Telefone</dt>
+                            <dd class="mt-0.5 text-sm tabular-nums">
+                                @if ($patient->guardian_phone)
+                                    <a href="tel:+55{{ $patient->guardian_phone }}" class="text-teal-800 hover:underline">{{ $patient->formattedGuardianPhone() }}</a>
+                                @else
+                                    —
+                                @endif
+                            </dd>
+                        </div>
+                    </dl>
+                @else
+                    <p class="mt-4 text-sm text-amber-800">Paciente menor de idade sem responsável legal cadastrado. Complete o cadastro.</p>
+                @endif
+            </section>
+        @endif
 
         <section class="card p-6 lg:col-span-2">
             <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Endereço</h2>
@@ -105,9 +206,9 @@
         </section>
     </div>
 
-    @can('viewClinicalRecords', $patient)
+    @if ($clinical)
         @include('patients._anamnesis')
-    @endcan
+    @endif
 
     @if ($tab !== null)
         @php $tabClass = fn (bool $active) => 'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap '.($active ? 'bg-teal-700 text-white' : 'text-slate-700 hover:bg-slate-100'); @endphp

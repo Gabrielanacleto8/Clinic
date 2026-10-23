@@ -4,12 +4,22 @@
 
     $canEdit = $products->contains(fn ($product) => auth()->user()->can('update', $product));
     $canCreate = auth()->user()->can('create', App\Models\Product::class);
+    $canEnter = auth()->user()->can('move', App\Models\Product::class);
+    $filtered = $filters['q'] !== '' || $filters['categoria'] !== '' || $filters['situacao'] !== 'ativos';
 @endphp
 <x-stock.page active="produtos" :alerts="$alerts" :subtitle="$products->total().' '.($products->total() === 1 ? 'produto' : 'produtos')">
-    @if ($canCreate)
+    @if ($canCreate || $canEnter)
         <x-slot:actions>
-            <button type="button" class="btn btn-secondary" data-dialog-open="invoice-import">Importar nota fiscal</button>
-            <button type="button" class="btn btn-primary" data-dialog-open="product-create">Novo produto</button>
+            @if ($canCreate)
+                <button type="button" class="btn btn-secondary" data-dialog-open="invoice-import">Importar nota fiscal</button>
+            @endif
+            @if ($canEnter)
+                {{-- O diálogo de entrada fica na aba Entradas, que já abre com ele. --}}
+                <a href="{{ route('stock.entries.index', ['nova' => 1]) }}" class="btn btn-secondary">Nova entrada</a>
+            @endif
+            @if ($canCreate)
+                <button type="button" class="btn btn-primary" data-dialog-open="product-create">Novo produto</button>
+            @endif
         </x-slot:actions>
     @endif
 
@@ -67,6 +77,9 @@
                         <td data-label="Categoria" class="px-4 py-3 text-slate-600">{{ $product->category->label() }}</td>
                         <td data-label="Disponível" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
                             {{ LocalizedDecimal::quantity($product->available_quantity ?? 0) }} {{ $product->unit->symbol() }}
+                            @if ((float) ($product->discard_quantity ?? 0) > 0)
+                                <span class="block text-xs text-red-700">+ {{ LocalizedDecimal::quantity($product->discard_quantity) }} {{ $product->unit->symbol() }} a descartar</span>
+                            @endif
                         </td>
                         <td data-label="Mínimo" class="px-4 py-3 text-right whitespace-nowrap text-slate-600 tabular-nums">
                             {{ (float) $product->minimum_stock > 0 ? LocalizedDecimal::quantity($product->minimum_stock).' '.$product->unit->symbol() : '—' }}
@@ -105,8 +118,7 @@
                                         'unit_content' => LocalizedDecimal::quantityInput($product->unit_content),
                                         'hours_after_opening' => $product->hours_after_opening,
                                         'multi_patient_use' => $product->multi_patient_use,
-                                        'cost' => LocalizedDecimal::moneyInput($product->cost),
-                                        'price' => LocalizedDecimal::moneyInput($product->price),
+                                        'cost' => LocalizedDecimal::unitMoneyInput($product->cost),
                                         'is_active' => $product->is_active,
                                     ];
                                 @endphp
@@ -119,7 +131,17 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-10 text-center text-slate-500">Nenhum produto encontrado.</td>
+                        <td colspan="6" class="px-4 py-10 text-center text-slate-500">
+                            @if ($filtered)
+                                Nenhum produto encontrado com estes filtros.
+                                <a href="{{ route('products.index') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                            @else
+                                Nenhum produto cadastrado.
+                                @if ($canCreate)
+                                    <button type="button" class="cursor-pointer font-medium text-teal-800 hover:underline" data-dialog-open="product-create">Cadastrar o primeiro produto</button>
+                                @endif
+                            @endif
+                        </td>
                     </tr>
                 @endforelse
             </tbody>
@@ -158,4 +180,5 @@
 
         @include('stock._invoice_dialog')
     @endif
+
 </x-stock.page>

@@ -32,9 +32,15 @@
                                 </td>
                                 @foreach ($roles as $role)
                                     <td data-label="{{ $role->label() }}" class="px-4 py-3 text-center">
-                                        <input type="checkbox" name="permissions[{{ $role->value }}][]" value="{{ $permission->value }}"
-                                               class="size-4 cursor-pointer accent-teal-700" aria-label="{{ $permission->label() }}: {{ $role->label() }}"
-                                               @checked($rolePermissions->allows($role, $permission))>
+                                        {{-- data-requires: o app.js marca e trava as permissões de que esta depende. --}}
+                                        <span class="inline-flex flex-col items-center gap-0.5">
+                                            <input type="checkbox" name="permissions[{{ $role->value }}][]" value="{{ $permission->value }}"
+                                                   class="size-4 cursor-pointer accent-teal-700" aria-label="{{ $permission->label() }}: {{ $role->label() }}"
+                                                   data-requires="{{ implode(',', array_map(fn ($required) => $required->value, $permission->requires())) }}"
+                                                   data-label="{{ $permission->label() }}"
+                                                   @checked($rolePermissions->allows($role, $permission))>
+                                            <span class="text-[10px] leading-tight text-slate-500" data-requires-note></span>
+                                        </span>
                                     </td>
                                 @endforeach
                             </tr>
@@ -45,7 +51,7 @@
         </div>
 
         <p class="text-xs text-slate-500">
-            Permissões dependentes são concedidas juntas: quem pode editar também pode ver, e o prontuário exige acesso ao cadastro de pacientes.
+            Permissões dependentes são concedidas juntas e aparecem marcadas e travadas: quem pode editar também pode ver, anular atendimento inclui o financeiro, e o prontuário exige acesso ao cadastro de pacientes.
         </p>
 
         <div class="flex justify-end">

@@ -22,6 +22,7 @@ enum AuditAction: string
     case PatientUpdated = 'patient.updated';
     case PatientArchived = 'patient.archived';
     case PatientRestored = 'patient.restored';
+    case PatientLookup = 'patient.lookup';
     case PatientRecordPrinted = 'patient.record_printed';
 
     case AppointmentCreated = 'appointment.created';
@@ -31,17 +32,24 @@ enum AuditAction: string
 
     case FinancialEntryCreated = 'finance.entry_created';
     case FinancialEntryDeleted = 'finance.entry_deleted';
+    case FinancialEntryUpdated = 'finance.entry_updated';
     case InstallmentPaid = 'finance.installment_paid';
     case InstallmentReopened = 'finance.installment_reopened';
     case FinanceViewed = 'finance.viewed';
+
+    case ProcedureCreated = 'procedure.created';
+    case ProcedureUpdated = 'procedure.updated';
 
     case ProductCreated = 'product.created';
     case ProductUpdated = 'product.updated';
     case StockMoved = 'stock.moved';
     case StockUnitOpened = 'stock.unit_opened';
     case ProductBatchUpdated = 'stock.batch_updated';
+    case StockCounted = 'stock.counted';
+    case StockEntryCostCorrected = 'stock.entry_cost_corrected';
 
     case AnamnesisUpdated = 'anamnesis.updated';
+    case AnamnesisReviewed = 'anamnesis.reviewed';
 
     case TreatmentsListed = 'treatment.listed';
     case TreatmentViewed = 'treatment.viewed';
@@ -84,6 +92,7 @@ enum AuditAction: string
             self::PatientUpdated => 'Alterou cadastro do paciente',
             self::PatientArchived => 'Arquivou paciente',
             self::PatientRestored => 'Restaurou paciente',
+            self::PatientLookup => 'Encontrou cadastro existente ao digitar um CPF',
             self::PatientRecordPrinted => 'Imprimiu o prontuário',
             self::AppointmentCreated => 'Criou agendamento',
             self::AppointmentUpdated => 'Remarcou agendamento',
@@ -91,14 +100,21 @@ enum AuditAction: string
             self::AgendaViewed => 'Consultou a agenda',
             self::FinancialEntryCreated => 'Criou lançamento financeiro',
             self::FinancialEntryDeleted => 'Excluiu lançamento financeiro',
+            self::FinancialEntryUpdated => 'Alterou lançamento financeiro',
             self::InstallmentPaid => 'Registrou pagamento',
             self::InstallmentReopened => 'Desfez pagamento',
             self::FinanceViewed => 'Consultou o financeiro',
+            self::ProcedureCreated => 'Cadastrou procedimento',
+            self::ProcedureUpdated => 'Alterou procedimento',
             self::ProductCreated => 'Cadastrou produto',
             self::ProductUpdated => 'Alterou produto',
             self::StockMoved => 'Movimentou o estoque',
             self::StockUnitOpened => 'Abriu unidade de produto',
+            self::ProductBatchUpdated => 'Corrigiu dados do lote',
+            self::StockCounted => 'Conferiu o inventário',
+            self::StockEntryCostCorrected => 'Corrigiu o custo de uma entrada',
             self::AnamnesisUpdated => 'Alterou a ficha de saúde',
+            self::AnamnesisReviewed => 'Revisou a ficha de saúde sem alteração',
             self::TreatmentsListed => 'Consultou a lista de atendimentos',
             self::TreatmentViewed => 'Abriu atendimento',
             self::TreatmentCreated => 'Registrou atendimento',

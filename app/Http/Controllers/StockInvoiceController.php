@@ -12,6 +12,7 @@ use App\Models\StockMovement;
 use App\Services\InvoiceXmlReader;
 use App\Services\PendingInvoiceImports;
 use App\Services\StockInvoiceImporter;
+use App\Support\Quantity;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,11 +57,13 @@ class StockInvoiceController extends Controller
         $products = Product::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'unit', 'unit_content']);
         $imported = $this->importedInvoice($invoice);
 
+        $matches = $this->matches($invoice['items'], $products);
+
         return view('stock.invoice', [
             'token' => $token,
-            'invoice' => $invoice,
+            'invoice' => $this->convertForFractioned($invoice, $matches, $products),
             'products' => $products,
-            'matches' => $this->matches($invoice['items'], $products),
+            'matches' => $matches,
             'inactiveMatches' => $this->inactiveMatches($invoice['items']),
             'imported' => $imported,
             // Notas lançadas antes do registro pela chave de acesso: só um
@@ -87,11 +90,20 @@ class StockInvoiceController extends Controller
         $this->pending->forget($request->session(), $token);
 
         $plural = fn (int $total, string $one, string $many) => $total.' '.($total === 1 ? $one : $many);
+        $created = $result['created'];
 
-        return redirect()
-            ->route($result['entries'] > 0 ? 'stock.entries.index' : 'products.index')
-            ->with('success', 'Nota fiscal importada: '.$plural($result['products'], 'produto cadastrado', 'produtos cadastrados')
-                .' e '.$plural($result['entries'], 'entrada lançada', 'entradas lançadas').'.');
+        // Produto novo nasce com o mínimo zerado e sem alertas: o aviso lembra de completar o cadastro.
+        $message = 'Nota fiscal importada: '.$plural($result['products'], 'produto cadastrado', 'produtos cadastrados')
+            .' e '.$plural($result['entries'], 'entrada lançada', 'entradas lançadas').'.'
+            .($created === [] ? '' : ' Complete o cadastro (estoque mínimo, marca) de: '.implode(', ', array_map(fn (Product $product) => $product->name, $created)).'.');
+
+        $response = redirect()->route($result['entries'] > 0 ? 'stock.entries.index' : 'products.index')->with('success', $message);
+
+        if ($created !== []) {
+            $response->with('success_links', array_map(fn (Product $product) => ['url' => route('products.edit', $product), 'label' => 'Completar '.$product->name], $created));
+        }
+
+        return $response;
     }
 
     public function destroy(Request $request): RedirectResponse
@@ -113,6 +125,37 @@ class StockInvoiceController extends Controller
         }
 
         return StockInvoice::query()->with('user:id,name')->where('access_key', $invoice['access_key'])->first();
+    }
+
+    /**
+     * Item ligado a produto fracionado já cadastrado: a nota traz frascos, o
+     * estoque controla o conteúdo deles. A quantidade dos lotes já aparece
+     * convertida (× conteúdo), para o usuário só conferir.
+     *
+     * @param  array<string, mixed>  $invoice
+     * @param  array<int, int>  $matches
+     * @param  Collection<int, Product>  $products
+     * @return array<string, mixed>
+     */
+    private function convertForFractioned(array $invoice, array $matches, Collection $products): array
+    {
+        foreach ($matches as $index => $productId) {
+            $product = $products->firstWhere('id', $productId);
+
+            if ($product === null || ! $product->isFractioned()) {
+                continue;
+            }
+
+            $content = Quantity::toThousandths($product->unit_content);
+
+            $invoice['items'][$index]['lots'] = array_map(fn (array $lot) => [
+                ...$lot,
+                'quantity' => Quantity::fromThousandths((int) round(Quantity::toThousandths($lot['quantity']) * $content / Quantity::SCALE)),
+            ], $invoice['items'][$index]['lots']);
+            $invoice['items'][$index]['converted'] = true;
+        }
+
+        return $invoice;
     }
 
     /**

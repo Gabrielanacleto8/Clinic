@@ -58,22 +58,23 @@ class PatientHistoryTest extends TestCase
 
     public function test_tabs_follow_the_role_permissions(): void
     {
-        // Recepção: só o cadastro, sem histórico.
-        $this->actingAs(User::factory()->create())->get($this->url)
-            ->assertOk()->assertDontSee('Histórico do paciente')->assertDontSee('Produtos utilizados')->assertDontSee('Evoluções');
+        // Recepção: o cadastro, a agenda e o financeiro do paciente (ela recebe), sem o prontuário.
+        $reception = $this->actingAs(User::factory()->create())->get($this->url);
+        $reception->assertOk()->assertDontSee('Produtos utilizados')->assertDontSee('Evoluções')->assertSee('Agendamentos');
+        $this->assertSame(['agendamentos', 'financeiro'], array_keys($reception->viewData('tabs')));
 
-        // Profissional: histórico clínico, sem o financeiro.
+        // Profissional: histórico clínico e agenda, sem o financeiro.
         $response = $this->actingAs(User::factory()->professional()->create())->get($this->url);
         $response->assertSee('Produtos utilizados')->assertSee('Fotos')->assertSee('Evoluções');
-        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes'], array_keys($response->viewData('tabs')));
+        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'agendamentos'], array_keys($response->viewData('tabs')));
 
         // Pedir a aba financeira sem permissão cai na aba padrão.
-        $this->get("{$this->url}?aba=financeiro")->assertOk()->assertViewHas('tab', 'atendimentos')->assertDontSee('Total pendente');
+        $this->get("{$this->url}?aba=financeiro")->assertOk()->assertViewHas('tab', 'atendimentos')->assertDontSee('A vencer');
         $this->get("{$this->url}?aba=inexistente")->assertOk()->assertViewHas('tab', 'atendimentos');
 
         $admin = $this->actingAs(User::factory()->admin()->create())->get("{$this->url}?aba=financeiro");
-        $admin->assertOk()->assertViewHas('tab', 'financeiro')->assertSee('Total pendente');
-        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'financeiro'], array_keys($admin->viewData('tabs')));
+        $admin->assertOk()->assertViewHas('tab', 'financeiro')->assertSee('A vencer');
+        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'agendamentos', 'financeiro'], array_keys($admin->viewData('tabs')));
     }
 
     public function test_products_tab_lists_what_was_applied_in_the_patients_treatments(): void
@@ -141,9 +142,10 @@ class PatientHistoryTest extends TestCase
 
         $this->get("{$this->url}?aba=fotos")->assertOk()->assertSee('Do atendimento 3')->assertSee('Avulsa 3');
 
-        // Permissões, paciente, auditoria, criador e ficha, contagem e página da
-        // galeria, atendimentos e procedimentos: nada por foto.
-        $this->assertSame(8, count(DB::getQueryLog()));
+        // Permissões, paciente, auditoria, criador e ficha, o cartão de agenda
+        // (próximos, faltas e retorno previsto), contagem e página da galeria,
+        // atendimentos e procedimentos: nada por foto.
+        $this->assertSame(11, count(DB::getQueryLog()));
     }
 
     public function test_the_record_is_read_only_and_only_accepts_loose_photos(): void
@@ -194,7 +196,8 @@ class PatientHistoryTest extends TestCase
         $totals = $response->viewData('financialTotals');
 
         $this->assertEquals(400.0, $totals->paid);
-        $this->assertEquals(800.0, $totals->pending);
+        // Vencido e a vencer separados, para a cobrança.
+        $this->assertEquals(800.0, $totals->overdue + $totals->upcoming);
     }
 
     public function test_only_the_open_tab_is_queried(): void
@@ -204,7 +207,8 @@ class PatientHistoryTest extends TestCase
 
         DB::enableQueryLog();
         $this->get($this->url)->assertOk();
-        $queries = implode("\n", array_column(DB::getQueryLog(), 'query'));
+        // O saldo pendente do cabeçalho é uma soma só; o resto do financeiro fica para a aba dele.
+        $queries = implode("\n", array_filter(array_column(DB::getQueryLog(), 'query'), fn (string $query) => ! str_contains($query, 'coalesce(sum(i.amount)')));
 
         $this->assertStringContainsString('`treatments`', $queries);
         foreach (['financial_installments', 'treatment_notes', 'treatment_products', 'product_batches'] as $table) {

@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Enums\AuditAction;
 use App\Enums\StockMovementType;
 use App\Http\Requests\UpdateProductBatchRequest;
+use App\Http\Requests\WriteOffExpiredBatchRequest;
+use App\Models\AuditLog;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\StockMovement;
 use App\Services\AuditLogger;
 use App\Services\StockAlerts;
+use App\Services\StockLedger;
+use App\Support\ClinicTime;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +42,8 @@ class ProductBatchController extends Controller
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:100'],
             'situacao' => ['nullable', Rule::in(array_keys(self::FILTERS))],
+            // "Vence até": lotes com saldo que vencem até esta data, qualquer que seja a situação.
+            'vence_ate' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
         $status = $filters['situacao'] ?? 'com-saldo';
@@ -45,6 +51,7 @@ class ProductBatchController extends Controller
         $batches = ProductBatch::query()
             ->with('product:id,name,code,unit,is_active')
             ->when($filters['q'] ?? null, fn ($query, string $term) => $query->search($term))
+            ->when($filters['vence_ate'] ?? null, fn ($query, string $until) => $query->where('quantity', '>', 0)->whereBetween('expires_on', [ClinicTime::today(), $until]))
             ->when($status === 'com-saldo', fn ($query) => $query->where('quantity', '>', 0))
             ->when($status === 'vencendo', fn ($query) => $query->expiringSoon())
             ->when($status === 'vencidos', fn ($query) => $query->expiredWithStock())
@@ -57,7 +64,7 @@ class ProductBatchController extends Controller
         return view('stock.batches', [
             'batches' => $batches,
             'statusOptions' => self::FILTERS,
-            'filters' => ['q' => $filters['q'] ?? '', 'situacao' => $status],
+            'filters' => ['q' => $filters['q'] ?? '', 'situacao' => $status, 'vence_ate' => $filters['vence_ate'] ?? ''],
             'alerts' => $alerts->summary(),
         ]);
     }
@@ -82,6 +89,13 @@ class ProductBatchController extends Controller
         return view('stock.batch', [
             'batch' => $batch,
             'product' => $batch->product,
+            // Última conferência de inventário em que este lote foi contado.
+            'lastCount' => AuditLog::query()
+                ->with('user:id,name')
+                ->where('action', AuditAction::StockCounted->value)
+                ->whereJsonContains('metadata->batch_ids', $batch->id)
+                ->latest('id')
+                ->first(),
             // Soma por tipo de movimentação, para o resumo do lote.
             'totals' => $totals->map(fn ($row) => $row->total),
             'lostValue' => abs((float) ($totals->get(StockMovementType::Loss->value)?->value ?? 0)),
@@ -95,15 +109,21 @@ class ProductBatchController extends Controller
     }
 
     /**
-     * Corrige fabricação e validade digitadas errado. As datas antigas e as
-     * novas entram na auditoria: são dados do lote, não do paciente, e a
-     * correção mexe na rastreabilidade.
+     * Corrige código, fabricação e validade digitados errado. Os valores
+     * antigos e os novos entram na auditoria: são dados do lote, não do
+     * paciente, e a correção mexe na rastreabilidade.
      */
     public function update(UpdateProductBatchRequest $request, ProductBatch $batch, AuditLogger $audit): RedirectResponse
     {
-        $changed = DB::transaction(function () use ($request, $batch, $audit): array {
+        $snapshot = fn (ProductBatch $batch) => [
+            'batch_code' => $batch->batch_code,
+            'manufactured_on' => $batch->manufactured_on?->format('Y-m-d'),
+            'expires_on' => $batch->expires_on?->format('Y-m-d'),
+        ];
+
+        $changed = DB::transaction(function () use ($request, $batch, $audit, $snapshot): array {
             $batch = ProductBatch::query()->whereKey($batch->getKey())->lockForUpdate()->firstOrFail();
-            $before = ['manufactured_on' => $batch->manufactured_on?->format('Y-m-d'), 'expires_on' => $batch->expires_on?->format('Y-m-d')];
+            $before = $snapshot($batch);
 
             $batch->fill($request->validated());
             $changed = array_keys($batch->getDirty());
@@ -118,13 +138,26 @@ class ProductBatchController extends Controller
                 'product_id' => $batch->product_id,
                 'fields' => $changed,
                 'from' => array_intersect_key($before, array_flip($changed)),
-                'to' => array_intersect_key(['manufactured_on' => $batch->manufactured_on?->format('Y-m-d'), 'expires_on' => $batch->expires_on?->format('Y-m-d')], array_flip($changed)),
+                'to' => array_intersect_key($snapshot($batch), array_flip($changed)),
             ]);
 
             return $changed;
         });
 
         return redirect()->route('stock.batches.show', $batch)
-            ->with('success', $changed === [] ? 'As datas já estavam assim. Nada foi alterado.' : 'Datas do lote corrigidas.');
+            ->with('success', $changed === [] ? 'Os dados já estavam assim. Nada foi alterado.' : 'Dados do lote corrigidos.');
+    }
+
+    /**
+     * Baixa um lote vencido inteiro como perda: o fechado e as unidades abertas.
+     */
+    public function writeOff(WriteOffExpiredBatchRequest $request, ProductBatch $batch, StockLedger $ledger): RedirectResponse
+    {
+        abort_unless($batch->isExpired(), 404);
+
+        $movements = $ledger->writeOffExpired($batch, (string) $request->validated('reason'), $request->user());
+
+        return redirect()->back(fallback: route('stock.batches.show', $batch))
+            ->with('success', $movements === [] ? 'O lote já estava zerado. Nada foi alterado.' : 'Lote vencido baixado como perda ('.count($movements).' '.(count($movements) === 1 ? 'movimentação' : 'movimentações').').');
     }
 }

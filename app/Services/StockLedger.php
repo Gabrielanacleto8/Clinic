@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\AuditAction;
 use App\Enums\StockMovementType;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\StaleStockException;
 use App\Exceptions\UnusableStockException;
 use App\Models\ProductBatch;
 use App\Models\StockMovement;
@@ -42,7 +43,7 @@ class StockLedger
 
     /**
      * Saída manual que não é perda nem consumo: devolução, uso interno, transferência.
-     * No produto fracionado, sai só da parte lacrada. Lote vencido não sai
+     * No produto fracionado, sai só da parte fechada. Lote vencido não sai
      * por aqui: produto vencido não circula, só é baixado como perda.
      *
      * @throws InsufficientStockException
@@ -57,7 +58,7 @@ class StockLedger
 
     /**
      * Perda: quebra, extravio ou descarte por vencimento. No produto
-     * fracionado, sai só da parte lacrada; a sobra de unidade aberta sai por discard().
+     * fracionado, sai só da parte fechada; a sobra de unidade aberta sai por discard().
      *
      * @throws InsufficientStockException
      */
@@ -101,7 +102,7 @@ class StockLedger
     }
 
     /**
-     * Abre uma unidade lacrada do lote. Não muda o saldo do lote: só separa
+     * Abre uma unidade fechada do lote. Não muda o saldo do lote: só separa
      * o conteúdo da unidade para ser usado aos poucos.
      *
      * @throws UnusableStockException
@@ -121,7 +122,7 @@ class StockLedger
                 ! $product->is_active => throw new UnusableStockException("O produto {$product->name} está inativo."),
                 $batch->isExpired() => throw new UnusableStockException("O lote de {$name} está vencido. Não abra unidades dele."),
                 Quantity::toThousandths($this->sealedQuantity($batch)) < Quantity::toThousandths($product->unit_content) => throw new UnusableStockException(
-                    "Não há unidade lacrada de {$name} para abrir. Lacrado: ".LocalizedDecimal::quantity($this->sealedQuantity($batch)).' '.$product->unit->symbol().'.',
+                    "Não há unidade fechada de {$name} para abrir. Fechado: ".LocalizedDecimal::quantity($this->sealedQuantity($batch)).' '.$product->unit->symbol().'.',
                 ),
                 default => null,
             };
@@ -211,23 +212,107 @@ class StockLedger
 
     /**
      * Ajusta o saldo do lote para a quantidade contada. No produto
-     * fracionado, a contagem é só do que está lacrado: o que resta nas
+     * fracionado, a contagem é só do que está fechado: o que resta nas
      * unidades abertas fica como está e sai por discard(). Devolve nulo
      * quando a contagem confere com o saldo e não há o que registrar. Lote
      * vencido não é ajustado: o que há nele é baixado como perda.
      *
+     * @param  string|null  $expectedSealed  Saldo (fechado) que a tela mostrava ao contar. Se ele mudou
+     *                                       nesse meio-tempo, a contagem é recusada: aplicá-la desfaria
+     *                                       um consumo ou uma entrada feitos enquanto se contava.
+     *
      * @throws UnusableStockException
+     * @throws StaleStockException
      */
-    public function adjustTo(ProductBatch $batch, string $countedQuantity, string $reason, ?User $user): ?StockMovement
+    public function adjustTo(ProductBatch $batch, string $countedQuantity, string $reason, ?User $user, ?string $expectedSealed = null): ?StockMovement
     {
         $this->refuseExpired($batch);
 
-        return DB::transaction(function () use ($batch, $countedQuantity, $reason, $user): ?StockMovement {
+        return DB::transaction(function () use ($batch, $countedQuantity, $reason, $user, $expectedSealed): ?StockMovement {
             $batch = $this->lockBatch($batch);
             $open = $batch->product->isFractioned() ? Quantity::toThousandths($this->lockedOpenQuantity($batch)) : 0;
-            $delta = Quantity::toThousandths($countedQuantity) + $open - Quantity::toThousandths($batch->quantity);
+            $sealed = Quantity::toThousandths($batch->quantity) - $open;
+
+            if ($expectedSealed !== null && Quantity::toThousandths($expectedSealed) !== $sealed) {
+                throw new StaleStockException($batch, Quantity::fromThousandths($sealed));
+            }
+
+            $delta = Quantity::toThousandths($countedQuantity) - $sealed;
 
             return $delta === 0 ? null : $this->apply($batch, StockMovementType::Adjustment, $delta, $reason, $user);
+        });
+    }
+
+    /**
+     * Baixa como perda tudo o que resta em um lote vencido: o que está
+     * fechado e, no fracionado, o que resta em cada unidade aberta. Tudo em
+     * uma transação, cada parte com a própria movimentação.
+     *
+     * @return list<StockMovement>
+     *
+     * @throws LogicException Quando o lote não está vencido.
+     */
+    public function writeOffExpired(ProductBatch $batch, string $reason, ?User $user): array
+    {
+        return DB::transaction(function () use ($batch, $reason, $user): array {
+            $batch = $this->lockBatch($batch);
+
+            if (! $batch->isExpired()) {
+                throw new LogicException('Só lote vencido é baixado por aqui.');
+            }
+
+            $movements = [];
+
+            foreach ($batch->units()->withBalance()->orderBy('id')->get() as $unit) {
+                $unit->setRelation('batch', $batch);
+                $movements[] = $this->discard($unit, $reason, $user);
+            }
+
+            $sealed = Quantity::toThousandths($this->sealedQuantity($batch));
+
+            if ($sealed > 0) {
+                $movements[] = $this->apply($batch, StockMovementType::Loss, -$sealed, $reason, $user);
+            }
+
+            return array_values(array_filter($movements));
+        });
+    }
+
+    /**
+     * Corrige o custo unitário de uma entrada digitado errado. É a única
+     * alteração aceita em uma linha do livro: não mexe em saldo, mas o custo
+     * médio do lote, que vale para todo consumo e perda, sai dela. Fica na
+     * auditoria com o valor antigo e o novo.
+     *
+     * @throws LogicException Quando a movimentação não é uma entrada.
+     */
+    public function correctEntryCost(StockMovement $entry, ?string $unitCost, ?User $user): bool
+    {
+        if ($entry->type !== StockMovementType::Entry) {
+            throw new LogicException('Só o custo de uma entrada pode ser corrigido.');
+        }
+
+        return DB::transaction(function () use ($entry, $unitCost, $user): bool {
+            // Trava o lote antes da entrada, na mesma ordem das baixas: uma baixa
+            // simultânea não lê o custo médio antigo no meio da correção.
+            $this->lockBatch(ProductBatch::query()->findOrFail($entry->product_batch_id));
+            $current = DB::table('stock_movements')->where('id', $entry->getKey())->lockForUpdate()->value('unit_cost');
+            $new = $unitCost === null ? null : number_format((float) $unitCost, 4, '.', '');
+
+            if ($current === null ? $new === null : ($new !== null && number_format((float) $current, 4, '.', '') === $new)) {
+                return false;
+            }
+
+            DB::table('stock_movements')->where('id', $entry->getKey())->update(['unit_cost' => $new]);
+            $entry->setRawAttributes([...$entry->getAttributes(), 'unit_cost' => $new], true);
+
+            $this->audit->log(AuditAction::StockEntryCostCorrected, $entry, [
+                'product_batch_id' => $entry->product_batch_id,
+                'from' => $current === null ? null : number_format((float) $current, 4, '.', ''),
+                'to' => $new,
+            ], $user);
+
+            return true;
         });
     }
 
@@ -254,7 +339,7 @@ class StockLedger
             if ($unit !== null) {
                 $this->moveUnit($batch, $unit, $delta);
             } elseif ($delta < 0 && $batch->product->isFractioned()) {
-                // Sem unidade, a baixa só pode sair do que está lacrado: o
+                // Sem unidade, a baixa só pode sair do que está fechado: o
                 // conteúdo das unidades abertas é delas.
                 $sealed = Quantity::toThousandths($current) - Quantity::toThousandths($this->lockedOpenQuantity($batch));
 

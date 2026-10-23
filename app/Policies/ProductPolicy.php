@@ -37,6 +37,15 @@ class ProductPolicy
     }
 
     /**
+     * Descartar o que resta em uma unidade aberta ou baixar lote vencido como
+     * perda. É tarefa de quem usa o produto, não de quem compra.
+     */
+    public function discard(User $user, ?Product $product = null): bool
+    {
+        return $user->hasPermission(Permission::StockDiscard) || $user->hasPermission(Permission::StockManage);
+    }
+
+    /**
      * Inventário e ajuste de saldo mexem no estoque sem documento de origem:
      * exigem autorização própria, além da de movimentar.
      */

@@ -1,6 +1,11 @@
 @php
     use App\Support\ClinicTime;
     use App\Support\Duration;
+
+    // Vindo da ficha do paciente ("Agendar"), cancelar volta para ela.
+    $cancelUrl = $appointment->exists
+        ? route('agenda.index', ['data' => $appointment->localDay()]).'#dia'
+        : ($fromPatient ?? false ? route('patients.show', $patient) : route('agenda.index'));
 @endphp
 @csrf
 
@@ -16,8 +21,9 @@
         @endif
 
         <x-form.input class="md:col-span-3" name="scheduled_at" label="Data e hora" type="datetime-local" required step="300"
-                      :value="ClinicTime::toInput($appointment->scheduled_at)" />
-        <x-form.select class="md:col-span-3" name="duration_minutes" label="Duração" :options="Duration::options()" :selected="$appointment->duration_minutes" required />
+                      :value="ClinicTime::toInput($appointment->scheduled_at)" data-ends-at-source />
+        <x-form.select class="md:col-span-3" name="duration_minutes" label="Duração" :options="Duration::options()" :selected="$appointment->duration_minutes" required
+                       data-ends-at-duration hint="Termina às —" />
 
         <x-form.select class="md:col-span-3" name="professional_id" label="Profissional" required placeholder="Selecione"
                        :options="$professionals->pluck('name', 'id')->all()" :selected="$appointment->professional_id" />
@@ -39,12 +45,19 @@
             @enderror
         </div>
 
+        {{-- Horários já ocupados do profissional no dia escolhido, consultados pelo app.js. --}}
+        <div class="md:col-span-6" data-occupancy data-url="{{ route('agenda.occupancy') }}" @if ($appointment->exists) data-except="{{ $appointment->id }}" @endif hidden>
+            <p class="label">Horários ocupados no dia</p>
+            <p class="text-sm text-slate-600" data-occupancy-status></p>
+            <ul class="mt-1 flex flex-wrap gap-1.5 text-xs" data-occupancy-list></ul>
+        </div>
+
         <x-form.textarea class="md:col-span-6" name="notes" label="Observações da agenda" :value="$appointment->notes" rows="2" maxlength="500"
                          hint="Recados de agendamento, como encaixe ou preferência de horário. Informações clínicas vão no prontuário." />
     </div>
 </section>
 
 <div class="flex flex-wrap items-center justify-end gap-3">
-    <a href="{{ route('agenda.index', $appointment->exists ? ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')] : []) }}" class="btn btn-secondary">Voltar</a>
+    <a href="{{ $cancelUrl }}" class="btn btn-secondary">Cancelar</a>
     <button type="submit" class="btn btn-primary">{{ $appointment->exists ? 'Salvar alterações' : 'Agendar' }}</button>
 </div>

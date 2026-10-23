@@ -17,8 +17,6 @@
     </div>
 
     @if ($anamnesis)
-        <x-health-alerts :anamnesis="$anamnesis" class="mt-4" />
-
         <dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             @unless ($anamnesis->allergies)
                 <div>
@@ -33,8 +31,11 @@
                 </div>
             @endforeach
         </dl>
-        <p class="mt-4 text-xs text-slate-500">
-            Atualizada em {{ App\Support\ClinicTime::format($anamnesis->updated_at) }}
+        <p @class(['mt-4 text-xs', 'text-amber-800' => $anamnesis->isStale(), 'text-slate-500' => ! $anamnesis->isStale()])>
+            Revisada em {{ App\Support\ClinicTime::format($anamnesis->updated_at) }}{{ $anamnesis->updater ? ' por '.$anamnesis->updater->name : '' }}.
+            @if ($anamnesis->isStale())
+                Confira com o paciente e salve a ficha para registrar a revisão.
+            @endif
         </p>
     @else
         <p class="mt-4 text-sm text-slate-600">

@@ -100,7 +100,7 @@ class StockTest extends TestCase
 
         $this->assertSame(ProductUnit::ToxinUnit, $product->unit);
         $this->assertSame('200.000', $product->minimum_stock);
-        $this->assertSame('1234.56', $product->cost);
+        $this->assertSame('1234.5600', $product->cost);
         $this->assertNull($product->price);
 
         $this->get("/estoque/{$product->id}")->assertOk()->assertSee('Toxina botulínica 100 U')->assertSee('R$ 1.234,56')->assertSee('Nenhum lote ainda');
@@ -125,7 +125,7 @@ class StockTest extends TestCase
             'category' => ['', 'x'],
             'unit' => ['', 'litro'],
             'minimum_stock' => ['', '-1', 'abc', '1,2345'],
-            'cost' => ['-1', 'abc', '1,999'],
+            'cost' => ['-1', 'abc', '1,99999'],
             'price' => ['-1', '1000000'],
             'brand' => [str_repeat('a', 101)],
         ];
@@ -227,7 +227,7 @@ class StockTest extends TestCase
         $this->assertSame('-2.500', StockMovement::sole()->quantity);
 
         $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '7,501', 'reason' => 'Uso interno'])
-            ->assertSessionHasErrors(['quantity' => 'Saldo insuficiente no lote L1. Disponível: 7,5.']);
+            ->assertSessionHasErrors(['quantity' => 'Saldo insuficiente no lote L1. Disponível: 7,5 un.']);
         // Toda saída manual identifica o motivo.
         $this->move($product, ['type' => 'exit', 'product_batch_id' => $batch->id, 'quantity' => '1'])->assertSessionHasErrors(['reason' => 'Informe o motivo.']);
         // Lote de outro produto não pode ser movimentado por esta página.

@@ -20,7 +20,9 @@ class PatientFactory extends Factory
         return [
             'name' => fake()->name(),
             'cpf' => fake()->unique()->cpf(false),
-            'birth_date' => fake()->dateTimeBetween('-90 years', '-1 year')->format('Y-m-d'),
+            // Adulto por padrão: menor de idade exige responsável legal (ver minor()).
+            // As datas partem do now() do Carbon, que respeita o travelTo dos testes.
+            'birth_date' => fake()->dateTimeBetween(now()->subYears(90), now()->subYears(18)->subDay())->format('Y-m-d'),
             'sex' => fake()->randomElement(Sex::cases()),
             'phone' => fake()->numerify('119########'),
             'email' => fake()->optional()->safeEmail(),
@@ -32,5 +34,18 @@ class PatientFactory extends Factory
             'state' => fake()->randomElement(BrazilianStates::CODES),
             'notes' => null,
         ];
+    }
+
+    /**
+     * Menor de idade, com o responsável legal que o cadastro exige.
+     */
+    public function minor(): static
+    {
+        return $this->state(fn () => [
+            'birth_date' => fake()->dateTimeBetween(now()->subYears(17), now()->subYear())->format('Y-m-d'),
+            'guardian_name' => fake()->name(),
+            'guardian_relationship' => 'Mãe',
+            'guardian_phone' => fake()->numerify('119########'),
+        ]);
     }
 }

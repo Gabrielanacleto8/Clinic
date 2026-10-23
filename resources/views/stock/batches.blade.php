@@ -1,5 +1,8 @@
 @php
     use App\Support\LocalizedDecimal;
+
+    $canDiscard = auth()->user()->can('discard', App\Models\Product::class);
+    $filtered = array_filter($filters) !== [] && $filters !== ['q' => '', 'situacao' => 'com-saldo', 'vence_ate' => ''];
 @endphp
 <x-stock.page active="lotes" :alerts="$alerts" :subtitle="$batches->total().' '.($batches->total() === 1 ? 'lote' : 'lotes')">
     @can('adjust', App\Models\Product::class)
@@ -9,7 +12,7 @@
     @endcan
 
     <form method="GET" action="{{ route('stock.batches.index') }}" class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-12" role="search">
-        <div class="sm:col-span-7">
+        <div class="sm:col-span-4">
             <label for="q" class="sr-only">Buscar por produto ou lote</label>
             <input id="q" name="q" type="search" value="{{ $filters['q'] }}" maxlength="100" class="input" placeholder="Buscar por produto ou lote">
         </div>
@@ -21,8 +24,12 @@
                 @endforeach
             </select>
         </div>
+        <div class="flex items-center gap-2 sm:col-span-3">
+            <label for="vence_ate" class="shrink-0 text-sm text-slate-600">Vence até</label>
+            <input id="vence_ate" name="vence_ate" type="date" value="{{ $filters['vence_ate'] }}" class="input min-w-0">
+        </div>
         <button type="submit" class="btn btn-secondary sm:col-span-2">Filtrar</button>
-        @foreach (['q', 'situacao'] as $field)
+        @foreach (['q', 'situacao', 'vence_ate'] as $field)
             @error($field)
                 <p class="text-sm text-red-700 sm:col-span-12">{{ $message }}</p>
             @enderror
@@ -61,12 +68,24 @@
                         </td>
                         <td data-label="Saldo" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::quantity($batch->quantity) }} {{ $product->unit->symbol() }}</td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
-                            <a href="{{ route('stock.batches.show', $batch) }}" class="font-medium text-teal-800 hover:underline">Rastrear</a>
+                            @if ($canDiscard && ! $empty && $batch->isExpired())
+                                <button type="button" class="cursor-pointer font-medium text-red-700 hover:underline" data-dialog-open="batch-write-off"
+                                        data-dialog-action="{{ route('stock.batches.write-off', $batch) }}"
+                                        data-dialog-summary="{{ $product->name }} · lote {{ $batch->batch_code }} · {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $product->unit->symbol() }}"
+                                        data-dialog-values="{{ json_encode(['reason' => 'Vencido em '.$batch->expires_on->format('d/m/Y')], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}">Baixar vencido</button>
+                            @else
+                                <a href="{{ route('stock.batches.show', $batch) }}" class="font-medium text-teal-800 hover:underline">Rastrear</a>
+                            @endif
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-10 text-center text-slate-500">Nenhum lote encontrado.</td>
+                        <td colspan="6" class="px-4 py-10 text-center text-slate-500">
+                            Nenhum lote encontrado.
+                            @if ($filtered)
+                                <a href="{{ route('stock.batches.index') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                            @endif
+                        </td>
                     </tr>
                 @endforelse
             </tbody>
@@ -76,4 +95,8 @@
     <div class="mt-4">
         {{ $batches->links() }}
     </div>
+
+    @if ($canDiscard)
+        @include('stock._write_off_dialog')
+    @endif
 </x-stock.page>

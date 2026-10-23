@@ -12,6 +12,7 @@ use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Procedure;
 use App\Models\Treatment;
+use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\TreatmentFormOptions;
 use App\Services\TreatmentRecorder;
@@ -20,6 +21,7 @@ use App\Support\ClinicTime;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class TreatmentController extends Controller
@@ -40,13 +42,19 @@ class TreatmentController extends Controller
             'procedimento' => ['nullable', 'integer'],
             'de' => ['nullable', 'date_format:Y-m-d'],
             'ate' => ['nullable', 'date_format:Y-m-d'],
+            'profissional' => ['nullable', 'integer'],
+            'situacao' => ['nullable', Rule::in(['validos', 'anulados', 'todos'])],
         ]);
+        $status = $filters['situacao'] ?? 'validos';
 
         $treatments = Treatment::query()
             ->with(['patient:id,name', 'professional:id,name', 'procedure:id,name'])
             // Atendimentos de pacientes arquivados não aparecem.
             ->whereHas('patient', fn ($query) => $query->search($filters['q'] ?? null))
             ->when($filters['procedimento'] ?? null, fn ($query, int|string $procedureId) => $query->where('procedure_id', $procedureId))
+            ->when($filters['profissional'] ?? null, fn ($query, int|string $professionalId) => $query->where('professional_id', $professionalId))
+            ->when($status === 'validos', fn ($query) => $query->whereNull('voided_at'))
+            ->when($status === 'anulados', fn ($query) => $query->whereNotNull('voided_at'))
             ->performedBetween($filters['de'] ?? null, $filters['ate'] ?? null)
             ->latest('performed_at')
             ->latest('id')
@@ -59,8 +67,9 @@ class TreatmentController extends Controller
 
         return view('treatments.index', [
             'treatments' => $treatments,
-            'filters' => ['q' => $filters['q'] ?? '', 'procedimento' => (string) ($filters['procedimento'] ?? ''), 'de' => $filters['de'] ?? '', 'ate' => $filters['ate'] ?? ''],
+            'filters' => ['q' => $filters['q'] ?? '', 'procedimento' => (string) ($filters['procedimento'] ?? ''), 'de' => $filters['de'] ?? '', 'ate' => $filters['ate'] ?? '', 'profissional' => (string) ($filters['profissional'] ?? ''), 'situacao' => $status],
             'procedures' => Procedure::query()->orderBy('name')->pluck('name', 'id'),
+            'professionals' => User::query()->whereIn('id', Treatment::query()->select('professional_id'))->orderBy('name')->pluck('name', 'id'),
             'treatmentForm' => $request->user()->can('create', Treatment::class) ? $options->forDialog($request) : null,
         ]);
     }
@@ -76,10 +85,12 @@ class TreatmentController extends Controller
         // Origem vem da URL (ou do formulário que voltou com erro): só um valor do enum vale.
         $origin = $request->old('origem', $request->query('origem'));
 
-        // Vindo da agenda, o registro já abre com o que foi combinado no agendamento.
+        // Vindo da agenda, o registro já abre com o que foi combinado no agendamento,
+        // inclusive a data: o de dia anterior não pode ficar com a data de hoje.
         if ($appointment) {
             $treatment->procedure_id = $appointment->procedure_id;
             $treatment->professional_id = $appointment->professional_id;
+            $treatment->performed_at = $appointment->scheduled_at->min(now());
         }
 
         return view('treatments.create', [
@@ -87,7 +98,7 @@ class TreatmentController extends Controller
             'treatment' => $treatment,
             'appointment' => $appointment,
             'origin' => is_string($origin) ? TreatmentOrigin::tryFrom($origin) : null,
-            ...$options->for($request->user()),
+            ...$options->for($request->user(), $appointment?->procedure_id),
         ]);
     }
 
@@ -112,11 +123,16 @@ class TreatmentController extends Controller
 
         [$dayStart, $dayEnd] = ClinicTime::dayBounds(ClinicTime::local(ClinicTime::fromInput($request->validated('performed_at')))->format('Y-m-d'));
 
+        // Com mais de um agendamento no dia, o do mesmo profissional e procedimento
+        // é o que este registro encerra.
+        $professionalId = $this->resolveProfessionalId($request);
+        $procedureId = (int) $request->validated('procedure_id');
+
         $appointmentId = Appointment::query()
             ->where('patient_id', $patient->getKey())
             ->openForTreatment()
             ->whereBetween('scheduled_at', [$dayStart, $dayEnd])
-            ->orderBy('scheduled_at')
+            ->orderByRaw('(professional_id = ?) desc, (procedure_id <=> ?) desc, scheduled_at', [$professionalId, $procedureId])
             ->value('id');
 
         return $this->register($request, $patient, $recorder, $appointmentId);
@@ -150,9 +166,19 @@ class TreatmentController extends Controller
 
         $appointment = $appointmentId !== null ? Appointment::find($appointmentId) : null;
 
+        $links = [
+            ['url' => route('patients.treatments.show', [$patient, $treatment]), 'label' => 'Ver o atendimento'],
+            ['url' => route('patients.treatments.show', [$patient, $treatment]).'#fotos', 'label' => 'Adicionar fotos'],
+        ];
+
+        // Retorno previsto só vale se virar agendamento: o atalho já abre o dia.
+        if ($treatment->return_date !== null && $request->user()->can('create', Appointment::class)) {
+            $links[] = ['url' => route('appointments.create', ['paciente' => $patient->getKey(), 'data' => $treatment->return_date->format('Y-m-d')]), 'label' => 'Agendar o retorno de '.$treatment->return_date->format('d/m')];
+        }
+
         return redirect()->to($origin->url($appointment))
             ->with('success', $message)
-            ->with('success_link', ['url' => route('patients.treatments.show', [$patient, $treatment]), 'label' => 'Ver o atendimento']);
+            ->with('success_links', $links);
     }
 
     public function show(Request $request, Patient $patient, Treatment $treatment): View
@@ -180,6 +206,12 @@ class TreatmentController extends Controller
         return view('treatments.show', [
             'patient' => $patient->load('anamnesis'),
             'treatment' => $treatment,
+            // Quem pode anular vê, antes de tentar, se há pagamento registrado.
+            'paidInstallments' => $treatment->relationLoaded('financialEntry') ? ($treatment->financialEntry?->installments->whereNotNull('paid_at')->count() ?? 0) : 0,
+            // Anulado: o agendamento devolvido à agenda, se ainda estiver em aberto, recebe o registro correto.
+            'reopenedAppointment' => $treatment->isVoided()
+                ? Appointment::query()->where('patient_id', $patient->getKey())->openForTreatment()->whereBetween('scheduled_at', ClinicTime::dayBounds($treatment->performed_at ? ClinicTime::format($treatment->performed_at, 'Y-m-d') : ClinicTime::today()))->orderBy('scheduled_at')->first(['id'])
+                : null,
         ]);
     }
 
@@ -219,8 +251,18 @@ class TreatmentController extends Controller
     {
         $voider->void($treatment, $request->user(), $request->validated('reason'));
 
-        return redirect()->route('patients.treatments.show', [$patient, $treatment])
-            ->with('success', 'Atendimento anulado. O estoque foi devolvido, a cobrança foi excluída e o agendamento, se havia, voltou para a agenda.');
+        // O que aconteceu com o agendamento depende de o horário ainda estar livre.
+        $appointment = Appointment::query()->where('treatment_id', null)->where('patient_id', $patient->getKey())
+            ->whereKey($voider->reopenedAppointmentId())->first();
+
+        $message = 'Atendimento anulado. O estoque foi devolvido e a cobrança foi excluída.';
+        $message .= match (true) {
+            $appointment === null => '',
+            $appointment->isOpen() => ' O agendamento voltou para a agenda: registre o atendimento correto por ele.',
+            default => ' O horário do agendamento já estava ocupado, então ele ficou cancelado: crie um novo agendamento se precisar.',
+        };
+
+        return redirect()->route('patients.treatments.show', [$patient, $treatment])->with('success', $message);
     }
 
     /**

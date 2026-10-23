@@ -45,6 +45,8 @@ class ImportInvoiceRequest extends FormRequest
             }
 
             $item['total_cost'] = LocalizedDecimal::normalize($item['total_cost'] ?? null);
+            $item['unit_content'] = LocalizedDecimal::normalize($item['unit_content'] ?? null);
+            $item['multi_patient_use'] = filter_var($item['multi_patient_use'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $item['lots'] = array_map(
                 fn ($lot) => is_array($lot) ? [...$lot, 'quantity' => LocalizedDecimal::normalize($lot['quantity'] ?? null)] : $lot,
                 is_array($item['lots'] ?? null) ? $item['lots'] : [],
@@ -82,6 +84,10 @@ class ImportInvoiceRequest extends FormRequest
                 "{$prefix}.code" => $isNew ? ['nullable', 'string', 'max:40', Rule::unique(Product::class, 'code')] : ['nullable'],
                 "{$prefix}.category" => $isNew ? ['required', Rule::enum(ProductCategory::class)] : ['nullable'],
                 "{$prefix}.unit" => $isNew ? ['required', Rule::enum(ProductUnit::class)] : ['nullable'],
+                // Fracionado no produto novo: conteúdo de cada frasco, na unidade escolhida.
+                "{$prefix}.unit_content" => $isNew ? ['nullable', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'] : ['nullable'],
+                "{$prefix}.hours_after_opening" => $isNew ? ['nullable', 'integer', 'min:1', 'max:8760'] : ['nullable'],
+                "{$prefix}.multi_patient_use" => ['nullable', 'boolean'],
                 "{$prefix}.total_cost" => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999.99'],
                 "{$prefix}.enter" => ['required', 'boolean'],
             ];
@@ -126,8 +132,31 @@ class ImportInvoiceRequest extends FormRequest
                 }
             },
             $this->checkFractionedLots(...),
+            $this->checkNewFractionedLots(...),
             $this->checkRepeatedCodes(...),
         ];
+    }
+
+    /**
+     * Produto novo com conteúdo por frasco: a quantidade dos lotes é a da
+     * nota, em frascos inteiros; o importador multiplica pelo conteúdo.
+     */
+    private function checkNewFractionedLots(Validator $validator): void
+    {
+        foreach ($this->selectedItems() as $index => $item) {
+            if (filled($item['product_id'] ?? null) || ! is_numeric($item['unit_content'] ?? null) || ! filter_var($item['enter'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                continue;
+            }
+
+            foreach ($item['lots'] ?? [] as $lotIndex => $lot) {
+                $field = "items.{$index}.lots.{$lotIndex}.quantity";
+
+                if (is_array($lot) && is_numeric($lot['quantity'] ?? null) && ! $validator->errors()->has($field)
+                    && Quantity::toThousandths($lot['quantity']) % Quantity::SCALE !== 0) {
+                    $validator->errors()->add($field, 'Com o conteúdo por unidade preenchido, a quantidade do lote é em unidades fechadas (frascos) inteiras.');
+                }
+            }
+        }
     }
 
     /**
@@ -222,6 +251,9 @@ class ImportInvoiceRequest extends FormRequest
                 ...$item,
                 'product_id' => filled($item['product_id'] ?? null) ? (int) $item['product_id'] : null,
                 'total_cost' => filled($item['total_cost'] ?? null) ? (string) $item['total_cost'] : null,
+                'unit_content' => filled($item['unit_content'] ?? null) ? (string) $item['unit_content'] : null,
+                'hours_after_opening' => filled($item['hours_after_opening'] ?? null) ? (int) $item['hours_after_opening'] : null,
+                'multi_patient_use' => (bool) ($item['multi_patient_use'] ?? false),
                 'enter' => (bool) $item['enter'],
                 'lots' => $item['lots'] ?? [],
             ])
@@ -240,6 +272,8 @@ class ImportInvoiceRequest extends FormRequest
             'items.*.category' => 'categoria',
             'items.*.unit' => 'unidade',
             'items.*.total_cost' => 'valor total do item',
+            'items.*.unit_content' => 'conteúdo por unidade',
+            'items.*.hours_after_opening' => 'prazo depois de aberto',
             'items.*.lots.*.batch_code' => 'lote',
             'items.*.lots.*.quantity' => 'quantidade',
             'items.*.lots.*.manufactured_on' => 'fabricação',

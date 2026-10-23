@@ -37,6 +37,39 @@ class PatientAnamnesis extends Model
     }
 
     /**
+     * Ficha sem revisão há mais tempo do que a clínica aceita: o profissional
+     * confere com o paciente antes do procedimento.
+     */
+    public function isStale(): bool
+    {
+        return $this->updated_at !== null
+            && $this->updated_at->lessThan(now()->subMonths(config('clinic.anamnesis_review_months')));
+    }
+
+    /**
+     * Os avisos que o profissional precisa ver antes de qualquer procedimento,
+     * na ordem em que aparecem. Os textos são do próprio paciente.
+     *
+     * @return list<array{label: string|null, text: string}>
+     */
+    public function alerts(): array
+    {
+        $alerts = [];
+
+        if ($this->pregnant_or_lactating) {
+            $alerts[] = ['label' => null, 'text' => 'Gestante ou lactante.'];
+        }
+
+        foreach (['allergies' => 'Alergias', 'medications' => 'Medicamentos em uso', 'health_conditions' => 'Condições de saúde'] as $field => $label) {
+            if (filled($this->{$field})) {
+                $alerts[] = ['label' => $label, 'text' => $this->{$field}];
+            }
+        }
+
+        return $alerts;
+    }
+
+    /**
      * @return BelongsTo<Patient, $this>
      */
     public function patient(): BelongsTo

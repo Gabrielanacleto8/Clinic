@@ -23,6 +23,14 @@ class TreatmentVoider
 {
     public const PAID_MESSAGE = 'A cobrança deste atendimento tem pagamento registrado. Desfaça o pagamento no financeiro antes de anular.';
 
+    /** Agendamento devolvido à agenda (ou cancelado) na última anulação. */
+    private ?int $reopenedAppointmentId = null;
+
+    public function reopenedAppointmentId(): ?int
+    {
+        return $this->reopenedAppointmentId;
+    }
+
     public function __construct(
         private readonly StockLedger $stock,
         private readonly AppointmentScheduler $scheduler,
@@ -106,6 +114,7 @@ class TreatmentVoider
 
         $appointment->treatment_id = null;
         $appointment->status = AppointmentStatus::Scheduled;
+        $this->reopenedAppointmentId = $appointment->getKey();
 
         try {
             $this->scheduler->save($appointment);

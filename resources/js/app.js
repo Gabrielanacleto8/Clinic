@@ -61,6 +61,15 @@ document.addEventListener('submit', (event) => {
 
     if (!event.defaultPrevented && form.method === 'post' && form.dataset.allowResubmit === undefined) {
         form.dataset.submitting = '';
+
+        // O botão mostra que o envio está em andamento; no 4G isso evita o segundo toque.
+        const button = event.submitter;
+
+        if (button && !button.dataset.label) {
+            button.dataset.label = button.textContent;
+            button.textContent = 'Enviando…';
+            button.setAttribute('aria-disabled', 'true');
+        }
     }
 });
 
@@ -77,11 +86,36 @@ if (keepaliveForms.length > 0) {
 
     keepaliveForms.forEach((form) => form.addEventListener('input', () => (typedAt = Date.now())));
 
-    window.setInterval(() => {
-        if (Date.now() - typedAt < interval) {
-            fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).catch(() => {});
+    const renew = async () => {
+        try {
+            const response = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+
+            // Sessão perdida (celular bloqueado por muito tempo): avisa antes de a pessoa enviar e perder o texto.
+            if (response.status === 401 || response.status === 419 || response.redirected) {
+                keepaliveForms.forEach((form) => {
+                    if (form.querySelector('[data-session-expired]')) return;
+
+                    const notice = document.createElement('p');
+                    notice.dataset.sessionExpired = '';
+                    notice.setAttribute('role', 'alert');
+                    notice.className = 'rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900';
+                    notice.textContent = 'Sua sessão expirou. Copie o que digitou, entre de novo em outra aba e envie outra vez.';
+                    form.prepend(notice);
+                });
+            }
+        } catch {
+            // Sem rede: nada a fazer agora; a próxima tentativa decide.
         }
+    };
+
+    window.setInterval(() => {
+        if (Date.now() - typedAt < interval) renew();
     }, interval);
+
+    // O celular suspende o temporizador com a tela bloqueada: ao voltar, renova na hora.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && typedAt > 0) renew();
+    });
 }
 
 // Página de impressão: o botão abre o diálogo de imprimir (ou salvar em PDF) do navegador.
@@ -90,6 +124,31 @@ document.querySelector('[data-print]')?.addEventListener('click', () => window.p
 // Voltar pelo navegador restaura a página do cache com o formulário ainda marcado.
 window.addEventListener('pageshow', () => {
     document.querySelectorAll('form[data-submitting]').forEach((form) => delete form.dataset.submitting);
+    document.querySelectorAll('[data-label]').forEach((button) => {
+        button.textContent = button.dataset.label;
+        button.removeAttribute('aria-disabled');
+        delete button.dataset.label;
+    });
+});
+
+// Formulário que voltou com erro: o foco vai ao resumo dos erros (ou ao
+// primeiro campo inválido), para a pessoa não procurar o que corrigir.
+window.addEventListener('DOMContentLoaded', () => {
+    const summary = document.querySelector('[data-form-errors]');
+    const invalid = document.querySelector('[aria-invalid="true"]');
+    const target = summary ?? invalid;
+
+    if (target && !target.closest('dialog')) {
+        target.focus({ preventScroll: false });
+        target.scrollIntoView({ block: 'center' });
+    }
+});
+
+// <select data-autosubmit>: trocar a opção já envia o formulário de filtro.
+document.addEventListener('change', (event) => {
+    if (event.target.matches('select[data-autosubmit]')) {
+        event.target.form?.requestSubmit();
+    }
 });
 
 // Menu lateral recolhível em telas pequenas. Em telas largas ele fica sempre
@@ -123,6 +182,21 @@ if (sidebar) {
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') setOpen(false);
+
+        // Com o menu aberto sobre a página, o Tab circula só dentro dele.
+        if (event.key === 'Tab' && isOpen() && window.innerWidth < 1024) {
+            const focusable = [...sidebar.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
     });
 
     // Ao alargar a janela o menu volta a ser fixo: descarta o estado "aberto".
@@ -158,7 +232,12 @@ document.querySelectorAll('[data-photo-input]').forEach((photoInput) => {
     const form = photoInput.closest('form');
     const status = form.querySelector('[data-photo-status]');
     const submit = form.querySelector('[data-photo-submit]');
+    // Lista de miniaturas com "remover". Só nos formulários que a têm (o avatar não).
+    const previews = form.querySelector('[data-photo-previews]');
     const maxFiles = Number(photoInput.dataset.maxFiles);
+    // Fotos já escolhidas: no celular a câmera devolve uma por vez, então cada
+    // escolha é somada às anteriores em vez de substituí-las.
+    let selected = [];
     const maxDimension = Number(photoInput.dataset.maxDimension);
     const maxBytes = Number(photoInput.dataset.maxBytes);
     const maxRequestBytes = Number(photoInput.dataset.maxRequestBytes);
@@ -211,17 +290,72 @@ document.querySelectorAll('[data-photo-input]').forEach((photoInput) => {
         return keepOriginal ? file : new File([blob], 'foto.jpg', { type: 'image/jpeg' });
     };
 
-    photoInput.addEventListener('change', async () => {
-        const files = [...photoInput.files];
+    const sync = () => {
+        const transfer = new DataTransfer();
 
-        if (files.length === 0) {
+        selected.forEach((item) => transfer.items.add(item.file));
+        photoInput.files = transfer.files;
+
+        if (previews) {
+            previews.replaceChildren(...selected.map((item, index) => {
+                const entry = document.createElement('li');
+                const image = document.createElement('img');
+                const remove = document.createElement('button');
+
+                entry.className = 'relative';
+                image.src = item.url;
+                image.alt = `Foto ${index + 1}`;
+                image.className = 'aspect-square w-full rounded-lg border border-slate-200 object-cover';
+                remove.type = 'button';
+                remove.className = 'absolute top-1 right-1 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-red-700 shadow hover:bg-white';
+                remove.textContent = 'Remover';
+                remove.setAttribute('aria-label', `Remover a foto ${index + 1}`);
+                remove.addEventListener('click', () => {
+                    URL.revokeObjectURL(item.url);
+                    selected.splice(index, 1);
+                    sync();
+                    announce([]);
+                });
+                entry.append(image, remove);
+
+                return entry;
+            }));
+            previews.hidden = selected.length === 0;
+        }
+    };
+
+    const announce = (unreadable) => {
+        if (selected.length === 0) {
             status.textContent = '';
             return;
         }
 
-        if (files.length > maxFiles) {
-            photoInput.value = '';
-            status.textContent = `Selecione no máximo ${maxFiles} fotos por envio.`;
+        const total = selected.reduce((sum, item) => sum + item.file.size, 0);
+        const plural = selected.length === 1 ? 'foto pronta' : 'fotos prontas';
+        const warning = unreadable.length > 0
+            ? ` Atenção: ${unreadable.join(', ')} não pôde ser lida pelo navegador e pode ser recusada; prefira JPEG ou PNG.`
+            : '';
+
+        status.textContent = `${selected.length} ${plural} para envio (${megabytes(total)}).${warning}`;
+    };
+
+    photoInput.addEventListener('change', async () => {
+        const files = [...photoInput.files];
+
+        if (files.length === 0) {
+            sync();
+            return;
+        }
+
+        // Um só arquivo (foto de identificação): a escolha nova substitui a anterior.
+        if (maxFiles === 1) {
+            selected.forEach((item) => URL.revokeObjectURL(item.url));
+            selected = [];
+        }
+
+        if (selected.length + files.length > maxFiles) {
+            sync();
+            status.textContent = `Selecione no máximo ${maxFiles} fotos por envio. ${selected.length} já ${selected.length === 1 ? 'escolhida' : 'escolhidas'}.`;
             return;
         }
 
@@ -231,24 +365,25 @@ document.querySelectorAll('[data-photo-input]').forEach((photoInput) => {
 
         // Cada foto precisa caber no limite por arquivo e, somadas, no limite do
         // envio. A folga cobre os demais campos do formulário.
-        const budget = Math.floor(Math.min(maxBytes, (maxRequestBytes * 0.9) / files.length) * 0.95);
-        const transfer = new DataTransfer();
+        const budget = Math.floor(Math.min(maxBytes, (maxRequestBytes * 0.9) / maxFiles) * 0.95);
+        const unreadable = [];
 
         for (const file of files) {
+            let prepared = file;
+
             try {
-                transfer.items.add(await shrink(file, budget));
+                prepared = await shrink(file, budget);
             } catch {
-                // Arquivo que o navegador não decodifica segue como está; o servidor decide.
-                transfer.items.add(file);
+                // Arquivo que o navegador não decodifica (HEIC, por exemplo) segue
+                // como está; o servidor decide, e a pessoa fica avisada.
+                unreadable.push(file.name);
             }
+
+            selected.push({ file: prepared, url: URL.createObjectURL(prepared) });
         }
 
-        photoInput.files = transfer.files;
-
-        const total = [...photoInput.files].reduce((sum, file) => sum + file.size, 0);
-        const plural = files.length === 1 ? 'foto pronta' : 'fotos prontas';
-
-        status.textContent = `${files.length} ${plural} para envio (${megabytes(total)}).`;
+        sync();
+        announce(unreadable);
         submit.disabled = false;
         preparing = false;
     });
@@ -299,7 +434,7 @@ if (picker) {
     const choose = (patient) => {
         hidden.value = patient.id;
         input.value = patient.name;
-        status.textContent = `Paciente selecionado: ${patient.name}, CPF ${patient.cpf}.`;
+        status.textContent = `Paciente selecionado: ${patient.name}, CPF ${patient.cpf}${patient.minor ? ', menor de idade' : ''}.`;
         close();
         announce();
     };
@@ -317,7 +452,11 @@ if (picker) {
             name.className = 'block font-medium text-slate-900';
             name.textContent = patient.name;
             details.className = 'block text-xs text-slate-500';
-            details.textContent = `CPF ${patient.cpf} · nascimento ${patient.birth_date}`;
+            details.textContent = [
+                `CPF ${patient.cpf}`,
+                `nascimento ${patient.birth_date}${patient.minor ? ' (menor de idade)' : ''}`,
+                patient.phone ? `tel. ${patient.phone}` : null,
+            ].filter(Boolean).join(' · ');
             option.append(name, details);
 
             // mousedown (e não click) para escolher antes de o campo perder o foco.
@@ -338,6 +477,7 @@ if (picker) {
     const search = async (term) => {
         request?.abort();
         request = new AbortController();
+        status.textContent = 'Buscando…';
 
         try {
             const response = await fetch(`${picker.dataset.url}?q=${encodeURIComponent(term)}`, {
@@ -350,9 +490,14 @@ if (picker) {
             results = await response.json();
             render();
 
+            // O servidor corta a lista: avisa em vez de parecer que são todos.
+            const truncated = response.headers.get('X-Has-More') === '1';
+
             status.textContent = results.length === 0
                 ? 'Nenhum paciente encontrado.'
-                : `${results.length} ${results.length === 1 ? 'paciente encontrado' : 'pacientes encontrados'}. Clique ou use as setas e Enter para escolher.`;
+                : truncated
+                    ? `Mostrando os ${results.length} primeiros. Digite mais do nome para encontrar o paciente certo.`
+                    : `${results.length} ${results.length === 1 ? 'paciente encontrado' : 'pacientes encontrados'}. Clique ou use as setas e Enter para escolher.`;
         } catch (error) {
             if (error.name === 'AbortError') return;
 
@@ -435,6 +580,7 @@ if (picker && healthAlerts) {
         if (!patientId) return;
 
         request = new AbortController();
+        show(['Consultando os avisos de saúde…']);
 
         try {
             const response = await fetch(healthAlerts.dataset.url.replace('__ID__', encodeURIComponent(patientId)), {
@@ -444,11 +590,12 @@ if (picker && healthAlerts) {
 
             if (!response.ok) throw new Error(String(response.status));
 
-            const alerts = await response.json();
+            const health = await response.json();
 
             show([
-                ...(alerts.pregnant_or_lactating ? ['Gestante ou lactante.'] : []),
-                ...(alerts.allergies ? [`Alergias: ${alerts.allergies}`] : []),
+                ...(health.missing ? ['Ficha de saúde não preenchida: confira alergias, medicamentos e condições de saúde antes do procedimento.'] : []),
+                ...(health.stale_since ? [`Ficha de saúde sem revisão desde ${health.stale_since}: confira com o paciente se algo mudou.`] : []),
+                ...health.alerts.map((alert) => (alert.label ? `${alert.label}: ${alert.text}` : alert.text)),
             ]);
         } catch (error) {
             if (error.name === 'AbortError') return;
@@ -472,8 +619,10 @@ document.addEventListener('change', (event) => {
     const duration = select.selectedOptions[0]?.dataset.duration;
     const target = document.getElementById(targetId);
 
-    if (duration && target && [...target.options].some((option) => option.value === duration)) {
+    // Duração já ajustada à mão não é sobrescrita (ver data-ends-at-duration).
+    if (duration && target && target.dataset.touched === undefined && [...target.options].some((option) => option.value === duration)) {
         target.value = duration;
+        target.dispatchEvent(new Event('change', { bubbles: true }));
     }
 });
 
@@ -492,7 +641,10 @@ if (procedureSelect) {
         unit: row.querySelector('[data-treatment-unit]'),
         unitField: row.querySelector('[data-treatment-unit-field]'),
         quantity: row.querySelector('[data-treatment-quantity]'),
+        symbol: row.querySelector('[data-treatment-unit-symbol]'),
     }));
+    const missing = form.querySelector('[data-treatment-missing]');
+    const missingList = form.querySelector('[data-treatment-missing-list]');
 
     // Unidade física: só para lote de produto fracionado, e só as unidades
     // abertas daquele lote. Sem JavaScript, o servidor confere a escolha.
@@ -517,6 +669,11 @@ if (procedureSelect) {
         if (fractioned && preferOpen) {
             row.unit.value = [...row.unit.options].find((option) => option.value !== '' && !option.disabled)?.value ?? '';
         }
+
+        // A unidade de medida (U, mL, un) ao lado da quantidade: evita trocar U por mL.
+        if (row.symbol) {
+            row.symbol.textContent = row.batch.selectedOptions[0]?.dataset.unit ?? '';
+        }
     };
 
     rows.forEach((row) => {
@@ -524,7 +681,7 @@ if (procedureSelect) {
         row.batch.addEventListener('change', () => syncUnits(row, { preferOpen: true }));
     });
 
-    const suggestionFor = (procedureId) => defaults[procedureId] ?? { amount: null, products: [] };
+    const suggestionFor = (procedureId) => defaults[procedureId] ?? { amount: null, products: [], missing: [] };
 
     // As linhas preenchidas são exatamente os produtos sugeridos (ou nenhuma, se nada foi sugerido).
     const productsAre = (suggested) => {
@@ -555,6 +712,12 @@ if (procedureSelect) {
                 syncUnits(row);
                 row.unit.value = next.products[index]?.stock_unit_id ?? '';
             });
+        }
+
+        // Produtos típicos sem lote no estoque: o aviso diz quais ficaram de fora da sugestão.
+        if (missing && missingList) {
+            missingList.textContent = (next.missing ?? []).join(', ');
+            missing.hidden = (next.missing ?? []).length === 0;
         }
 
         previous = next;
@@ -652,10 +815,357 @@ document.addEventListener('click', (event) => {
     }
 
     // Fecha pelo botão de fechar ou por um clique fora da janela (no fundo escurecido).
-    if (event.target.closest('[data-dialog-close]') || event.target instanceof HTMLDialogElement) {
+    // Arrastar uma seleção de texto para fora da janela também termina num clique no
+    // fundo: só fecha se o clique começou ali. Janelas de formulário longo (size="lg")
+    // fecham só pelo X ou por "Cancelar".
+    if (event.target.closest('[data-dialog-close]')) {
         event.target.closest('dialog')?.close();
+    } else if (event.target instanceof HTMLDialogElement && backdropPressed === event.target && !event.target.classList.contains('max-w-3xl')) {
+        event.target.close();
     }
+
+    backdropPressed = null;
+});
+
+let backdropPressed = null;
+
+document.addEventListener('mousedown', (event) => {
+    backdropPressed = event.target instanceof HTMLDialogElement ? event.target : null;
 });
 
 // Formulário de um diálogo que voltou com erro: reabre para mostrar a mensagem.
 document.querySelector('dialog[data-dialog-autoshow]')?.showModal();
+
+// Cadastro de paciente: digitar o CEP preenche o endereço pelo servidor
+// (a CSP não deixa o navegador consultar serviços externos). Só preenche o
+// que está em branco, e uma falha não atrapalha: a pessoa digita à mão.
+const cepInput = document.querySelector('[data-cep-lookup]');
+
+if (cepInput) {
+    const form = cepInput.form;
+    const fields = { street: 'street', district: 'district', city: 'city', state: 'state' };
+    let lastLookup = '';
+
+    cepInput.addEventListener('input', async () => {
+        const digits = onlyDigits(cepInput.value);
+
+        if (digits.length !== 8 || digits === lastLookup) return;
+
+        lastLookup = digits;
+
+        try {
+            const response = await fetch(cepInput.dataset.cepLookup.replace('__CEP__', digits), { headers: { Accept: 'application/json' } });
+
+            if (!response.ok) return;
+
+            const address = await response.json();
+
+            Object.entries(fields).forEach(([key, name]) => {
+                const field = form.elements[name];
+
+                if (field && field.value === '' && address[key]) {
+                    field.value = address[key];
+                }
+            });
+        } catch {
+            // Sem consulta, sem preenchimento: o formulário segue normal.
+        }
+    });
+}
+
+// Galeria de fotos: o botão "Comparar" só abre com exatamente duas fotos marcadas.
+const compareForm = document.querySelector('[data-compare-form]');
+
+if (compareForm) {
+    const button = compareForm.querySelector('[data-compare-submit]');
+    const picks = () => [...compareForm.querySelectorAll('[data-compare-pick]:checked')];
+
+    const update = () => {
+        const count = picks().length;
+
+        button.disabled = count !== 2;
+        button.textContent = count === 2 ? 'Comparar as 2 fotos' : `Comparar (${count}/2)`;
+    };
+
+    compareForm.addEventListener('change', (event) => {
+        if (!event.target.matches('[data-compare-pick]')) return;
+
+        // A terceira marcação desmarca a mais antiga.
+        const chosen = picks();
+
+        if (chosen.length > 2) {
+            chosen.find((box) => box !== event.target).checked = false;
+        }
+
+        update();
+    });
+
+    update();
+}
+
+// Botão que abre um diálogo pode trocar a confirmação do formulário dele
+// (data-dialog-confirm): receber uma parcela de cartão de crédito recebe todas,
+// e a pergunta precisa dizer isso. Sem o atributo, a confirmação anterior sai.
+document.addEventListener('click', (event) => {
+    const opener = event.target.closest('[data-dialog-open]');
+    const form = opener && document.getElementById(opener.dataset.dialogOpen)?.querySelector('form');
+
+    if (!form || opener.dataset.dialogConfirm === undefined) return;
+
+    if (opener.dataset.dialogConfirm) {
+        form.dataset.confirm = opener.dataset.dialogConfirm;
+    } else {
+        delete form.dataset.confirm;
+    }
+});
+
+// Tela de permissões: marcar uma permissão marca e trava as de que ela depende
+// (data-requires, valores separados por vírgula), por perfil. O servidor aplica
+// a mesma regra ao salvar; aqui o administrador só vê antes o que vai conceder.
+const permissionBoxes = [...document.querySelectorAll('input[type="checkbox"][data-requires]')];
+
+if (permissionBoxes.length > 0) {
+    const byRole = new Map();
+
+    permissionBoxes.forEach((box) => {
+        const role = box.name;
+        if (!byRole.has(role)) byRole.set(role, new Map());
+        byRole.get(role).set(box.value, box);
+    });
+
+    const refresh = () => {
+        byRole.forEach((boxes) => {
+            const grantedBy = new Map();
+
+            boxes.forEach((box) => {
+                if (!box.checked || box.disabled) return;
+
+                const pending = (box.dataset.requires || '').split(',').filter(Boolean);
+
+                while (pending.length > 0) {
+                    const value = pending.pop();
+                    const required = boxes.get(value);
+
+                    if (!required || grantedBy.has(value)) continue;
+
+                    grantedBy.set(value, box.dataset.label || box.value);
+                    pending.push(...(required.dataset.requires || '').split(',').filter(Boolean));
+                }
+            });
+
+            boxes.forEach((box) => {
+                const by = grantedBy.get(box.value);
+                const note = box.parentElement.querySelector('[data-requires-note]');
+
+                if (by) {
+                    box.checked = true;
+                    box.disabled = true;
+                    if (note) note.textContent = `incluída por: ${by}`;
+                } else {
+                    box.disabled = false;
+                    if (note) note.textContent = '';
+                }
+            });
+        });
+    };
+
+    // Caixa travada não é enviada pelo navegador: na hora de enviar, ela é destravada.
+    permissionBoxes[0].form?.addEventListener('submit', () => permissionBoxes.forEach((box) => (box.disabled = false)));
+    document.addEventListener('change', (event) => {
+        if (event.target.matches('input[type="checkbox"][data-requires]')) refresh();
+    });
+    refresh();
+}
+
+// Linhas repetidas de um formulário (produtos típicos do procedimento):
+// "Adicionar" clona a última linha vazia até o limite, renumerando os campos.
+document.querySelector('[data-rows-add]')?.addEventListener('click', (event) => {
+    const button = event.currentTarget;
+    const container = document.getElementById(button.dataset.rowsAdd);
+    const rows = [...container.querySelectorAll('fieldset')];
+    const max = Number(button.dataset.rowsMax || Infinity);
+
+    if (rows.length >= max) {
+        button.disabled = true;
+        return;
+    }
+
+    const index = rows.length;
+    const clone = rows[rows.length - 1].cloneNode(true);
+
+    clone.querySelectorAll('[name], [id], label[for]').forEach((element) => {
+        for (const attribute of ['name', 'id', 'for']) {
+            const value = element.getAttribute(attribute);
+            if (value) element.setAttribute(attribute, value.replace(/\d+/, String(index)));
+        }
+    });
+    clone.querySelectorAll('input').forEach((input) => (input.value = ''));
+    clone.querySelectorAll('select').forEach((select) => (select.value = ''));
+    clone.querySelectorAll('.input-error').forEach((element) => element.classList.remove('input-error'));
+    clone.querySelectorAll('p.text-red-700').forEach((element) => element.remove());
+    clone.querySelectorAll('label').forEach((label) => label.classList.add('sr-only'));
+
+    container.appendChild(clone);
+    clone.querySelector('select, input')?.focus();
+
+    if (rows.length + 1 >= max) button.disabled = true;
+});
+
+// Agendamento: "Termina às" acompanha data, hora e duração.
+const endsAtSource = document.querySelector('[data-ends-at-source]');
+const endsAtDuration = document.querySelector('[data-ends-at-duration]');
+
+if (endsAtSource && endsAtDuration) {
+    const hint = document.getElementById(`${endsAtDuration.id}-hint`);
+
+    const update = () => {
+        const start = new Date(endsAtSource.value);
+        const minutes = Number(endsAtDuration.value);
+
+        if (!hint) return;
+
+        if (Number.isNaN(start.getTime()) || !minutes) {
+            hint.textContent = 'Termina às —';
+            return;
+        }
+
+        const end = new Date(start.getTime() + minutes * 60 * 1000);
+        const sameDay = end.toDateString() === start.toDateString();
+
+        hint.textContent = `Termina às ${end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}${sameDay ? '' : ' (dia seguinte)'}`;
+    };
+
+    endsAtSource.addEventListener('input', update);
+    endsAtDuration.addEventListener('change', update);
+    update();
+}
+
+// Agendamento: escolher o procedimento só ajusta a duração se a pessoa ainda
+// não a tiver mexido (ver data-duration-source, acima).
+document.querySelector('[data-ends-at-duration]')?.addEventListener('change', (event) => {
+    if (event.isTrusted) event.target.dataset.touched = '';
+});
+
+// Agendamento: horários já ocupados do profissional no dia escolhido, para o
+// encaixe não ser por tentativa. Só horários e procedimentos, sem paciente.
+const occupancy = document.querySelector('[data-occupancy]');
+
+if (occupancy) {
+    const form = occupancy.closest('form');
+    const dateInput = form.querySelector('[name="scheduled_at"]');
+    const professionalSelect = form.querySelector('[name="professional_id"]');
+    const status = occupancy.querySelector('[data-occupancy-status]');
+    const list = occupancy.querySelector('[data-occupancy-list]');
+    let controller = null;
+
+    const load = async () => {
+        const date = dateInput.value.slice(0, 10);
+        const professional = professionalSelect.value;
+
+        if (!date || !professional) {
+            occupancy.hidden = true;
+            return;
+        }
+
+        controller?.abort();
+        controller = new AbortController();
+        occupancy.hidden = false;
+        status.textContent = 'Consultando…';
+        list.replaceChildren();
+
+        const params = new URLSearchParams({ data: date, profissional: professional });
+
+        if (occupancy.dataset.except) params.set('exceto', occupancy.dataset.except);
+
+        try {
+            const response = await fetch(`${occupancy.dataset.url}?${params}`, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                signal: controller.signal,
+            });
+
+            if (!response.ok) throw new Error(String(response.status));
+
+            const { slots } = await response.json();
+
+            status.textContent = slots.length === 0 ? 'Nenhum horário ocupado neste dia.' : '';
+
+            slots.forEach((slot) => {
+                const item = document.createElement('li');
+                item.className = 'rounded-md bg-slate-100 px-2 py-1 tabular-nums';
+                item.textContent = `${slot.from}–${slot.to}${slot.procedure ? ` · ${slot.procedure}` : ''}`;
+                list.append(item);
+            });
+        } catch (error) {
+            if (error.name !== 'AbortError') status.textContent = 'Não foi possível consultar os horários.';
+        }
+    };
+
+    dateInput.addEventListener('change', load);
+    professionalSelect.addEventListener('change', load);
+    load();
+}
+
+
+// Formulário com data-warn-unsaved="mensagem" (inventário): sair da página com
+// algum campo preenchido pede confirmação, porque o que foi digitado se perde.
+// O envio do próprio formulário não pergunta.
+document.querySelectorAll('form[data-warn-unsaved]').forEach((form) => {
+    let dirty = false;
+
+    form.addEventListener('input', () => (dirty = [...form.querySelectorAll('input:not([type=hidden])')].some((field) => field.value !== '')));
+    form.addEventListener('submit', () => (dirty = false));
+
+    window.addEventListener('beforeunload', (event) => {
+        if (dirty) {
+            event.preventDefault();
+            event.returnValue = form.dataset.warnUnsaved;
+        }
+    });
+});
+
+// Diálogo cujo formulário leva data-dialog-reset volta aos valores iniciais a
+// cada abertura: a quantidade digitada para um lote não fica para o próximo.
+// Na captura, antes de o abridor preencher os campos (data-dialog-values).
+document.addEventListener(
+    'click',
+    (event) => {
+        const opener = event.target.closest('[data-dialog-open]');
+        const form = opener && document.getElementById(opener.dataset.dialogOpen)?.querySelector('form[data-dialog-reset]');
+
+        form?.reset();
+        form?.querySelectorAll('[data-unit-preview]').forEach((preview) => (preview.textContent = ''));
+    },
+    true,
+);
+
+// Campo de unidades fechadas de produto fracionado (data-unit-content="100"
+// data-unit-symbol="U"): mostra ao lado quanto isso dá na unidade de medida.
+const unitPreview = (field) => {
+    const output = field.closest('form, td')?.querySelector(`output[for="${CSS.escape(field.id)}"]`);
+    const units = Number(String(field.value).replace(',', '.'));
+    const content = Number(String(field.dataset.unitContent).replace(',', '.'));
+
+    if (!output) return;
+
+    output.textContent =
+        field.value === '' || Number.isNaN(units) || Number.isNaN(content)
+            ? ''
+            : `= ${(units * content).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${field.dataset.unitSymbol}`;
+};
+
+document.querySelectorAll('[data-unit-content]').forEach(unitPreview);
+document.addEventListener('input', (event) => {
+    if (event.target.dataset?.unitContent !== undefined) unitPreview(event.target);
+});
+
+// Conferência da nota fiscal: os campos de cadastro de produto novo só valem
+// quando nenhum produto do estoque foi escolhido para o item.
+document.querySelectorAll('[data-invoice-item]').forEach((item) => {
+    const select = item.querySelector('[data-invoice-product]');
+    const block = item.querySelector('[data-invoice-new-product]');
+    const sync = () => (block.hidden = select.value !== '');
+
+    sync();
+    select.addEventListener('change', sync);
+});

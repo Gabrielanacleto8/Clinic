@@ -6,6 +6,7 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\CepLookupController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\FinancialEntryController;
 use App\Http\Controllers\HomeController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\StockInventoryController;
 use App\Http\Controllers\StockInvoiceController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\StockUnitController;
+use App\Http\Controllers\TreatmentChargeController;
 use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\TreatmentDocumentController;
 use App\Http\Controllers\TreatmentNoteController;
@@ -40,6 +42,9 @@ Route::middleware('guest')->group(function () {
 Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
     Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
 
+    // Endereço pelo CEP, consultado pelo servidor (a CSP não deixa o navegador falar com serviços externos).
+    Route::get('cep/{cep}', CepLookupController::class)->where('cep', '[0-9]{8}')->middleware('throttle:30,1')->name('cep.lookup');
+
     // Mantém a sessão viva enquanto alguém digita um formulário longo (ver app.js).
     Route::get('sessao', fn () => response()->noContent())->middleware('throttle:20,1')->name('session.keepalive');
 
@@ -51,6 +56,7 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::get('/', [HomeController::class, 'index'])->name('home');
 
         Route::get('agenda', [AgendaController::class, 'index'])->name('agenda.index');
+        Route::get('agenda/ocupacao', [AgendaController::class, 'occupancy'])->middleware('throttle:60,1')->name('agenda.occupancy');
 
         Route::resource('agendamentos', AppointmentController::class)
             ->parameters(['agendamentos' => 'appointment'])
@@ -95,6 +101,8 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             // Fotos: o envio pela ficha é de fotos avulsas; o de atendimento fica em
             // atendimentos/{treatment}/fotos. Ler e remover é sempre por aqui, para qualquer foto do paciente.
             Route::post('fotos', [PatientPhotoController::class, 'store'])->name('photos.store');
+            // Antes de fotos/{photo}, para "comparar" não ser lido como um id.
+            Route::get('fotos/comparar', [PatientPhotoController::class, 'compare'])->name('photos.compare');
             Route::get('fotos/{photo}', [PatientPhotoController::class, 'show'])->name('photos.show');
             Route::delete('fotos/{photo}', [PatientPhotoController::class, 'destroy'])->name('photos.destroy');
 
@@ -128,7 +136,10 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::get('estoque/lotes', [ProductBatchController::class, 'index'])->name('stock.batches.index');
         Route::get('estoque/lotes/{batch}', [ProductBatchController::class, 'show'])->name('stock.batches.show');
         Route::patch('estoque/lotes/{batch}', [ProductBatchController::class, 'update'])->name('stock.batches.update');
+        Route::post('estoque/lotes/{batch}/baixa-vencido', [ProductBatchController::class, 'writeOff'])->name('stock.batches.write-off');
+        Route::patch('estoque/movimentacoes/{movement}/custo', [StockMovementController::class, 'updateCost'])->name('stock.movements.cost');
         // Unidades físicas de produto fracionado.
+        Route::get('estoque/unidades', [StockUnitController::class, 'index'])->name('stock.units.index');
         Route::post('estoque/lotes/{batch}/unidades', [StockUnitController::class, 'store'])->name('stock.units.store');
         Route::get('estoque/unidades/{unit}', [StockUnitController::class, 'show'])->name('stock.units.show');
         Route::post('estoque/unidades/{unit}/descarte', [StockUnitController::class, 'discard'])->name('stock.units.discard');
@@ -149,7 +160,10 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::get('financeiro', [FinanceController::class, 'index'])->name('finance.index');
         Route::get('financeiro/lancamentos/novo', [FinancialEntryController::class, 'create'])->name('finance.entries.create');
         Route::post('financeiro/lancamentos', [FinancialEntryController::class, 'store'])->name('finance.entries.store');
+        Route::get('financeiro/lancamentos/{entry}/editar', [FinancialEntryController::class, 'edit'])->name('finance.entries.edit');
+        Route::put('financeiro/lancamentos/{entry}', [FinancialEntryController::class, 'update'])->name('finance.entries.update');
         Route::delete('financeiro/lancamentos/{entry}', [FinancialEntryController::class, 'destroy'])->name('finance.entries.destroy');
+        Route::put('financeiro/lancamentos/{entry}/cobranca', [TreatmentChargeController::class, 'update'])->name('finance.entries.charge');
         Route::post('financeiro/pagamentos', [InstallmentPaymentController::class, 'store'])->name('finance.payments.store');
         Route::delete('financeiro/pagamentos/{installment}', [InstallmentPaymentController::class, 'destroy'])->name('finance.payments.destroy');
 

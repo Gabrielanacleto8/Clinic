@@ -13,10 +13,18 @@
         @if ($archived)
             <input type="hidden" name="arquivados" value="1">
         @endif
+        @can('viewArchived', App\Models\Patient::class)
+            <nav class="flex rounded-lg border border-slate-200 p-0.5" aria-label="Situação do cadastro">
+                <a href="{{ route('patients.index', array_filter(['q' => $search])) }}" @if (! $archived) aria-current="page" @endif
+                   @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => ! $archived, 'text-slate-700 hover:bg-slate-100' => $archived])>Ativos</a>
+                <a href="{{ route('patients.index', array_filter(['q' => $search, 'arquivados' => 1])) }}" @if ($archived) aria-current="page" @endif
+                   @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => $archived, 'text-slate-700 hover:bg-slate-100' => ! $archived])>Arquivados</a>
+            </nav>
+        @endcan
         <div class="min-w-0 flex-1 basis-64">
-            <label for="q" class="sr-only">Buscar por nome ou CPF</label>
+            <label for="q" class="sr-only">Buscar por nome, CPF ou telefone</label>
             <input id="q" name="q" type="search" value="{{ $search }}" maxlength="100" class="input"
-                   placeholder="Buscar por nome ou CPF completo">
+                   placeholder="Buscar por nome, CPF completo ou telefone">
             @error('q')
                 <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
             @enderror
@@ -45,7 +53,10 @@
                             <div class="flex items-center gap-3">
                                 <x-patients.avatar :patient="$patient" />
                                 @if ($archived)
-                                    {{ $patient->name }}
+                                    <span>
+                                        {{ $patient->name }}
+                                        <span class="block text-xs font-normal text-slate-500">Arquivado em {{ $patient->deleted_at->timezone(App\Support\ClinicTime::timezone())->format('d/m/Y') }}</span>
+                                    </span>
                                 @else
                                     <a href="{{ route('patients.show', $patient) }}" class="text-teal-800 hover:underline">{{ $patient->name }}</a>
                                 @endif
@@ -93,13 +104,4 @@
         {{ $patients->links() }}
     </div>
 
-    @can('viewArchived', App\Models\Patient::class)
-        <p class="mt-6 text-sm">
-            @if ($archived)
-                <a href="{{ route('patients.index') }}" class="text-teal-800 hover:underline">← Voltar para pacientes ativos</a>
-            @else
-                <a href="{{ route('patients.index', ['arquivados' => 1]) }}" class="text-slate-600 hover:underline">Ver pacientes arquivados</a>
-            @endif
-        </p>
-    @endcan
 </x-layouts.app>

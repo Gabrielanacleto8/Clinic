@@ -5,10 +5,11 @@ namespace App\Http\Requests;
 use App\Models\ProductBatch;
 use App\Support\ClinicTime;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
- * Correção da fabricação e da validade de um lote digitadas errado na
- * entrada. Mexe na rastreabilidade, por isso exige a permissão de ajuste.
+ * Correção do código, da fabricação e da validade de um lote digitados
+ * errado na entrada. Mexe na rastreabilidade, por isso exige a permissão de ajuste.
  */
 class UpdateProductBatchRequest extends FormRequest
 {
@@ -24,7 +25,11 @@ class UpdateProductBatchRequest extends FormRequest
      */
     public function rules(): array
     {
+        $batch = $this->route('batch');
+
         return [
+            // Ausente, o código fica como está.
+            'batch_code' => ['sometimes', 'required', 'string', 'max:60', Rule::unique(ProductBatch::class, 'batch_code')->where('product_id', $batch->product_id)->ignore($batch)],
             'manufactured_on' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'before_or_equal:'.ClinicTime::today()],
             // Pode ficar no passado: corrigir para a data real pode revelar que o lote venceu.
             'expires_on' => [
@@ -39,7 +44,7 @@ class UpdateProductBatchRequest extends FormRequest
      */
     public function attributes(): array
     {
-        return ['manufactured_on' => 'fabricação', 'expires_on' => 'validade'];
+        return ['batch_code' => 'código do lote', 'manufactured_on' => 'fabricação', 'expires_on' => 'validade'];
     }
 
     /**
@@ -48,6 +53,7 @@ class UpdateProductBatchRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'batch_code.unique' => 'Já existe outro lote deste produto com este código.',
             'manufactured_on.before_or_equal' => 'A fabricação não pode estar no futuro.',
             'expires_on.after' => 'A validade deve ser posterior à fabricação.',
         ];

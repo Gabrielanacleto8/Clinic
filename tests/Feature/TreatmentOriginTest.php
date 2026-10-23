@@ -68,7 +68,7 @@ class TreatmentOriginTest extends TestCase
         $first = Treatment::sole();
         $this->assertSame(
             ['url' => route('patients.treatments.show', [$this->patient, $first]), 'label' => 'Ver o atendimento'],
-            session('success_link'),
+            session('success_links')[0],
         );
 
         // A mensagem leva o atalho para o registro, sem tirar o usuário do Início.
@@ -109,9 +109,10 @@ class TreatmentOriginTest extends TestCase
         $this->assertMatchesRegularExpression('/href="[^"]*\/agenda"[^>]*aria-current="page"/', $page);
         $this->assertDoesNotMatchRegularExpression('/href="[^"]*\/pacientes"[^>]*aria-current="page"/', $page);
 
-        $this->from($create)->post("/pacientes/{$this->patient->id}/atendimentos", $this->payload(['appointment_id' => $appointment->id, 'origem' => 'agenda']))
+        // O registro leva a data do agendamento que encerra (07/10), não a de hoje.
+        $this->from($create)->post("/pacientes/{$this->patient->id}/atendimentos", $this->payload(['appointment_id' => $appointment->id, 'origem' => 'agenda', 'performed_at' => '2026-10-07T16:10']))
             ->assertSessionHasNoErrors()
-            ->assertRedirect('/agenda?data=2026-10-07');
+            ->assertRedirect('/agenda?data=2026-10-07#dia');
 
         $this->assertSame(Treatment::sole()->id, $appointment->refresh()->treatment_id);
     }

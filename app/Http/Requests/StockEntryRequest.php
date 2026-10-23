@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\StockMovementType;
 use App\Models\Product;
+use App\Models\ProductBatch;
+use App\Models\StockMovement;
 use App\Support\ClinicTime;
 use App\Support\LocalizedDecimal;
 use App\Support\Quantity;
@@ -50,8 +53,16 @@ class StockEntryRequest extends FormRequest
             'supplier' => ['nullable', 'string', 'max:150'],
             'invoice_number' => ['nullable', 'string', 'max:60'],
             'reason' => ['nullable', 'string', 'max:255'],
+            // Confirmação de custo muito diferente do da última entrada (ver after()).
+            'confirm_cost' => ['nullable', 'boolean'],
         ];
     }
+
+    /**
+     * Quantas vezes maior ou menor um custo precisa ser, em relação à última
+     * entrada do produto, para pedir confirmação. Pega "12000" no lugar de "12,00".
+     */
+    public const COST_RATIO_ALERT = 5;
 
     /**
      * @return list<callable>
@@ -74,7 +85,39 @@ class StockEntryRequest extends FormRequest
                         .LocalizedDecimal::quantity(3 * (float) $product->unit_content).' '.$product->unit->symbol().').');
                 }
             },
+            $this->checkCostAgainstLastEntry(...),
         ];
+    }
+
+    /**
+     * Custo muito acima ou abaixo do da última entrada do produto costuma ser
+     * erro de digitação, e contaminaria o custo médio do lote. Pede confirmação.
+     */
+    private function checkCostAgainstLastEntry(Validator $validator): void
+    {
+        if ($validator->errors()->hasAny(['product_id', 'unit_cost']) || ! is_numeric($this->input('unit_cost')) || $this->boolean('confirm_cost')) {
+            return;
+        }
+
+        $cost = (float) $this->input('unit_cost');
+        $last = StockMovement::query()
+            ->where('type', StockMovementType::Entry)
+            ->whereNotNull('unit_cost')
+            ->where('unit_cost', '>', 0)
+            ->whereIn('product_batch_id', ProductBatch::query()->where('product_id', (int) $this->input('product_id'))->select('id'))
+            ->latest('id')
+            ->value('unit_cost');
+
+        if ($last === null || $cost <= 0) {
+            return;
+        }
+
+        $ratio = $cost / (float) $last;
+
+        if ($ratio >= self::COST_RATIO_ALERT || $ratio <= 1 / self::COST_RATIO_ALERT) {
+            $validator->errors()->add('unit_cost', 'Este custo é '.($ratio > 1 ? number_format($ratio, 1, ',', '.').' vezes maior' : number_format(1 / $ratio, 1, ',', '.').' vezes menor')
+                .' que o da última entrada deste produto ('.LocalizedDecimal::unitMoney($last).'). Confira o valor e, se estiver certo, marque "Confirmo o custo".');
+        }
     }
 
     /**

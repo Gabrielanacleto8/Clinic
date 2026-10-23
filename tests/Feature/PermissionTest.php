@@ -159,7 +159,7 @@ class PermissionTest extends TestCase
         $this->assertSame($admin->id, $log->user_id);
         $this->assertSame('receptionist', $log->metadata['role']);
         $this->assertSame(['finance.view'], $log->metadata['added']);
-        $this->assertEqualsCanonicalizing(['patients.manage', 'agenda.manage'], $log->metadata['removed']);
+        $this->assertEqualsCanonicalizing(['patients.manage', 'agenda.manage', 'finance.receive'], $log->metadata['removed']);
     }
 
     public function test_permissions_are_read_from_the_database_once_per_request(): void
@@ -189,5 +189,26 @@ class PermissionTest extends TestCase
 
         $this->assertStringNotContainsString('href="'.route('patients.index').'"', $html);
         $this->assertStringNotContainsString('Novo agendamento', $html);
+    }
+
+    public function test_the_migration_grants_receive_to_who_manages_finance_and_the_new_defaults(): void
+    {
+        $permissions = fn (UserRole $role) => DB::table('role_permissions')->where('role', $role->value)->pluck('permission')->sort()->values()->all();
+
+        // Estado de antes da migration: profissional com o financeiro inteiro, nenhuma das permissões novas.
+        DB::table('role_permissions')->whereIn('permission', [Permission::FinanceReceive->value, Permission::StockDiscard->value])->delete();
+        DB::table('role_permissions')->insert(['role' => UserRole::Professional->value, 'permission' => Permission::FinanceManage->value]);
+        $before = ['professional' => $permissions(UserRole::Professional), 'receptionist' => $permissions(UserRole::Receptionist)];
+
+        $migration = require database_path('migrations/2026_10_23_000001_grant_receive_and_discard_permissions.php');
+        $migration->up();
+        // Rodar de novo não duplica.
+        $migration->up();
+
+        $this->assertEqualsCanonicalizing([...$before['professional'], 'finance.receive', 'stock.discard'], $permissions(UserRole::Professional));
+        $this->assertEqualsCanonicalizing([...$before['receptionist'], 'finance.receive'], $permissions(UserRole::Receptionist));
+
+        $migration->down();
+        $this->assertSame(0, DB::table('role_permissions')->whereIn('permission', ['finance.receive', 'stock.discard'])->count());
     }
 }

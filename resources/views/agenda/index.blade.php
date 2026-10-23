@@ -4,8 +4,8 @@
 
     $iso = $date->format('Y-m-d');
     $pt = fn ($day, string $format) => $day->locale('pt_BR')->translatedFormat($format);
-    // Visão e profissional escolhidos seguem em toda a navegação.
-    $keep = array_filter(['visao' => $view === 'semana' ? 'semana' : null, 'profissional' => $professionalId]);
+    // Visão e profissional escolhidos seguem em toda a navegação (ver AgendaController).
+    $keep = $agendaQuery;
     $link = fn (string $day, array $extra = []) => route('agenda.index', [...$keep, ...$extra, 'data' => $day]);
     $weekly = $view === 'semana';
     // Escolher um dia recarrega a agenda com a lista dele no painel. A âncora
@@ -41,9 +41,9 @@
         <a href="{{ $link($next) }}" class="btn btn-secondary">{{ $weekly ? 'Próxima semana →' : 'Próximo mês →' }}</a>
 
         <nav class="flex rounded-lg border border-slate-200 p-0.5" aria-label="Visão da agenda">
-            <a href="{{ route('agenda.index', array_filter(['data' => $iso, 'profissional' => $professionalId])) }}" @if (! $weekly) aria-current="page" @endif
+            <a href="{{ route('agenda.index', array_filter(['data' => $iso, 'profissional' => $agendaQuery['profissional'] ?? null])) }}" @if (! $weekly) aria-current="page" @endif
                @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => ! $weekly, 'text-slate-700 hover:bg-slate-100' => $weekly])>Mês</a>
-            <a href="{{ route('agenda.index', array_filter(['data' => $iso, 'visao' => 'semana', 'profissional' => $professionalId])) }}" @if ($weekly) aria-current="page" @endif
+            <a href="{{ route('agenda.index', array_filter(['data' => $iso, 'visao' => 'semana', 'profissional' => $agendaQuery['profissional'] ?? null])) }}" @if ($weekly) aria-current="page" @endif
                @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => $weekly, 'text-slate-700 hover:bg-slate-100' => ! $weekly])>Semana</a>
         </nav>
 
@@ -53,8 +53,10 @@
             @endif
             <div>
                 <label for="profissional" class="sr-only">Profissional</label>
-                <select id="profissional" name="profissional" class="input">
-                    <option value="">Todos os profissionais</option>
+                {{-- Trocar o profissional já recarrega a agenda (app.js); "Todos" é explícito
+                     porque quem atende abre a própria agenda por padrão. --}}
+                <select id="profissional" name="profissional" class="input" data-autosubmit>
+                    <option value="todos" @selected($professionalId === null)>Todos os profissionais</option>
                     @foreach ($professionals as $id => $name)
                         <option value="{{ $id }}" @selected($professionalId === $id)>{{ $name }}</option>
                     @endforeach
@@ -189,7 +191,7 @@
             @if ($dayAppointments->isEmpty())
                 <p class="px-4 py-10 text-center text-sm text-slate-500 sm:px-6">Nenhum agendamento para este dia.</p>
             @else
-                @include('appointments._list', ['appointments' => $dayAppointments, 'dense' => true])
+                @include('appointments._list', ['appointments' => $dayAppointments, 'dense' => true, 'agendaQuery' => $agendaQuery])
             @endif
         </section>
     </div>

@@ -5,8 +5,10 @@ namespace App\Http\Requests;
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Support\ClinicTime;
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 /**
@@ -56,24 +58,34 @@ class AppointmentStatusRequest extends FormRequest
                 $appointment = $this->appointment();
                 $next = AppointmentStatus::from($this->input('status'));
 
-                // Falta é marcada no dia ou depois; antes disso o paciente ainda pode vir.
-                if ($next === AppointmentStatus::NoShow && ClinicTime::format($appointment->scheduled_at, 'Y-m-d') > ClinicTime::today()) {
+                if ($next === AppointmentStatus::NoShow && ! $appointment->canBeMarkedMissed()) {
                     $validator->errors()->add('status', 'Falta só pode ser marcada a partir do dia do agendamento. Para desmarcar antes, cancele.');
                 }
 
                 if ($next === AppointmentStatus::Scheduled && ! $appointment->isOpen()) {
-                    // Reaberto, o agendamento volta a aceitar registro de atendimento e a ocupar
-                    // o horário: um de dia que já passou deixaria um registro retroativo em aberto.
-                    if (ClinicTime::format($appointment->scheduled_at, 'Y-m-d') < ClinicTime::today()) {
-                        $validator->errors()->add('status', 'Agendamento de dia que já passou não pode ser reaberto. Crie um novo agendamento.');
-                    }
+                    $appointment->loadMissing('professional:id,is_active');
 
-                    if (! $appointment->professional()->where('is_active', true)->exists()) {
+                    if ($appointment->localDay() < ClinicTime::today()) {
+                        $validator->errors()->add('status', 'Agendamento de dia que já passou não pode ser reaberto. Crie um novo agendamento.');
+                    } elseif (! $appointment->canBeReopened()) {
                         $validator->errors()->add('status', 'O profissional deste agendamento está inativo. Crie um novo agendamento com outro profissional.');
                     }
                 }
             },
         ];
+    }
+
+    /**
+     * A lista de agendamentos é longa: o erro vai para o aviso no topo da
+     * página, com o horário do agendamento, em vez de ficar no fim da lista.
+     */
+    protected function failedValidation(ValidatorContract $validator): void
+    {
+        // Sem nome de paciente na mensagem: o horário e o procedimento bastam para achar a linha.
+        $appointment = $this->appointment()->loadMissing('procedure:id,name');
+        $where = ClinicTime::format($appointment->scheduled_at, 'd/m H:i').($appointment->procedure ? ', '.$appointment->procedure->name : '');
+
+        throw ValidationException::withMessages(['status' => $validator->errors()->first('status')." ({$where})"])->redirectTo(url()->previous());
     }
 
     /**

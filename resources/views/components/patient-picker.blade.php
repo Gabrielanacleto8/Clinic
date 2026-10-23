@@ -1,14 +1,14 @@
-@props(['patient' => null, 'scope' => null, 'autofocus' => false])
+@props(['patient' => null, 'scope' => null, 'autofocus' => false, 'required' => true])
 @php
     // Com "scope" (o id de um diálogo), o erro só vale se o envio partiu dele.
     $hasError = ($scope === null || old('_dialog') === $scope) && $errors->has('patient_id');
 @endphp
 {{-- Seletor de paciente com busca. O comportamento está em resources/js/app.js. --}}
 <div {{ $attributes->class('relative') }} data-patient-picker data-url="{{ route('patients.search') }}">
-    <label for="patient_search" class="label">Paciente <span class="text-red-600" aria-hidden="true">*</span></label>
+    <label for="patient_search" class="label">Paciente @if ($required)<span class="text-red-600" aria-hidden="true">*</span>@else<span class="font-normal text-slate-500">(opcional)</span>@endif</label>
     <input type="hidden" name="patient_id" value="{{ $patient?->id }}" data-patient-id>
     <input id="patient_search" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="patient-options"
-           autocomplete="off" value="{{ $patient?->name }}" placeholder="Digite o nome ou o CPF completo" data-patient-search
+           autocomplete="off" value="{{ $patient?->name }}" placeholder="Nome, CPF completo ou telefone" data-patient-search
            @if ($autofocus) autofocus @endif
            @if ($hasError) aria-invalid="true" @endif
            @class(['input', 'input-error' => $hasError])>
