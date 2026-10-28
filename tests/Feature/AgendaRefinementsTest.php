@@ -251,12 +251,15 @@ class AgendaRefinementsTest extends TestCase
 
         app(RolePermissions::class)->sync(UserRole::Professional, [...Permission::defaultsFor(UserRole::Professional), Permission::FinanceReceive]);
 
-        $this->actingAs($this->professional->fresh())
+        $html = $this->actingAs($this->professional->fresh())
             ->get("/pacientes/{$this->patient->id}/atendimentos/novo?agendamento={$appointment->id}")
             ->assertOk()
             ->assertSee('Sem lote disponível no estoque, não sugeridos:')->assertSee('Sem Lote')
-            ->assertSee('name="first_installment_paid" value="1"', false)
-            ->assertDontSee('accent-teal-700"\n                           checked', false);
+            ->getContent();
+
+        // A caixa de recebido existe e vem desmarcada.
+        $this->assertSame(1, preg_match('/<input type="checkbox" name="first_installment_paid" value="1"[^>]*>/', $html, $checkbox));
+        $this->assertStringNotContainsString('checked', $checkbox[0]);
     }
 
     public function test_treatment_list_filters_by_professional_and_status(): void

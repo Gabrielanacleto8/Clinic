@@ -93,6 +93,9 @@
                     <tr>
                         <td colspan="4" class="px-4 py-10 text-center text-slate-500">
                             {{ $filtered ? 'Nenhum atendimento encontrado com estes filtros.' : 'Nenhum atendimento registrado ainda.' }}
+                            @if ($treatmentForm && ! $filtered)
+                                <button type="button" class="btn btn-primary mx-auto mt-4 flex w-fit" data-dialog-open="{{ $treatmentForm['scope'] }}">Registrar o primeiro atendimento</button>
+                            @endif
                         </td>
                     </tr>
                 @endforelse

@@ -20,7 +20,7 @@
             </h1>
             <p class="mt-1 text-sm text-slate-600">
                 {{ ClinicTime::format($treatment->performed_at, 'd/m/Y') }} às {{ ClinicTime::format($treatment->performed_at, 'H:i') }}
-                · {{ $treatment->professional->name }}
+                · {{ $treatment->professional->nameWithRegistration() }}
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">

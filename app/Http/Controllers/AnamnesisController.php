@@ -6,7 +6,9 @@ use App\Enums\AuditAction;
 use App\Http\Requests\AnamnesisRequest;
 use App\Models\Patient;
 use App\Models\PatientAnamnesis;
+use App\Models\PatientAnamnesisVersion;
 use App\Services\AuditLogger;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +30,37 @@ class AnamnesisController extends Controller
         return view('anamnesis.edit', [
             'patient' => $patient,
             'anamnesis' => $patient->anamnesis ?? new PatientAnamnesis,
+            'versions' => $this->versionList($patient),
         ]);
+    }
+
+    /**
+     * Uma versão anterior da ficha, só para leitura.
+     */
+    public function version(Patient $patient, PatientAnamnesisVersion $anamnesisVersion): View
+    {
+        Gate::authorize('viewClinicalRecords', $patient);
+
+        $this->audit->log(AuditAction::AnamnesisVersionViewed, $patient, ['version_id' => $anamnesisVersion->getKey()]);
+
+        return view('anamnesis.version', [
+            'patient' => $patient,
+            'version' => $anamnesisVersion->load('author:id,name'),
+            'versions' => $this->versionList($patient),
+        ]);
+    }
+
+    /**
+     * Datas e autores das versões anteriores, da mais recente à mais antiga, sem o conteúdo.
+     *
+     * @return Collection<int, PatientAnamnesisVersion>
+     */
+    private function versionList(Patient $patient): Collection
+    {
+        return $patient->anamnesisVersions()
+            ->with('author:id,name')
+            ->latest('patient_anamnesis_versions.id')
+            ->get(['patient_anamnesis_versions.id', 'patient_anamnesis_versions.recorded_by', 'patient_anamnesis_versions.recorded_at', 'patient_anamnesis_versions.created_at']);
     }
 
     public function update(AnamnesisRequest $request, Patient $patient): RedirectResponse
@@ -47,6 +79,11 @@ class AnamnesisController extends Controller
                 $this->reviewed = true;
 
                 return;
+            }
+
+            // O que valia até agora vira versão anterior, consultável depois.
+            if ($anamnesis->exists) {
+                $anamnesis->archiveCurrentVersion();
             }
 
             $anamnesis->save();

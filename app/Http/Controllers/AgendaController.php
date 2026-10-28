@@ -7,6 +7,7 @@ use App\Enums\AuditAction;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Support\AgendaDayGrid;
 use App\Support\ClinicTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -28,7 +29,7 @@ class AgendaController extends Controller
 
         $filters = $request->validate([
             'data' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
-            'visao' => ['nullable', Rule::in(['mes', 'semana'])],
+            'visao' => ['nullable', Rule::in(['mes', 'semana', 'dia'])],
             // Um profissional, ou "todos". Quem atende abre a própria agenda por padrão.
             'profissional' => ['nullable', Rule::anyOf([['integer'], [Rule::in(['todos'])]])],
         ]);
@@ -39,9 +40,11 @@ class AgendaController extends Controller
 
         // Semanas inteiras, de segunda a domingo, em dias do calendário da clínica:
         // o mês em várias linhas, ou só a semana do dia escolhido.
-        [$first, $last] = $view === 'semana'
-            ? [$date->startOfWeek(CarbonImmutable::MONDAY), $date->endOfWeek(CarbonImmutable::SUNDAY)]
-            : [$date->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY), $date->endOfMonth()->endOfWeek(CarbonImmutable::SUNDAY)];
+        [$first, $last] = match ($view) {
+            'dia' => [$date, $date],
+            'semana' => [$date->startOfWeek(CarbonImmutable::MONDAY), $date->endOfWeek(CarbonImmutable::SUNDAY)],
+            default => [$date->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY), $date->endOfMonth()->endOfWeek(CarbonImmutable::SUNDAY)],
+        };
 
         // Uma consulta para a grade toda; a separação por dia é feita em memória.
         $appointmentsByDay = $this->appointmentsBetween($first, $last, $professionalId)
@@ -53,20 +56,32 @@ class AgendaController extends Controller
         // A agenda mostra quem vem e com quem: é leitura de dado de paciente.
         $audit->log(AuditAction::AgendaViewed, null, ['view' => $view, 'from' => $first->format('Y-m-d'), 'to' => $last->format('Y-m-d'), 'professional_id' => $professionalId]);
 
+        $professionals = User::query()->attending()->orderBy('name')->pluck('name', 'id');
+
         return view('agenda.index', [
             'date' => $date,
             'today' => ClinicTime::today(),
             'view' => $view,
             'professionalId' => $professionalId,
-            'professionals' => User::query()->attending()->orderBy('name')->pluck('name', 'id'),
+            'professionals' => $professionals,
+            // Visão do dia: um profissional por coluna, nos horários do dia.
+            'dayGrid' => $view === 'dia' ? new AgendaDayGrid($date, $dayAppointments, $professionals, $professionalId) : null,
             // O que a navegação e as ações da lista do dia devem manter. O profissional
             // só vai explícito quando foi escolhido: sem ele, quem atende volta à própria agenda.
-            'agendaQuery' => array_filter(['visao' => $view === 'semana' ? 'semana' : null, 'profissional' => $filters['profissional'] ?? null]),
+            'agendaQuery' => array_filter(['visao' => $view === 'mes' ? null : $view, 'profissional' => $filters['profissional'] ?? null]),
             'days' => $this->days($first, $last),
             'appointmentsByDay' => $appointmentsByDay,
             'dayAppointments' => $dayAppointments,
-            'previous' => $view === 'semana' ? $date->subWeek()->format('Y-m-d') : $this->shiftMonth($date, -1),
-            'next' => $view === 'semana' ? $date->addWeek()->format('Y-m-d') : $this->shiftMonth($date, 1),
+            'previous' => match ($view) {
+                'dia' => $date->subDay()->format('Y-m-d'),
+                'semana' => $date->subWeek()->format('Y-m-d'),
+                default => $this->shiftMonth($date, -1),
+            },
+            'next' => match ($view) {
+                'dia' => $date->addDay()->format('Y-m-d'),
+                'semana' => $date->addWeek()->format('Y-m-d'),
+                default => $this->shiftMonth($date, 1),
+            },
         ]);
     }
 

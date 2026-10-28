@@ -7,6 +7,7 @@ use App\Models\Procedure;
 use App\Models\ProductBatch;
 use App\Models\StockUnit;
 use App\Models\Treatment;
+use App\Models\TreatmentPlanItem;
 use App\Models\User;
 use App\Support\LocalizedDecimal;
 use Illuminate\Database\Eloquent\Collection;
@@ -95,12 +96,30 @@ class TreatmentFormOptions
     {
         $patientId = $request->old('_dialog') === self::DIALOG ? $request->old('patient_id') : null;
 
+        $patient = is_numeric($patientId) ? Patient::find((int) $patientId) : null;
+
         return [
             'scope' => self::DIALOG,
             'treatment' => new Treatment,
-            'patient' => is_numeric($patientId) ? Patient::find((int) $patientId) : null,
+            'patient' => $patient,
+            'planSessions' => $patient ? $this->planSessions($patient) : new Collection,
             ...$this->for($request->user()),
         ];
+    }
+
+    /**
+     * Sessões de pacote que o paciente ainda pode usar.
+     *
+     * @return Collection<int, TreatmentPlanItem>
+     */
+    public function planSessions(Patient $patient): Collection
+    {
+        return TreatmentPlanItem::query()
+            ->availableFor($patient->getKey())
+            ->with('procedure:id,name')
+            ->orderBy('treatment_plan_id')
+            ->orderBy('id')
+            ->get(['id', 'treatment_plan_id', 'procedure_id', 'sessions']);
     }
 
     /**

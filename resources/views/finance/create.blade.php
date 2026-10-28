@@ -7,7 +7,7 @@
     $isIncome = $type === FinancialEntryType::Income;
     $installmentOptions = collect(range(1, InstallmentPlan::MAX_INSTALLMENTS))->mapWithKeys(fn ($count) => [$count => $count === 1 ? 'À vista' : $count.'x'])->all();
     $defaults ??= [];
-    $tab = fn (bool $active) => 'rounded-lg px-4 py-2 text-sm font-medium '.($active ? 'bg-teal-700 text-white' : 'text-slate-700 hover:bg-slate-100');
+    $tab = fn (bool $active) => 'rounded-lg px-4 py-2 text-sm font-medium '.($active ? 'bg-brand text-on-brand' : 'text-slate-700 hover:bg-slate-100');
 @endphp
 <x-layouts.app :title="$isIncome ? 'Nova receita' : 'Nova despesa'">
     <div class="mx-auto max-w-3xl">
@@ -52,7 +52,7 @@
                     <div class="md:col-span-2 md:pt-7">
                         <label class="flex items-center gap-2 text-sm">
                             <input type="hidden" name="first_installment_paid" value="0">
-                            <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
+                            <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-brand"
                                    @checked(old('first_installment_paid'))>
                             {{ $isIncome ? 'Primeira parcela já recebida' : 'Primeira parcela já paga' }}
                         </label>

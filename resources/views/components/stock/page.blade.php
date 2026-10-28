@@ -18,7 +18,7 @@
         $alerts['expiring'] > 0 ? [$plural($alerts['expiring'], 'lote perto do vencimento', 'lotes perto do vencimento'), route('stock.batches.index', ['situacao' => 'vencendo']), 'bg-amber-100 text-amber-800'] : null,
     ]);
 
-    $tabClass = fn (bool $current) => 'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap '.($current ? 'bg-teal-700 text-white' : 'text-slate-700 hover:bg-slate-100');
+    $tabClass = fn (bool $current) => 'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap '.($current ? 'bg-brand text-on-brand' : 'text-slate-700 hover:bg-slate-100');
 @endphp
 {{-- Moldura das abas do estoque: título, alertas e navegação. --}}
 <x-layouts.app title="Estoque">
@@ -42,7 +42,7 @@
         </ul>
     @endif
 
-    <nav class="mt-4 flex gap-1 relative overflow-x-auto rounded-xl border border-slate-200 bg-white p-1" aria-label="Seções do estoque">
+    <nav class="mt-4 flex gap-1 relative overflow-x-auto rounded-xl border border-slate-200 bg-white p-1" aria-label="Seções do estoque" data-tabs>
         @foreach ($tabs as $key => [$label, $url])
             <a href="{{ $url }}" class="{{ $tabClass($active === $key) }}" @if ($active === $key) aria-current="page" @endif>{{ $label }}</a>
         @endforeach

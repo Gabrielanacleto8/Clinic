@@ -198,7 +198,34 @@
 <section class="{{ $section }}">
     <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Cobrança</h2>
     <p class="mt-1 text-sm text-slate-600">Gera o lançamento no financeiro, na data do atendimento.</p>
-    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6">
+
+    {{-- Sessão de pacote já pago: no prontuário, as do paciente; no diálogo, buscadas ao escolher o paciente (app.js). --}}
+    @php
+        $planSessions ??= collect();
+        $sessionInScope = $scope === null || old('_dialog') === $scope;
+        $sessionError = $sessionInScope ? $errors->first('treatment_plan_item_id') : null;
+        $sessionId = ($scope ? $scope.'-' : '').'treatment_plan_item_id';
+    @endphp
+    <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3" data-plan-sessions
+         @if ($scope) data-url="{{ route('patients.plan-sessions', ['patient' => '__ID__']) }}" @endif
+         @if ($planSessions->isEmpty() && ! $sessionError) hidden @endif>
+        <label for="{{ $sessionId }}" class="label">Sessão de pacote</label>
+        <select id="{{ $sessionId }}" name="treatment_plan_item_id" data-plan-session-select
+                @if ($sessionError) aria-invalid="true" aria-describedby="{{ $sessionId }}-error" @endif
+                @class(['input', 'input-error' => $sessionError])>
+            <option value="">Não usar: cobrar este atendimento</option>
+            @foreach ($planSessions as $item)
+                <option value="{{ $item->id }}" data-procedure="{{ $item->procedure_id }}"
+                        @selected($sessionInScope && (string) old('treatment_plan_item_id') === (string) $item->id)>{{ $item->sessionLabel() }}</option>
+            @endforeach
+        </select>
+        <p class="mt-1 text-xs text-emerald-900">O pacote já foi cobrado na aprovação: usando uma sessão, este atendimento não gera cobrança.</p>
+        @if ($sessionError)
+            <p id="{{ $sessionId }}-error" class="mt-1 text-sm text-red-700">{{ $sessionError }}</p>
+        @endif
+    </div>
+
+    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6" data-charge-fields>
         <x-form.input :scope="$scope" class="md:col-span-2" name="amount" label="Valor do atendimento (R$)" required inputmode="decimal" autocomplete="off"
                       :value="$suggested['amount']" hint="Use 0 para atendimento sem cobrança." data-treatment-amount />
         <x-form.select :scope="$scope" class="md:col-span-2" name="payment_method" label="Forma de pagamento" :options="PaymentMethod::options()" placeholder="Selecione" />
@@ -210,7 +237,7 @@
                 <label class="flex items-center gap-2 text-sm">
                     <input type="hidden" name="first_installment_paid" value="0">
                     {{-- Desmarcado por padrão: dar por recebido o que ainda não entrou bloquearia a anulação e inflaria o caixa. --}}
-                    <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
+                    <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-brand"
                            @checked(old('first_installment_paid', false))>
                     Pagamento (ou primeira parcela) já recebido
                 </label>

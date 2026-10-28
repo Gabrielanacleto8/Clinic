@@ -40,13 +40,13 @@ class FinancialEntryPolicy
     }
 
     /**
-     * Lançamento gerado por atendimento faz parte do histórico do atendimento
-     * e não é excluído por aqui. Com parcela paga, o pagamento é desfeito
+     * Lançamento gerado por atendimento ou por orçamento aprovado faz parte do
+     * histórico deles e não é excluído por aqui. Com parcela paga, o pagamento é desfeito
      * antes: excluir sumiria com dinheiro já contado em meses fechados.
      */
     public function delete(User $user, FinancialEntry $entry): bool
     {
-        return $user->hasPermission(Permission::FinanceManage) && $entry->treatment_id === null && ! $entry->hasPaidInstallment();
+        return $user->hasPermission(Permission::FinanceManage) && ! $entry->isGenerated() && ! $entry->hasPaidInstallment();
     }
 
     /**
@@ -55,15 +55,15 @@ class FinancialEntryPolicy
      */
     public function update(User $user, FinancialEntry $entry): bool
     {
-        return $user->hasPermission(Permission::FinanceManage) && $entry->treatment_id === null;
+        return $user->hasPermission(Permission::FinanceManage) && ! $entry->isGenerated();
     }
 
     /**
      * Ajustar forma de pagamento, parcelas e vencimento da cobrança de um
-     * atendimento, enquanto nada foi recebido. O registro clínico não muda.
+     * atendimento ou de um pacote, enquanto nada foi recebido. O registro de origem não muda.
      */
     public function adjustCharge(User $user, FinancialEntry $entry): bool
     {
-        return $user->hasPermission(Permission::FinanceManage) && $entry->treatment_id !== null && ! $entry->hasPaidInstallment();
+        return $user->hasPermission(Permission::FinanceManage) && $entry->isGenerated() && ! $entry->hasPaidInstallment();
     }
 }

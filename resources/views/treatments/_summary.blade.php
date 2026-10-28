@@ -13,7 +13,7 @@
     <p class="mt-1 text-sm text-slate-600">
         <a href="{{ route('patients.show', $patient) }}" class="font-medium text-teal-800 hover:underline">{{ $patient->name }}</a>
         · {{ ClinicTime::format($treatment->performed_at, 'd/m/Y') }} às {{ ClinicTime::format($treatment->performed_at, 'H:i') }}
-        · {{ $treatment->professional->name }}
+        · {{ $treatment->professional->nameWithRegistration() }}
     </p>
     <p class="mt-1 text-xs text-slate-500">Registrado em {{ ClinicTime::format($treatment->created_at) }}.</p>
     @if ($treatment->isVoided())

@@ -61,6 +61,16 @@ class PhotoProcessor
     }
 
     /**
+     * Logo da clínica: a imagem inteira, sem recorte, reduzida para caber em $max pixels.
+     *
+     * @throws InvalidPhotoException
+     */
+    public function logo(UploadedFile $file, int $max): string
+    {
+        return $this->encode($this->fit($this->load($file), $max), 90);
+    }
+
+    /**
      * Valida o arquivo pelo conteúdo e devolve os pixels já na orientação certa.
      *
      * @throws InvalidPhotoException

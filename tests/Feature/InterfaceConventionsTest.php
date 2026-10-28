@@ -27,7 +27,7 @@ class InterfaceConventionsTest extends TestCase
         $header = $this->header($this->actingAs(User::factory()->create(['name' => 'Carla Recepção']))->get('/pacientes')->assertOk()->getContent());
 
         $this->assertStringContainsString('Carla', $header);
-        $this->assertStringContainsString('href="'.route('password.edit').'"', $header);
+        $this->assertStringContainsString('href="'.route('profile.show').'"', $header);
         $this->assertMatchesRegularExpression('/<form method="POST" action="'.preg_quote(route('logout'), '/').'"[^>]*>.*?Sair<\/button>/s', $header);
     }
 

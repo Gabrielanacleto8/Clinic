@@ -120,6 +120,16 @@ class Treatment extends Model
     }
 
     /**
+     * Sessão de pacote que este atendimento usou, se usou.
+     *
+     * @return BelongsTo<TreatmentPlanItem, $this>
+     */
+    public function planItem(): BelongsTo
+    {
+        return $this->belongsTo(TreatmentPlanItem::class, 'treatment_plan_item_id');
+    }
+
+    /**
      * @return HasMany<TreatmentProduct, $this>
      */
     public function products(): HasMany

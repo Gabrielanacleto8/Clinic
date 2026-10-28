@@ -35,6 +35,7 @@ class UpdateUserRequest extends FormRequest
             'name' => ['required', 'string', 'min:3', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class)->ignore($this->route('user'))],
             'role' => ['required', Rule::enum(UserRole::class)],
+            'professional_registration' => ['nullable', 'string', 'max:40'],
             'is_active' => ['required', 'boolean'],
             'password' => ['nullable', 'string', 'max:255', 'confirmed', Password::defaults()],
         ];
@@ -78,7 +79,7 @@ class UpdateUserRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'name' => 'nome', 'email' => 'e-mail', 'role' => 'perfil',
+            'name' => 'nome', 'email' => 'e-mail', 'role' => 'perfil', 'professional_registration' => 'registro profissional',
             'is_active' => 'situação', 'password' => 'senha provisória',
         ];
     }

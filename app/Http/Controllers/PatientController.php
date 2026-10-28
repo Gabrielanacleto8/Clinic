@@ -11,6 +11,7 @@ use App\Models\FinancialInstallment;
 use App\Models\Patient;
 use App\Models\PatientAttachment;
 use App\Models\TreatmentNote;
+use App\Models\TreatmentPlan;
 use App\Models\TreatmentProduct;
 use App\Services\AppointmentScheduler;
 use App\Services\AuditLogger;
@@ -36,6 +37,8 @@ class PatientController extends Controller
     private const AGENDA_TABS = ['agendamentos' => 'Agendamentos'];
 
     private const FINANCE_TABS = ['financeiro' => 'Financeiro'];
+
+    private const PLAN_TABS = ['orcamentos' => 'Orçamentos'];
 
     /** Abrir a mesma aba de novo em poucos minutos não gera outro registro de leitura. */
     private const VIEW_AUDIT_MINUTES = 5;
@@ -134,7 +137,7 @@ class PatientController extends Controller
         $agenda = $user->hasPermission(Permission::AgendaView);
         // Quem recebe de paciente vê o débito dele, mesmo sem o resto do financeiro.
         $finance = $user->hasPermission(Permission::FinanceView) || $user->hasPermission(Permission::FinanceReceive);
-        $tabs = $this->availableTabs($clinical, $agenda, $finance);
+        $tabs = [...$this->availableTabs($clinical, $agenda, $finance), ...($user->can('viewAny', TreatmentPlan::class) ? self::PLAN_TABS : [])];
         $requested = $request->query('aba');
         $tab = is_string($requested) && array_key_exists($requested, $tabs) ? $requested : array_key_first($tabs);
 
@@ -235,6 +238,9 @@ class PatientController extends Controller
         $page = fn ($query, int $size = 15) => $query->paginate($size)->withQueryString()->fragment('historico');
 
         return match ($tab) {
+            'orcamentos' => [
+                'records' => $page($patient->treatmentPlans()->withUsage()->latest('id')),
+            ],
             'atendimentos' => [
                 'records' => $page($patient->treatments()->with(['professional:id,name', 'procedure:id,name'])->withCount('photos')
                     ->latest('performed_at')),

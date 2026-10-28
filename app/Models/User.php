@@ -17,12 +17,19 @@ use Illuminate\Notifications\Notifiable;
  * Perfil, situação e data de troca de senha ficam fora do mass assignment
  * de propósito: só são alterados de forma explícita, por quem tem permissão.
  */
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'professional_registration'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Padrões do banco, para o modelo recém-criado já tê-los sem ser relido.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = ['professional_registration' => null];
 
     /**
      * @return array<string, string>
@@ -41,6 +48,14 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === UserRole::Admin;
+    }
+
+    /**
+     * Como o profissional assina nos documentos: o nome e, se informado, o registro no conselho.
+     */
+    public function nameWithRegistration(): string
+    {
+        return $this->name.($this->professional_registration ? ' · '.$this->professional_registration : '');
     }
 
     public function hasPermission(Permission $permission): bool

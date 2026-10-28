@@ -5,6 +5,7 @@ namespace App\Enums;
 enum FinancialCategory: string
 {
     case Treatment = 'treatment';
+    case TreatmentPlan = 'treatment_plan';
     case OtherIncome = 'other_income';
 
     case Supplies = 'supplies';
@@ -19,6 +20,7 @@ enum FinancialCategory: string
     {
         return match ($this) {
             self::Treatment => 'Atendimento',
+            self::TreatmentPlan => 'Pacote de sessões',
             self::OtherIncome => 'Outras receitas',
             self::Supplies => 'Insumos e produtos',
             self::Rent => 'Aluguel e condomínio',
@@ -33,14 +35,15 @@ enum FinancialCategory: string
     public function type(): FinancialEntryType
     {
         return match ($this) {
-            self::Treatment, self::OtherIncome => FinancialEntryType::Income,
+            self::Treatment, self::TreatmentPlan, self::OtherIncome => FinancialEntryType::Income,
             default => FinancialEntryType::Expense,
         };
     }
 
     /**
      * Categorias que podem ser escolhidas em um lançamento manual do tipo dado.
-     * "Atendimento" fica de fora: só nasce do registro de um atendimento.
+     * "Atendimento" e "Pacote de sessões" ficam de fora: só nascem do registro
+     * de um atendimento e da aprovação de um orçamento.
      *
      * @return array<string, string>
      */
@@ -49,7 +52,7 @@ enum FinancialCategory: string
         $options = [];
 
         foreach (self::cases() as $category) {
-            if ($category->type() === $type && $category !== self::Treatment) {
+            if ($category->type() === $type && ! in_array($category, [self::Treatment, self::TreatmentPlan], true)) {
                 $options[$category->value] = $category->label();
             }
         }

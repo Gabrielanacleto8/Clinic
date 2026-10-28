@@ -37,9 +37,5 @@
                 Confira com o paciente e salve a ficha para registrar a revisão.
             @endif
         </p>
-    @else
-        <p class="mt-4 text-sm text-slate-600">
-            Ficha ainda não preenchida. Registre alergias, medicamentos e condições de saúde antes do primeiro procedimento.
-        </p>
     @endif
 </section>

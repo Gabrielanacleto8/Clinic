@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Sex;
 use App\Support\BlindIndex;
 use App\Support\Cpf;
+use App\Support\Phone;
 use Database\Factories\PatientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -89,6 +91,24 @@ class Patient extends Model
     }
 
     /**
+     * Versões anteriores da ficha de saúde; a rota da versão é resolvida por aqui.
+     *
+     * @return HasManyThrough<PatientAnamnesisVersion, PatientAnamnesis, $this>
+     */
+    public function anamnesisVersions(): HasManyThrough
+    {
+        return $this->hasManyThrough(PatientAnamnesisVersion::class, PatientAnamnesis::class);
+    }
+
+    /**
+     * @return HasMany<TreatmentPlan, $this>
+     */
+    public function treatmentPlans(): HasMany
+    {
+        return $this->hasMany(TreatmentPlan::class);
+    }
+
+    /**
      * @return HasMany<Treatment, $this>
      */
     public function treatments(): HasMany
@@ -161,7 +181,7 @@ class Patient extends Model
 
     public function formattedGuardianPhone(): string
     {
-        return self::formatPhone((string) $this->guardian_phone);
+        return Phone::format($this->guardian_phone);
     }
 
     /**
@@ -184,16 +204,7 @@ class Patient extends Model
 
     public function formattedPhone(): string
     {
-        return self::formatPhone((string) $this->phone);
-    }
-
-    private static function formatPhone(string $phone): string
-    {
-        return match (strlen($phone)) {
-            11 => sprintf('(%s) %s-%s', substr($phone, 0, 2), substr($phone, 2, 5), substr($phone, 7)),
-            10 => sprintf('(%s) %s-%s', substr($phone, 0, 2), substr($phone, 2, 4), substr($phone, 6)),
-            default => $phone,
-        };
+        return Phone::format($this->phone);
     }
 
     public function formattedZipCode(): string

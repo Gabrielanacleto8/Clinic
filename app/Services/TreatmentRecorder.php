@@ -12,6 +12,7 @@ use App\Models\Appointment;
 use App\Models\ProductBatch;
 use App\Models\StockUnit;
 use App\Models\Treatment;
+use App\Models\TreatmentPlanItem;
 use App\Models\User;
 use App\Support\ClinicTime;
 use App\Support\LocalizedDecimal;
@@ -27,6 +28,8 @@ class TreatmentRecorder
 {
     public const APPOINTMENT_NOT_OPEN = 'Este agendamento não está mais em aberto. Confira a situação dele na agenda.';
 
+    public const PLAN_SESSION_UNAVAILABLE = 'Esta sessão de pacote não está mais disponível para o paciente. Recarregue a página.';
+
     public function __construct(
         private readonly StockLedger $stock,
         private readonly FinancialRecorder $finance,
@@ -38,12 +41,18 @@ class TreatmentRecorder
      * @param  list<array{product_batch_id: int, stock_unit_id?: int|null, quantity: string}>  $products  No fracionado, sem unidade abre uma nova do lote.
      * @param  array{amount: string, payment_method: PaymentMethod, installments: int, first_due_date: string, first_installment_paid: bool}|null  $payment  Nulo quando não há cobrança.
      * @param  int|null  $appointmentId  Agendamento que este atendimento encerra, se houver.
+     * @param  int|null  $planItemId  Item de pacote cuja sessão este atendimento usa; sem cobrança própria.
      *
      * @throws ValidationException
      */
-    public function record(Treatment $treatment, array $products, ?array $payment, ?int $appointmentId, User $user): Treatment
+    public function record(Treatment $treatment, array $products, ?array $payment, ?int $appointmentId, User $user, ?int $planItemId = null): Treatment
     {
-        return DB::transaction(function () use ($treatment, $products, $payment, $appointmentId, $user): Treatment {
+        return DB::transaction(function () use ($treatment, $products, $payment, $appointmentId, $user, $planItemId): Treatment {
+            if ($planItemId !== null) {
+                $this->claimPlanSession($planItemId, $treatment);
+                $payment = null;
+            }
+
             $treatment->save();
 
             $this->withdrawProducts($treatment, $products, $user);
@@ -75,6 +84,7 @@ class TreatmentRecorder
                 'patient_id' => $treatment->patient_id,
                 'products' => $treatment->products->count(),
                 'charged' => $payment !== null,
+                ...($planItemId === null ? [] : ['plan_item_id' => $planItemId]),
             ]);
 
             return $treatment;
@@ -158,6 +168,28 @@ class TreatmentRecorder
                 'quantity' => $row['quantity'],
             ]);
         }
+    }
+
+    /**
+     * Reserva a sessão do pacote para este atendimento. A trava no item impede
+     * que dois registros simultâneos usem a última sessão duas vezes.
+     *
+     * @throws ValidationException
+     */
+    private function claimPlanSession(int $planItemId, Treatment $treatment): void
+    {
+        TreatmentPlanItem::query()->whereKey($planItemId)->lockForUpdate()->first(['id']);
+
+        $item = TreatmentPlanItem::query()
+            ->availableFor($treatment->patient_id)
+            ->whereKey($planItemId)
+            ->first(['id', 'procedure_id', 'sessions']);
+
+        if ($item === null || $item->procedure_id !== $treatment->procedure_id) {
+            throw ValidationException::withMessages(['treatment_plan_item_id' => self::PLAN_SESSION_UNAVAILABLE]);
+        }
+
+        $treatment->treatment_plan_item_id = $item->getKey();
     }
 
     /**

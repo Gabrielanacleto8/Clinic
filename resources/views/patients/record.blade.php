@@ -19,7 +19,7 @@
 @endphp
 <x-layouts.print :title="'Prontuário · '.$patient->name" :back="$back">
     <header class="border-b border-slate-300 pb-4">
-        <p class="text-xs text-slate-500">{{ config('app.name') }} · {{ $single ? 'Registro de atendimento' : 'Prontuário' }}</p>
+        <x-clinic-header :profile="$clinic" :document="$single ? 'Registro de atendimento' : 'Prontuário'" class="mb-4" />
         <h1 class="mt-1 text-xl font-semibold">{{ $patient->name }}@if ($patient->trashed()) <span class="text-sm font-normal text-slate-500">(cadastro arquivado)</span>@endif</h1>
         <p class="mt-1 text-slate-600">
             CPF {{ $patient->formattedCpf() }}
@@ -74,7 +74,7 @@
         <article class="mt-3 break-inside-avoid rounded-lg border border-slate-300 p-4">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 class="text-base font-semibold">{{ $treatment->procedure->name }}</h3>
-                <p class="text-slate-600">{{ ClinicTime::format($treatment->performed_at) }} · {{ $treatment->professional->name }}</p>
+                <p class="text-slate-600">{{ ClinicTime::format($treatment->performed_at) }} · {{ $treatment->professional->nameWithRegistration() }}</p>
             </div>
             @if ($treatment->isVoided())
                 <p class="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-red-900">

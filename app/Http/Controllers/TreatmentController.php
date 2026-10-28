@@ -98,6 +98,7 @@ class TreatmentController extends Controller
             'treatment' => $treatment,
             'appointment' => $appointment,
             'origin' => is_string($origin) ? TreatmentOrigin::tryFrom($origin) : null,
+            'planSessions' => $options->planSessions($patient),
             ...$options->for($request->user(), $appointment?->procedure_id),
         ]);
     }
@@ -149,7 +150,7 @@ class TreatmentController extends Controller
         $treatment->professional_id = $this->resolveProfessionalId($request);
         $treatment->created_by = $request->user()->getKey();
 
-        $recorder->record($treatment, $request->products(), $request->payment(), $appointmentId, $request->user());
+        $recorder->record($treatment, $request->products(), $request->payment(), $appointmentId, $request->user(), $request->planItemId());
 
         $message = 'Atendimento registrado. Estoque e financeiro foram atualizados.';
 
@@ -188,7 +189,7 @@ class TreatmentController extends Controller
         $this->audit->log(AuditAction::TreatmentViewed, $treatment, ['patient_id' => $patient->getKey()]);
 
         $treatment->load([
-            'professional:id,name',
+            'professional:id,name,professional_registration',
             'creator:id,name',
             'voidedBy:id,name',
             'procedure:id,name',
@@ -227,7 +228,7 @@ class TreatmentController extends Controller
         $this->audit->log(AuditAction::TreatmentViewed, $treatment, ['patient_id' => $patient->getKey(), 'view' => 'summary']);
 
         $treatment->load([
-            'professional:id,name',
+            'professional:id,name,professional_registration',
             'procedure:id,name',
             'products.batch.product:id,name,unit',
             'notes.author:id,name',

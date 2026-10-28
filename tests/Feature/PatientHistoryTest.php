@@ -58,15 +58,15 @@ class PatientHistoryTest extends TestCase
 
     public function test_tabs_follow_the_role_permissions(): void
     {
-        // Recepção: o cadastro, a agenda e o financeiro do paciente (ela recebe), sem o prontuário.
+        // Recepção: o cadastro, a agenda, o financeiro do paciente (ela recebe) e os orçamentos, sem o prontuário.
         $reception = $this->actingAs(User::factory()->create())->get($this->url);
         $reception->assertOk()->assertDontSee('Produtos utilizados')->assertDontSee('Evoluções')->assertSee('Agendamentos');
-        $this->assertSame(['agendamentos', 'financeiro'], array_keys($reception->viewData('tabs')));
+        $this->assertSame(['agendamentos', 'financeiro', 'orcamentos'], array_keys($reception->viewData('tabs')));
 
         // Profissional: histórico clínico e agenda, sem o financeiro.
         $response = $this->actingAs(User::factory()->professional()->create())->get($this->url);
         $response->assertSee('Produtos utilizados')->assertSee('Fotos')->assertSee('Evoluções');
-        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'agendamentos'], array_keys($response->viewData('tabs')));
+        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'agendamentos', 'orcamentos'], array_keys($response->viewData('tabs')));
 
         // Pedir a aba financeira sem permissão cai na aba padrão.
         $this->get("{$this->url}?aba=financeiro")->assertOk()->assertViewHas('tab', 'atendimentos')->assertDontSee('A vencer');
@@ -74,7 +74,7 @@ class PatientHistoryTest extends TestCase
 
         $admin = $this->actingAs(User::factory()->admin()->create())->get("{$this->url}?aba=financeiro");
         $admin->assertOk()->assertViewHas('tab', 'financeiro')->assertSee('A vencer');
-        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'agendamentos', 'financeiro'], array_keys($admin->viewData('tabs')));
+        $this->assertSame(['atendimentos', 'produtos', 'fotos', 'evolucoes', 'agendamentos', 'financeiro', 'orcamentos'], array_keys($admin->viewData('tabs')));
     }
 
     public function test_products_tab_lists_what_was_applied_in_the_patients_treatments(): void

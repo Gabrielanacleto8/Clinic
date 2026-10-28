@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\AppointmentScheduler;
 use App\Services\AuditLogger;
 use App\Support\ClinicTime;
+use App\Support\Duration;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -37,30 +38,49 @@ class AppointmentController extends Controller
     {
         Gate::authorize('create', Appointment::class);
 
+        // Sugestões vindas de links: a ficha ("Agendar"), o horário livre da
+        // visão do dia (data, hora e profissional) e a sessão de um pacote (procedimento).
         $query = $request->validate([
             'paciente' => ['nullable', 'integer'],
             'data' => ['nullable', 'date_format:Y-m-d'],
+            'hora' => ['nullable', 'date_format:H:i'],
+            'profissional' => ['nullable', 'integer'],
+            'procedimento' => ['nullable', 'integer'],
         ]);
 
         // Paciente vindo do link "Agendar" ou devolvido após erro de validação.
         $patientId = $request->old('patient_id', $query['paciente'] ?? null);
 
-        // Sugere a próxima hora cheia de hoje, ou 9h do dia futuro que estava aberto na agenda.
-        $suggested = isset($query['data']) && $query['data'] > ClinicTime::today()
-            ? CarbonImmutable::createFromFormat('Y-m-d H:i', $query['data'].' 09:00', ClinicTime::timezone())
-            : ClinicTime::local(now())->addHour()->startOfHour();
+        // A hora escolhida na grade do dia; sem ela, a próxima hora cheia de hoje
+        // ou 9h do dia futuro que estava aberto na agenda.
+        $suggested = match (true) {
+            isset($query['data'], $query['hora']) => CarbonImmutable::createFromFormat('Y-m-d H:i', $query['data'].' '.$query['hora'], ClinicTime::timezone()),
+            isset($query['data']) && $query['data'] > ClinicTime::today() => CarbonImmutable::createFromFormat('Y-m-d H:i', $query['data'].' 09:00', ClinicTime::timezone()),
+            default => ClinicTime::local(now())->addHour()->startOfHour(),
+        };
+
+        $professionals = $this->professionals();
+        $procedures = $this->procedures();
+        $procedure = isset($query['procedimento']) ? $procedures->firstWhere('id', (int) $query['procedimento']) : null;
 
         $appointment = new Appointment;
-        $appointment->schedule($suggested->utc(), 30);
-        $appointment->professional_id = $request->user()->hasPermission(Permission::RecordsManage) ? $request->user()->getKey() : null;
+        // Com o procedimento, a duração estimada no catálogo, se for uma das oferecidas.
+        $duration = $procedure && in_array((int) $procedure->duration_minutes, Duration::OPTIONS, true) ? (int) $procedure->duration_minutes : 30;
+        $appointment->schedule($suggested->utc(), $duration);
+        $appointment->procedure_id = $procedure?->getKey();
+        $appointment->professional_id = match (true) {
+            isset($query['profissional']) && $professionals->contains('id', (int) $query['profissional']) => (int) $query['profissional'],
+            $request->user()->hasPermission(Permission::RecordsManage) => $request->user()->getKey(),
+            default => null,
+        };
 
         return view('appointments.create', [
             'appointment' => $appointment,
             'patient' => is_numeric($patientId) ? Patient::find((int) $patientId) : null,
             // Vindo do botão "Agendar" da ficha: cancelar volta para ela.
             'fromPatient' => isset($query['paciente']),
-            'professionals' => $this->professionals(),
-            'procedures' => $this->procedures(),
+            'professionals' => $professionals,
+            'procedures' => $procedures,
         ]);
     }
 
@@ -171,8 +191,8 @@ class AppointmentController extends Controller
     private function backToAgenda(Appointment $appointment, string $message): RedirectResponse
     {
         $context = request()->validate([
-            'visao' => ['nullable', Rule::in(['mes', 'semana'])],
-            'profissional' => ['nullable', 'integer'],
+            'visao' => ['nullable', Rule::in(['mes', 'semana', 'dia'])],
+            'profissional' => ['nullable', Rule::anyOf([['integer'], [Rule::in(['todos'])]])],
         ]);
 
         return redirect()

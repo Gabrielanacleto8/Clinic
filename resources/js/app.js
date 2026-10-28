@@ -26,6 +26,18 @@ const masks = {
         return `(${d.slice(0, 2)}) ${rest.length > split ? `${rest.slice(0, split)}-${rest.slice(split)}` : rest}`;
     },
 
+    cnpj(digits) {
+        const d = digits.slice(0, 14);
+        let out = d.slice(0, 2);
+
+        if (d.length > 2) out += `.${d.slice(2, 5)}`;
+        if (d.length > 5) out += `.${d.slice(5, 8)}`;
+        if (d.length > 8) out += `/${d.slice(8, 12)}`;
+        if (d.length > 12) out += `-${d.slice(12)}`;
+
+        return out;
+    },
+
     cep(digits) {
         const d = digits.slice(0, 8);
 
@@ -65,8 +77,9 @@ document.addEventListener('submit', (event) => {
         // O botão mostra que o envio está em andamento; no 4G isso evita o segundo toque.
         const button = event.submitter;
 
-        if (button && !button.dataset.label) {
-            button.dataset.label = button.textContent;
+        // Atributo próprio: data-label já é o rótulo das células de tabela (table-stack) e das permissões.
+        if (button && button.dataset.submitLabel === undefined) {
+            button.dataset.submitLabel = button.textContent;
             button.textContent = 'Enviando…';
             button.setAttribute('aria-disabled', 'true');
         }
@@ -121,13 +134,23 @@ if (keepaliveForms.length > 0) {
 // Página de impressão: o botão abre o diálogo de imprimir (ou salvar em PDF) do navegador.
 document.querySelector('[data-print]')?.addEventListener('click', () => window.print());
 
+// Abas [data-tabs] que rolam de lado no celular: a aba atual aparece inteira,
+// centralizada quando possível, em vez de ficar cortada na borda.
+document.querySelectorAll('[data-tabs]').forEach((tabs) => {
+    const current = tabs.querySelector('[aria-current="page"]');
+
+    if (current && tabs.scrollWidth > tabs.clientWidth) {
+        tabs.scrollLeft = current.offsetLeft - (tabs.clientWidth - current.offsetWidth) / 2;
+    }
+});
+
 // Voltar pelo navegador restaura a página do cache com o formulário ainda marcado.
 window.addEventListener('pageshow', () => {
     document.querySelectorAll('form[data-submitting]').forEach((form) => delete form.dataset.submitting);
-    document.querySelectorAll('[data-label]').forEach((button) => {
-        button.textContent = button.dataset.label;
+    document.querySelectorAll('[data-submit-label]').forEach((button) => {
+        button.textContent = button.dataset.submitLabel;
         button.removeAttribute('aria-disabled');
-        delete button.dataset.label;
+        delete button.dataset.submitLabel;
     });
 });
 
@@ -221,6 +244,33 @@ if (collapseButton) {
 
         const secure = location.protocol === 'https:' ? '; secure' : '';
         document.cookie = `sidebar=${root.dataset.sidebar}; path=/; max-age=31536000; samesite=lax${secure}`;
+    });
+}
+
+// Botão de modo escuro no topo: troca na hora e guarda a escolha neste
+// aparelho (o servidor lê o mesmo cookie para a próxima página já vir certa).
+document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = root.dataset.theme === 'dark' || (root.dataset.theme === 'system' && systemDark);
+
+    root.dataset.theme = dark ? 'light' : 'dark';
+
+    const secure = location.protocol === 'https:' ? '; secure' : '';
+    document.cookie = `theme=${root.dataset.theme}; path=/; max-age=157680000; samesite=lax${secure}`;
+});
+
+// Tecla "/" fora de um campo leva à pesquisa do topo, como em outros sistemas.
+const globalSearch = document.querySelector('[data-global-search]');
+
+if (globalSearch) {
+    document.addEventListener('keydown', (event) => {
+        const typing = event.target.closest('input, textarea, select, [contenteditable="true"]');
+
+        if (event.key === '/' && !typing && !event.ctrlKey && !event.metaKey && !event.altKey && globalSearch.offsetParent !== null) {
+            event.preventDefault();
+            globalSearch.focus();
+        }
     });
 }
 
@@ -551,6 +601,104 @@ if (picker) {
 
     input.addEventListener('blur', close);
 }
+
+// Sessão de pacote no registro do atendimento: usada, o procedimento passa a
+// ser o do pacote e a cobrança some (o pacote já foi cobrado). No diálogo, as
+// sessões do paciente são buscadas quando ele é escolhido.
+document.querySelectorAll('[data-plan-sessions]').forEach((block) => {
+    const form = block.closest('form');
+    const select = block.querySelector('[data-plan-session-select]');
+    const charge = form.querySelector('[data-charge-fields]');
+    const procedure = form.querySelector('select[name="procedure_id"]');
+
+    const sync = () => {
+        const option = select.selectedOptions[0];
+        const usingSession = select.value !== '';
+
+        charge.hidden = usingSession;
+        charge.querySelectorAll('input, select').forEach((field) => (field.disabled = usingSession));
+
+        if (usingSession && procedure && procedure.value !== option.dataset.procedure) {
+            procedure.value = option.dataset.procedure;
+            procedure.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    };
+
+    select.addEventListener('change', sync);
+    sync();
+
+    const patientPicker = form.querySelector('[data-patient-picker]');
+
+    if (!block.dataset.url || !patientPicker) return;
+
+    const fill = (sessions) => {
+        select.replaceChildren(select.options[0], ...sessions.map((session) => {
+            const option = document.createElement('option');
+
+            option.value = String(session.id);
+            option.dataset.procedure = String(session.procedure_id);
+            option.textContent = session.label;
+
+            return option;
+        }));
+
+        block.hidden = sessions.length === 0;
+        sync();
+    };
+
+    patientPicker.addEventListener('patientchange', async (event) => {
+        select.value = '';
+        fill([]);
+
+        if (!event.detail.id) return;
+
+        try {
+            const response = await fetch(block.dataset.url.replace('__ID__', encodeURIComponent(event.detail.id)), { headers: { Accept: 'application/json' } });
+
+            if (response.ok) fill((await response.json()).sessions);
+        } catch {
+            // Sem a lista, o atendimento é cobrado normalmente; a sessão pode ser usada num novo registro.
+        }
+    });
+});
+
+// Orçamento: escolher o procedimento preenche o valor do catálogo (se a linha
+// ainda não tem valor) e o total é refeito a cada mudança.
+document.querySelectorAll('[data-plan-items]').forEach((list) => {
+    const total = list.closest('form').querySelector('[data-plan-total]');
+    const parse = (text) => Number(String(text).replace(/\./g, '').replace(',', '.')) || 0;
+    const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const refresh = () => {
+        let sum = 0;
+
+        list.querySelectorAll('[data-plan-item]').forEach((row) => {
+            if (row.querySelector('[data-plan-procedure]').value === '') return;
+
+            sum += parse(row.querySelector('[data-plan-sessions-input]').value) * parse(row.querySelector('[data-plan-price]').value);
+        });
+
+        total.textContent = money.format(sum);
+    };
+
+    list.addEventListener('change', (event) => {
+        const row = event.target.closest('[data-plan-item]');
+
+        if (event.target.matches('[data-plan-procedure]') && row) {
+            const price = row.querySelector('[data-plan-price]');
+            const sessions = row.querySelector('[data-plan-sessions-input]');
+            const option = event.target.selectedOptions[0];
+
+            if (price.value === '' && option.dataset.price) price.value = option.dataset.price;
+            if (sessions.value === '' && event.target.value !== '') sessions.value = '1';
+        }
+
+        refresh();
+    });
+
+    list.addEventListener('input', refresh);
+    refresh();
+});
 
 // Diálogo "Registrar atendimento": ao escolher o paciente, mostra os avisos de
 // saúde dele (alergias, gestação), como o formulário do prontuário já faz.

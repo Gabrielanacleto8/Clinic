@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 /**
  * Item do catálogo de procedimentos da clínica.
  */
-#[Fillable(['name', 'description', 'category', 'price', 'duration_minutes', 'is_active'])]
+#[Fillable(['name', 'description', 'consent_template', 'category', 'price', 'duration_minutes', 'is_active'])]
 class Procedure extends Model
 {
     /** @use HasFactory<ProcedureFactory> */

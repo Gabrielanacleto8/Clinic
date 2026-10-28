@@ -33,7 +33,7 @@
         <div class="md:col-span-2 md:pt-7">
             <label class="flex items-center gap-2 text-sm">
                 <input type="hidden" name="is_active" value="0">
-                <input type="checkbox" name="is_active" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
+                <input type="checkbox" name="is_active" value="1" class="size-4 rounded border-slate-300 accent-brand"
                        @checked($inScope ? old('is_active', $product->is_active) : $product->is_active)>
                 Ativo
             </label>
@@ -42,7 +42,7 @@
                 {{-- Só aparece ao desativar produto com saldo: um clique errado não tira o produto do atendimento sem aviso. --}}
                 <label class="mt-2 flex items-start gap-2 text-sm">
                     <input type="hidden" name="confirm_deactivate" value="0">
-                    <input type="checkbox" name="confirm_deactivate" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700" @checked(old('confirm_deactivate'))>
+                    <input type="checkbox" name="confirm_deactivate" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-brand" @checked(old('confirm_deactivate'))>
                     Confirmo a desativação
                 </label>
             @endif
@@ -62,7 +62,7 @@
             <div class="md:col-span-2 md:pt-7">
                 <label class="flex items-start gap-2 text-sm">
                     <input type="hidden" name="multi_patient_use" value="0">
-                    <input type="checkbox" name="multi_patient_use" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700"
+                    <input type="checkbox" name="multi_patient_use" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-brand"
                            @checked($inScope ? old('multi_patient_use', $product->multi_patient_use) : $product->multi_patient_use)>
                     A sobra pode ser usada em outro paciente
                 </label>

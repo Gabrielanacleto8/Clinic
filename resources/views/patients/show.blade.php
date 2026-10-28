@@ -51,14 +51,18 @@
             @can('update', $patient)
                 <a href="{{ route('patients.edit', $patient) }}" class="btn btn-secondary">Editar</a>
             @endcan
-            @if ($clinical || auth()->user()->can('viewAny', App\Models\AuditLog::class))
+            @if ($clinical || auth()->user()->can('viewAny', App\Models\AuditLog::class) || auth()->user()->can('create', App\Models\TreatmentPlan::class))
                 {{-- Ações de consulta menos frequentes ficam num menu: o arquivamento está no fim da edição. --}}
                 <details class="relative" data-menu>
                     <summary class="btn btn-secondary cursor-pointer list-none">Mais <x-icon name="chevron-down" class="size-4" /></summary>
                     <div class="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                         @if ($clinical)
                             <a href="{{ route('patients.record', $patient) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Imprimir prontuário</a>
+                            <a href="{{ route('patients.consent-term', $patient) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Termo de consentimento</a>
                         @endif
+                        @can('create', App\Models\TreatmentPlan::class)
+                            <a href="{{ route('patients.plans.create', $patient) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Novo orçamento</a>
+                        @endcan
                         @can('viewAny', App\Models\AuditLog::class)
                             <a href="{{ route('audit.index', ['paciente' => $patient->id]) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Ver acessos</a>
                         @endcan
@@ -70,7 +74,9 @@
 
     @if ($clinical)
         {{-- Alergias e contraindicações antes de tudo: é o que o profissional procura ao abrir a ficha. --}}
-        <x-health-alerts :anamnesis="$patient->anamnesis" class="mt-4" />
+        {{-- Sem ficha, o aviso já traz o botão de preencher: o cartão da ficha só aparece depois. --}}
+        <x-health-alerts :anamnesis="$patient->anamnesis" class="mt-4"
+                         :fill-url="auth()->user()->can('updateClinicalRecords', $patient) ? route('patients.anamnesis.edit', $patient) : null" />
     @endif
 
     @isset($upcomingAppointments)
@@ -206,13 +212,13 @@
         </section>
     </div>
 
-    @if ($clinical)
+    @if ($clinical && $patient->anamnesis)
         @include('patients._anamnesis')
     @endif
 
     @if ($tab !== null)
-        @php $tabClass = fn (bool $active) => 'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap '.($active ? 'bg-teal-700 text-white' : 'text-slate-700 hover:bg-slate-100'); @endphp
-        <nav id="historico" class="mt-6 flex gap-1 relative overflow-x-auto rounded-xl border border-slate-200 bg-white p-1" aria-label="Histórico do paciente">
+        @php $tabClass = fn (bool $active) => 'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap '.($active ? 'bg-brand text-on-brand' : 'text-slate-700 hover:bg-slate-100'); @endphp
+        <nav id="historico" class="mt-6 flex gap-1 relative overflow-x-auto rounded-xl border border-slate-200 bg-white p-1" aria-label="Histórico do paciente" data-tabs>
             @foreach ($tabs as $key => $label)
                 <a href="{{ route('patients.show', [$patient, 'aba' => $key]) }}#historico" class="{{ $tabClass($tab === $key) }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}</a>
             @endforeach

@@ -78,7 +78,12 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-4 py-10 text-center text-slate-500">Nenhum procedimento encontrado.</td>
+                        <td colspan="5" class="px-4 py-10 text-center text-slate-500">
+                            Nenhum procedimento encontrado.
+                            @can('create', App\Models\Procedure::class)
+                                <a href="{{ route('procedures.create') }}" class="btn btn-primary mx-auto mt-4 flex w-fit">Cadastrar procedimento</a>
+                            @endcan
+                        </td>
                     </tr>
                 @endforelse
             </tbody>

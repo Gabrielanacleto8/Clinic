@@ -28,14 +28,14 @@
                             <tr>
                                 <th scope="row" class="px-4 py-3 font-normal">{{ $permission->label() }}</th>
                                 <td data-label="{{ App\Enums\UserRole::Admin->label() }}" class="px-4 py-3 text-center">
-                                    <input type="checkbox" checked disabled class="size-4 accent-teal-700" aria-label="{{ $permission->label() }}: administrador, sempre permitido">
+                                    <input type="checkbox" checked disabled class="size-4 accent-brand max-md:size-6" aria-label="{{ $permission->label() }}: administrador, sempre permitido">
                                 </td>
                                 @foreach ($roles as $role)
                                     <td data-label="{{ $role->label() }}" class="px-4 py-3 text-center">
                                         {{-- data-requires: o app.js marca e trava as permissões de que esta depende. --}}
                                         <span class="inline-flex flex-col items-center gap-0.5">
                                             <input type="checkbox" name="permissions[{{ $role->value }}][]" value="{{ $permission->value }}"
-                                                   class="size-4 cursor-pointer accent-teal-700" aria-label="{{ $permission->label() }}: {{ $role->label() }}"
+                                                   class="size-4 cursor-pointer accent-brand max-md:size-6" aria-label="{{ $permission->label() }}: {{ $role->label() }}"
                                                    data-requires="{{ implode(',', array_map(fn ($required) => $required->value, $permission->requires())) }}"
                                                    data-label="{{ $permission->label() }}"
                                                    @checked($rolePermissions->allows($role, $permission))>

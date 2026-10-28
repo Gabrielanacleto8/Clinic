@@ -21,10 +21,12 @@ final class AuditDescription
     private const SUBJECTS = [
         'appointment' => 'Agendamento',
         'audit_log' => 'Registro de auditoria',
+        'clinic_profile' => 'Dados da clínica',
         'financial_entry' => 'Lançamento',
         'financial_installment' => 'Parcela',
         'patient' => 'Paciente',
         'patient_anamnesis' => 'Ficha de saúde',
+        'patient_anamnesis_version' => 'Versão da ficha de saúde',
         'patient_attachment' => 'Anexo',
         'procedure' => 'Procedimento',
         'product' => 'Produto',
@@ -33,6 +35,8 @@ final class AuditDescription
         'stock_unit' => 'Unidade',
         'treatment' => 'Atendimento',
         'treatment_note' => 'Evolução',
+        'treatment_plan' => 'Orçamento',
+        'treatment_plan_item' => 'Item de orçamento',
         'treatment_product' => 'Produto do atendimento',
         'user' => 'Usuário',
     ];
@@ -81,6 +85,11 @@ final class AuditDescription
         'scope' => 'Escopo',
         'remember' => 'Lembrar de mim',
         'archived' => 'Arquivados',
+        'version_id' => 'Versão',
+        'procedure_id' => 'Procedimento',
+        'rows' => 'Linhas exportadas',
+        'items' => 'Itens',
+        'plan_item_id' => 'Sessão de pacote (item)',
     ];
 
     private const FIELDS = [
@@ -94,7 +103,9 @@ final class AuditDescription
         'pregnant_or_lactating' => 'gestante ou lactante', 'expires_on' => 'validade', 'manufactured_on' => 'fabricação', 'products' => 'produtos típicos',
         'minimum_stock' => 'estoque mínimo', 'cost' => 'custo', 'unit' => 'unidade', 'unit_content' => 'conteúdo', 'brand' => 'marca',
         'manufacturer' => 'fabricante', 'supplier' => 'fornecedor', 'code' => 'código', 'hours_after_opening' => 'prazo depois de aberto',
-        'multi_patient_use' => 'uso em vários pacientes',
+        'multi_patient_use' => 'uso em vários pacientes', 'legal_name' => 'razão social', 'cnpj' => 'CNPJ', 'address' => 'endereço',
+        'technical_lead' => 'responsável técnico', 'professional_registration' => 'registro profissional', 'consent_template' => 'termo de consentimento',
+        'valid_until' => 'validade',
     ];
 
     private const REASONS = [

@@ -16,6 +16,9 @@ enum AuditAction: string
     case PermissionsUpdated = 'permissions.updated';
     case PermissionsViewed = 'permissions.viewed';
     case AuditViewed = 'audit.viewed';
+    case ClinicProfileUpdated = 'clinic.profile_updated';
+    case ClinicLogoUpdated = 'clinic.logo_updated';
+    case ClinicLogoRemoved = 'clinic.logo_removed';
 
     case PatientViewed = 'patient.viewed';
     case PatientCreated = 'patient.created';
@@ -24,6 +27,7 @@ enum AuditAction: string
     case PatientRestored = 'patient.restored';
     case PatientLookup = 'patient.lookup';
     case PatientRecordPrinted = 'patient.record_printed';
+    case ConsentTermPrinted = 'patient.consent_term_printed';
 
     case AppointmentCreated = 'appointment.created';
     case AppointmentUpdated = 'appointment.updated';
@@ -36,6 +40,8 @@ enum AuditAction: string
     case InstallmentPaid = 'finance.installment_paid';
     case InstallmentReopened = 'finance.installment_reopened';
     case FinanceViewed = 'finance.viewed';
+    case FinanceExported = 'finance.exported';
+    case FinanceMarginViewed = 'finance.margin_viewed';
 
     case ProcedureCreated = 'procedure.created';
     case ProcedureUpdated = 'procedure.updated';
@@ -50,6 +56,7 @@ enum AuditAction: string
 
     case AnamnesisUpdated = 'anamnesis.updated';
     case AnamnesisReviewed = 'anamnesis.reviewed';
+    case AnamnesisVersionViewed = 'anamnesis.version_viewed';
 
     case TreatmentsListed = 'treatment.listed';
     case TreatmentViewed = 'treatment.viewed';
@@ -61,6 +68,14 @@ enum AuditAction: string
     case TreatmentDiscarded = 'treatment.discarded';
     case TreatmentFinalized = 'treatment.finalized';
     case TreatmentNoteAdded = 'treatment.note_added';
+    case TreatmentPlanCreated = 'plan.created';
+    case TreatmentPlanUpdated = 'plan.updated';
+    case TreatmentPlanViewed = 'plan.viewed';
+    case TreatmentPlansListed = 'plan.listed';
+    case TreatmentPlanPrinted = 'plan.printed';
+    case TreatmentPlanApproved = 'plan.approved';
+    case TreatmentPlanDeclined = 'plan.declined';
+    case TreatmentPlanClosed = 'plan.closed';
 
     case PhotoUploaded = 'photo.uploaded';
     case PhotoViewed = 'photo.viewed';
@@ -87,6 +102,9 @@ enum AuditAction: string
             self::PermissionsUpdated => 'Alterou permissões',
             self::PermissionsViewed => 'Consultou permissões',
             self::AuditViewed => 'Consultou a auditoria',
+            self::ClinicProfileUpdated => 'Alterou os dados da clínica',
+            self::ClinicLogoUpdated => 'Trocou o logo da clínica',
+            self::ClinicLogoRemoved => 'Removeu o logo da clínica',
             self::PatientViewed => 'Abriu a ficha do paciente',
             self::PatientCreated => 'Cadastrou paciente',
             self::PatientUpdated => 'Alterou cadastro do paciente',
@@ -94,6 +112,7 @@ enum AuditAction: string
             self::PatientRestored => 'Restaurou paciente',
             self::PatientLookup => 'Encontrou cadastro existente ao digitar um CPF',
             self::PatientRecordPrinted => 'Imprimiu o prontuário',
+            self::ConsentTermPrinted => 'Imprimiu termo de consentimento',
             self::AppointmentCreated => 'Criou agendamento',
             self::AppointmentUpdated => 'Remarcou agendamento',
             self::AppointmentStatusChanged => 'Mudou a situação do agendamento',
@@ -104,6 +123,8 @@ enum AuditAction: string
             self::InstallmentPaid => 'Registrou pagamento',
             self::InstallmentReopened => 'Desfez pagamento',
             self::FinanceViewed => 'Consultou o financeiro',
+            self::FinanceExported => 'Exportou a planilha do financeiro',
+            self::FinanceMarginViewed => 'Consultou a margem por procedimento',
             self::ProcedureCreated => 'Cadastrou procedimento',
             self::ProcedureUpdated => 'Alterou procedimento',
             self::ProductCreated => 'Cadastrou produto',
@@ -115,6 +136,7 @@ enum AuditAction: string
             self::StockEntryCostCorrected => 'Corrigiu o custo de uma entrada',
             self::AnamnesisUpdated => 'Alterou a ficha de saúde',
             self::AnamnesisReviewed => 'Revisou a ficha de saúde sem alteração',
+            self::AnamnesisVersionViewed => 'Consultou versão anterior da ficha de saúde',
             self::TreatmentsListed => 'Consultou a lista de atendimentos',
             self::TreatmentViewed => 'Abriu atendimento',
             self::TreatmentCreated => 'Registrou atendimento',
@@ -123,6 +145,14 @@ enum AuditAction: string
             self::TreatmentDiscarded => 'Descartou rascunho (versão antiga)',
             self::TreatmentFinalized => 'Finalizou atendimento (versão antiga)',
             self::TreatmentNoteAdded => 'Registrou evolução',
+            self::TreatmentPlanCreated => 'Criou orçamento',
+            self::TreatmentPlanUpdated => 'Alterou orçamento',
+            self::TreatmentPlanViewed => 'Abriu orçamento',
+            self::TreatmentPlansListed => 'Consultou a lista de orçamentos',
+            self::TreatmentPlanPrinted => 'Imprimiu orçamento',
+            self::TreatmentPlanApproved => 'Aprovou orçamento (gerou o pacote e a cobrança)',
+            self::TreatmentPlanDeclined => 'Marcou orçamento como recusado',
+            self::TreatmentPlanClosed => 'Encerrou pacote',
             self::PhotoUploaded => 'Enviou foto',
             self::PhotoViewed => 'Abriu foto',
             self::PhotoDeleted => 'Removeu foto',

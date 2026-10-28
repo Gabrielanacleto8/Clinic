@@ -118,7 +118,7 @@ Para avisar os usuários durante a atualização: `docker compose -f docker-comp
 O serviço `backup` roda todo dia às `BACKUP_HOUR` (padrão 2h, no fuso `CLINIC_TIMEZONE`) e grava em `BACKUP_PATH` uma pasta `clinic-AAAAMMDD-HHMMSS` com:
 
 - `database.sql.gz` — o banco inteiro (`mysqldump --single-transaction`, sem travar o sistema);
-- `files.tar.gz` — fotos e documentos, que já estão criptografados com a `APP_KEY`;
+- `files.tar.gz` — fotos e documentos, que já estão criptografados com a `APP_KEY`, e o logo da clínica com os ícones do aplicativo (pasta `clinica/`, sem criptografia: é a marca pública);
 - `SHA256SUMS` — para conferir que a cópia não foi corrompida.
 
 Os dois arquivos saem como `.enc` (AES-256 com a `BACKUP_PASSPHRASE`). A cifra não autentica o conteúdo e o `SHA256SUMS` fica na mesma pasta: guarde as cópias onde só a clínica grava, para ninguém trocar um arquivo e refazer as somas. Cópias com mais de `BACKUP_RETENTION_DAYS` dias são apagadas.

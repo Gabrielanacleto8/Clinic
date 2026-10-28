@@ -8,6 +8,12 @@
     $keep = $agendaQuery;
     $link = fn (string $day, array $extra = []) => route('agenda.index', [...$keep, ...$extra, 'data' => $day]);
     $weekly = $view === 'semana';
+    $daily = $view === 'dia';
+    $previousLabel = match ($view) { 'dia' => 'Dia anterior', 'semana' => 'Semana anterior', default => 'Mês anterior' };
+    $nextLabel = match ($view) { 'dia' => 'Próximo dia', 'semana' => 'Próxima semana', default => 'Próximo mês' };
+    // Link para trocar de visão mantendo o dia e o filtro de profissional.
+    $viewLink = fn (?string $target) => route('agenda.index', array_filter(['data' => $iso, 'visao' => $target, 'profissional' => $agendaQuery['profissional'] ?? null]));
+    $canSchedule = auth()->user()->can('create', App\Models\Appointment::class);
     // Escolher um dia recarrega a agenda com a lista dele no painel. A âncora
     // leva até o painel no celular, onde ele fica abaixo do calendário.
     $dayLink = fn (string $day) => $link($day).'#dia';
@@ -20,7 +26,9 @@
         <div>
             <h1 class="text-xl font-semibold tracking-tight">Agenda</h1>
             <p class="mt-1 text-sm text-slate-600">
-                @if ($weekly)
+                @if ($daily)
+                    {{ ucfirst($pt($date, 'l, j \d\e F \d\e Y')) }}
+                @elseif ($weekly)
                     Semana de {{ $pt($days[0], 'j \d\e F') }} a {{ $pt(end($days), 'j \d\e F \d\e Y') }}
                 @else
                     {{ ucfirst($pt($date, 'F \d\e Y')) }}
@@ -36,22 +44,23 @@
     </div>
 
     <div class="mt-6 flex flex-wrap items-center gap-2">
-        <a href="{{ $link($previous) }}" class="btn btn-secondary">{{ $weekly ? '← Semana anterior' : '← Mês anterior' }}</a>
+        {{-- No celular as setas ficam sem texto visível, para a navegação caber numa linha. --}}
+        <a href="{{ $link($previous) }}" class="btn btn-secondary max-sm:px-3"><span aria-hidden="true">←</span><span class="max-sm:sr-only">{{ $previousLabel }}</span></a>
         <a href="{{ $link($today) }}" class="btn btn-secondary">Hoje</a>
-        <a href="{{ $link($next) }}" class="btn btn-secondary">{{ $weekly ? 'Próxima semana →' : 'Próximo mês →' }}</a>
+        <a href="{{ $link($next) }}" class="btn btn-secondary max-sm:px-3"><span class="max-sm:sr-only">{{ $nextLabel }}</span><span aria-hidden="true">→</span></a>
 
         <nav class="flex rounded-lg border border-slate-200 p-0.5" aria-label="Visão da agenda">
-            <a href="{{ route('agenda.index', array_filter(['data' => $iso, 'profissional' => $agendaQuery['profissional'] ?? null])) }}" @if (! $weekly) aria-current="page" @endif
-               @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => ! $weekly, 'text-slate-700 hover:bg-slate-100' => $weekly])>Mês</a>
-            <a href="{{ route('agenda.index', array_filter(['data' => $iso, 'visao' => 'semana', 'profissional' => $agendaQuery['profissional'] ?? null])) }}" @if ($weekly) aria-current="page" @endif
-               @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => $weekly, 'text-slate-700 hover:bg-slate-100' => ! $weekly])>Semana</a>
+            @foreach (['mes' => 'Mês', 'semana' => 'Semana', 'dia' => 'Dia'] as $target => $label)
+                <a href="{{ $viewLink($target === 'mes' ? null : $target) }}" @if ($view === $target) aria-current="page" @endif
+                   @class(['rounded-md px-3 py-1.5 text-sm', 'bg-brand font-medium text-on-brand' => $view === $target, 'text-slate-700 hover:bg-slate-100' => $view !== $target])>{{ $label }}</a>
+            @endforeach
         </nav>
 
-        <form method="GET" action="{{ route('agenda.index') }}" class="ml-auto flex flex-wrap items-start gap-2">
-            @if ($weekly)
-                <input type="hidden" name="visao" value="semana">
+        <form method="GET" action="{{ route('agenda.index') }}" class="flex w-full flex-wrap items-start gap-2 sm:ml-auto sm:w-auto">
+            @if ($view !== 'mes')
+                <input type="hidden" name="visao" value="{{ $view }}">
             @endif
-            <div>
+            <div class="w-full sm:w-auto">
                 <label for="profissional" class="sr-only">Profissional</label>
                 {{-- Trocar o profissional já recarrega a agenda (app.js); "Todos" é explícito
                      porque quem atende abre a própria agenda por padrão. --}}
@@ -62,7 +71,7 @@
                     @endforeach
                 </select>
             </div>
-            <div>
+            <div class="flex-1 sm:flex-none">
                 <label for="data" class="sr-only">Ir para a data</label>
                 <input id="data" name="data" type="date" value="{{ $iso }}" required @class(['input', 'input-error' => $errors->has('data')])>
                 @error('data')
@@ -75,7 +84,9 @@
 
     <div class="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div>
-            @if ($weekly)
+            @if ($daily)
+                @include('agenda._day')
+            @elseif ($weekly)
                 {{-- Semana: cada dia com todos os agendamentos, em coluna na tela larga e em bloco no celular. --}}
                 <div class="grid grid-cols-1 gap-2 md:grid-cols-7">
                     @foreach ($days as $day)
@@ -88,7 +99,7 @@
                             <a href="{{ $dayLink($key) }}" @if ($selected) aria-current="true" @endif
                                class="flex items-baseline justify-between gap-1 rounded px-1 text-xs font-medium text-slate-500 uppercase hover:bg-slate-100">
                                 <span>{{ $pt($day, 'D') }}</span>
-                                <span @class(['text-sm tabular-nums', 'rounded-full bg-teal-700 px-1.5 font-semibold text-white' => $key === $today, 'text-slate-900' => $key !== $today])>{{ $day->format('d/m') }}</span>
+                                <span @class(['text-sm tabular-nums', 'rounded-full bg-brand px-1.5 font-semibold text-on-brand' => $key === $today, 'text-slate-900' => $key !== $today])>{{ $day->format('d/m') }}</span>
                             </a>
                             @if ($items->isEmpty())
                                 <p class="mt-2 px-1 text-xs text-slate-400">Livre</p>
@@ -144,7 +155,7 @@
                                     ])>
                                         {{-- O link do número cobre a célula inteira: tocar em qualquer ponto escolhe o dia. --}}
                                         <a href="{{ $dayLink($key) }}" title="{{ $pt($day, 'l, j \d\e F') }}" @if ($selected) aria-current="true" @endif
-                                           @class(['inline-flex size-7 items-center justify-center rounded-full text-sm tabular-nums after:absolute after:inset-0', 'bg-teal-700 font-semibold text-white' => $key === $today])>{{ $day->day }}</a>
+                                           @class(['inline-flex size-7 items-center justify-center rounded-full text-sm tabular-nums after:absolute after:inset-0', 'bg-brand font-semibold text-on-brand' => $key === $today])>{{ $day->day }}</a>
                                         @if ($items->isNotEmpty())
                                             <p class="mx-auto mt-1 flex size-6 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-800 tabular-nums @xl:hidden">
                                                 {{ $items->count() }}<span class="sr-only"> {{ $items->count() === 1 ? 'agendamento' : 'agendamentos' }}</span>

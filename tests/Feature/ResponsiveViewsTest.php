@@ -35,6 +35,32 @@ class ResponsiveViewsTest extends TestCase
         $this->assertGreaterThan(0, $checked);
     }
 
+    public function test_scripts_leave_table_cell_labels_alone(): void
+    {
+        // data-label é o rótulo das células no celular. Um script que o reaproveite
+        // (o bloqueio de envio duplo já fez isso) troca o valor da célula pelo rótulo.
+        $script = File::get(resource_path('js/app.js'));
+
+        $this->assertStringNotContainsString("querySelectorAll('[data-label]')", $script);
+        $this->assertStringNotContainsString('.dataset.label =', $script);
+    }
+
+    public function test_scrollable_tab_bars_bring_the_current_tab_into_view(): void
+    {
+        $checked = 0;
+
+        foreach (File::allFiles(resource_path('views')) as $file) {
+            preg_match_all('/<nav\b[^>]*overflow-x-auto[^>]*>/', $file->getContents(), $navs);
+
+            foreach ($navs[0] as $nav) {
+                $this->assertStringContainsString('data-tabs', $nav, "Abas roláveis sem data-tabs em {$file->getRelativePathname()}");
+                $checked++;
+            }
+        }
+
+        $this->assertGreaterThan(0, $checked);
+    }
+
     public function test_horizontal_scroll_areas_keep_hidden_labels_inside(): void
     {
         foreach (File::allFiles(resource_path('views')) as $file) {

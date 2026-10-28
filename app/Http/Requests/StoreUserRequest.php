@@ -31,6 +31,7 @@ class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'min:3', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class)],
             'role' => ['required', Rule::enum(UserRole::class)],
+            'professional_registration' => ['nullable', 'string', 'max:40'],
             'password' => ['required', 'string', 'max:255', 'confirmed', Password::defaults()],
         ];
     }
@@ -40,6 +41,6 @@ class StoreUserRequest extends FormRequest
      */
     public function attributes(): array
     {
-        return ['name' => 'nome', 'email' => 'e-mail', 'role' => 'perfil', 'password' => 'senha provisória'];
+        return ['name' => 'nome', 'email' => 'e-mail', 'role' => 'perfil', 'professional_registration' => 'registro profissional', 'password' => 'senha provisória'];
     }
 }

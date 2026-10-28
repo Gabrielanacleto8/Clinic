@@ -124,7 +124,7 @@ class FinancialEntryController extends Controller
     {
         if (Gate::denies('delete', $entry)) {
             // Quem poderia excluir, mas há pagamento registrado, recebe a orientação em vez de 403.
-            abort_unless($entry->treatment_id === null && Gate::allows('update', $entry) && $entry->hasPaidInstallment(), 403);
+            abort_unless(! $entry->isGenerated() && Gate::allows('update', $entry) && $entry->hasPaidInstallment(), 403);
 
             return redirect()->back(fallback: route('finance.index'))->with('error', 'Este lançamento tem pagamento registrado. Desfaça os pagamentos antes de excluir.');
         }

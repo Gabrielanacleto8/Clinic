@@ -11,6 +11,7 @@ use App\Models\Procedure;
 use App\Models\ProductBatch;
 use App\Models\StockUnit;
 use App\Models\Treatment;
+use App\Models\TreatmentPlanItem;
 use App\Models\User;
 use App\Services\RolePermissions;
 use App\Services\TreatmentRecorder;
@@ -53,9 +54,25 @@ class TreatmentRequest extends FormRequest
         }
     }
 
+    /**
+     * Sessão de pacote usada: o pacote já foi cobrado na aprovação, então não há cobrança aqui.
+     */
+    private function usesPlanSession(): bool
+    {
+        return $this->filled('treatment_plan_item_id');
+    }
+
     private function hasCharge(): bool
     {
-        return is_numeric($this->input('amount')) && (float) $this->input('amount') > 0;
+        return ! $this->usesPlanSession() && is_numeric($this->input('amount')) && (float) $this->input('amount') > 0;
+    }
+
+    /**
+     * Paciente do atendimento: o da URL. No diálogo, o escolhido no formulário.
+     */
+    protected function patientId(): ?int
+    {
+        return $this->route('patient')?->getKey();
     }
 
     /**
@@ -112,7 +129,8 @@ class TreatmentRequest extends FormRequest
             'products.*.stock_unit_id' => ['nullable', 'integer', Rule::exists(StockUnit::class, 'id')],
             'products.*.quantity' => ['nullable', 'required_with:products.*.product_batch_id', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'],
 
-            'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999.99'],
+            'treatment_plan_item_id' => ['nullable', 'integer'],
+            'amount' => [$this->usesPlanSession() ? 'nullable' : 'required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999.99'],
             'payment_method' => [$whenCharged, Rule::enum(PaymentMethod::class)],
             'installments' => [$whenCharged, 'integer', 'min:1', 'max:'.InstallmentPlan::MAX_INSTALLMENTS],
             'first_due_date' => [$whenCharged, 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
@@ -170,6 +188,7 @@ class TreatmentRequest extends FormRequest
     {
         return [
             $this->checkProductRows(...),
+            $this->checkPlanSession(...),
             function (Validator $validator): void {
                 if ($validator->errors()->has('performed_at')) {
                     return;
@@ -251,6 +270,34 @@ class TreatmentRequest extends FormRequest
     }
 
     /**
+     * A sessão escolhida tem de ser de um pacote aprovado deste paciente, do
+     * mesmo procedimento e ainda ter sessão. O TreatmentRecorder confere de
+     * novo, com trava, ao gravar.
+     */
+    private function checkPlanSession(Validator $validator): void
+    {
+        if (! $this->usesPlanSession() || $validator->errors()->hasAny(['treatment_plan_item_id', 'procedure_id'])) {
+            return;
+        }
+
+        $item = $this->patientId() === null ? null : TreatmentPlanItem::query()
+            ->availableFor($this->patientId())
+            ->whereKey((int) $this->input('treatment_plan_item_id'))
+            ->first(['id', 'procedure_id', 'sessions']);
+
+        if ($item === null) {
+            $validator->errors()->add('treatment_plan_item_id', TreatmentRecorder::PLAN_SESSION_UNAVAILABLE);
+        } elseif ($item->procedure_id !== (int) $this->input('procedure_id')) {
+            $validator->errors()->add('treatment_plan_item_id', 'A sessão escolhida é de outro procedimento. Escolha o procedimento do pacote.');
+        }
+    }
+
+    public function planItemId(): ?int
+    {
+        return $this->usesPlanSession() ? (int) $this->validated('treatment_plan_item_id') : null;
+    }
+
+    /**
      * Linhas de produto preenchidas, já sem as linhas em branco do formulário.
      *
      * @return list<array{product_batch_id: int, stock_unit_id: int|null, quantity: string}>
@@ -308,6 +355,7 @@ class TreatmentRequest extends FormRequest
             'products.*.product_batch_id' => 'produto',
             'products.*.stock_unit_id' => 'unidade',
             'products.*.quantity' => 'quantidade',
+            'treatment_plan_item_id' => 'sessão de pacote',
             'amount' => 'valor do atendimento',
             'payment_method' => 'forma de pagamento',
             'installments' => 'número de parcelas',

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Ficha de saúde do paciente (anamnese). Uma por paciente.
@@ -75,6 +76,27 @@ class PatientAnamnesis extends Model
     public function patient(): BelongsTo
     {
         return $this->belongsTo(Patient::class);
+    }
+
+    /**
+     * Guarda o conteúdo atual como versão anterior, antes de ele ser sobrescrito.
+     * Chamado com as alterações ainda não gravadas: o original é o que vale hoje.
+     */
+    public function archiveCurrentVersion(): void
+    {
+        $this->versions()->create([
+            'content' => array_combine(PatientAnamnesisVersion::FIELDS, array_map($this->getOriginal(...), PatientAnamnesisVersion::FIELDS)),
+            'recorded_by' => $this->getOriginal('updated_by'),
+            'recorded_at' => $this->getOriginal('updated_at'),
+        ]);
+    }
+
+    /**
+     * @return HasMany<PatientAnamnesisVersion, $this>
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(PatientAnamnesisVersion::class);
     }
 
     /**

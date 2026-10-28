@@ -12,7 +12,7 @@
         <div class="md:col-span-2 md:pt-7">
             <label class="flex items-center gap-2 text-sm">
                 <input type="hidden" name="is_active" value="0">
-                <input type="checkbox" name="is_active" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
+                <input type="checkbox" name="is_active" value="1" class="size-4 rounded border-slate-300 accent-brand"
                        @checked(old('is_active', $procedure->is_active))>
                 Ativo
             </label>
@@ -23,6 +23,22 @@
         </div>
         <x-form.textarea class="md:col-span-6" name="description" label="Descrição" :value="$procedure->description" rows="3" maxlength="2000" />
     </div>
+</section>
+
+<section class="card p-6">
+    <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Termo de consentimento</h2>
+    <p class="mt-1 text-sm text-slate-600">
+        Impresso pela ficha do paciente (Mais › Termo de consentimento) para assinar antes do procedimento. Em branco, vale o modelo padrão.
+        Revise o texto com a assessoria jurídica da clínica.
+    </p>
+    <p class="mt-2 text-xs text-slate-500">
+        Marcações trocadas na impressão:
+        @foreach (App\Support\ConsentTerm::TOKENS as $token => $meaning)
+            <code class="rounded bg-slate-100 px-1">{{ $token }}</code> {{ $meaning }}@if (! $loop->last), @endif
+        @endforeach
+    </p>
+    <x-form.textarea class="mt-4" name="consent_template" label="Texto do termo" :value="$procedure->consent_template" rows="10" maxlength="20000"
+                     :placeholder="App\Support\ConsentTerm::DEFAULT_TEMPLATE" />
 </section>
 
 @php
@@ -37,7 +53,7 @@
 <section class="card p-6">
     <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Produtos normalmente utilizados</h2>
     <p class="mt-1 text-sm text-slate-600">
-        Servem de sugestão ao registrar um atendimento deste procedimento. A baixa no estoque usa o que for confirmado no atendimento.
+        Servem de sugestão ao registrar um atendimento deste procedimento, com a quantidade estimada na unidade de cada produto. A baixa no estoque usa o que for confirmado no atendimento.
     </p>
     @error('products')
         <p class="mt-2 text-sm text-red-700">{{ $message }}</p>
@@ -49,9 +65,11 @@
         <div id="procedure-products" class="mt-4 space-y-3">
             @for ($i = 0; $i < $productRows; $i++)
                 @php $row = $savedProducts[$i] ?? []; @endphp
-                <fieldset class="grid grid-cols-3 gap-3">
+                {{-- Produto ocupa o que sobra; a quantidade tem largura fixa e estreita. Os
+                     rótulos ficam numa linha só, para os campos das duas colunas alinharem. --}}
+                <fieldset class="flex items-start gap-3">
                     <legend class="sr-only">Produto {{ $i + 1 }}</legend>
-                    <div class="col-span-2">
+                    <div class="min-w-0 flex-1">
                         <label for="products-{{ $i }}-product_id" class="label @if ($i > 0) sr-only @endif">Produto</label>
                         <select id="products-{{ $i }}-product_id" name="products[{{ $i }}][product_id]"
                                 @class(['input', 'input-error' => $errors->has("products.$i.product_id")])>
@@ -66,10 +84,10 @@
                             <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
                         @enderror
                     </div>
-                    <div>
-                        <label for="products-{{ $i }}-quantity" class="label @if ($i > 0) sr-only @endif">Quantidade estimada</label>
+                    <div class="w-24 shrink-0 sm:w-28">
+                        <label for="products-{{ $i }}-quantity" class="label whitespace-nowrap @if ($i > 0) sr-only @endif">Quantidade</label>
                         <input id="products-{{ $i }}-quantity" name="products[{{ $i }}][quantity]" type="text" inputmode="decimal" autocomplete="off"
-                               value="{{ $row['quantity'] ?? '' }}" @class(['input', 'input-error' => $errors->has("products.$i.quantity")])>
+                               value="{{ $row['quantity'] ?? '' }}" @class(['input text-right tabular-nums', 'input-error' => $errors->has("products.$i.quantity")])>
                         @error("products.$i.quantity")
                             <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
                         @enderror

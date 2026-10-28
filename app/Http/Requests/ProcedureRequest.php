@@ -49,6 +49,7 @@ class ProcedureRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'min:2', 'max:150', Rule::unique(Procedure::class)->ignore($this->route('procedure'))],
             'description' => ['nullable', 'string', 'max:2000'],
+            'consent_template' => ['nullable', 'string', 'max:20000'],
             'category' => ['required', Rule::enum(ProcedureCategory::class)],
             'price' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
             'duration_minutes' => ['required', 'integer', Rule::in(Duration::OPTIONS)],
@@ -91,6 +92,7 @@ class ProcedureRequest extends FormRequest
         return [
             'name' => 'nome',
             'description' => 'descrição',
+            'consent_template' => 'termo de consentimento',
             'category' => 'categoria',
             'price' => 'valor',
             'duration_minutes' => 'duração estimada',

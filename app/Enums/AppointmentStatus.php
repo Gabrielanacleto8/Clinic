@@ -60,6 +60,20 @@ enum AppointmentStatus: string
     }
 
     /**
+     * Cores do bloco do agendamento na visão do dia.
+     */
+    public function blockClasses(): string
+    {
+        return match ($this) {
+            self::Scheduled => 'border-sky-500 bg-sky-50 text-sky-950',
+            self::Confirmed => 'border-teal-500 bg-teal-50 text-teal-950',
+            self::Completed => 'border-emerald-500 bg-emerald-50 text-emerald-950',
+            self::NoShow => 'border-amber-500 bg-amber-50 text-amber-950',
+            self::Cancelled => 'border-slate-400 bg-slate-50 text-slate-500',
+        };
+    }
+
+    /**
      * Cor do marcador usado nas visões resumidas da agenda (semana e mês).
      */
     public function dotClasses(): string

@@ -5,7 +5,7 @@
 
     $canManage = auth()->user()->can('create', App\Models\FinancialEntry::class);
     $monthLabel = fn ($date) => ucfirst($date->locale('pt_BR')->translatedFormat('F \d\e Y'));
-    $largestRevenue = max(1, max($revenueByMonth));
+    $largestRevenue = max(1, max($revenueByMonth), max($receivedByMonth));
     $today = ClinicTime::today();
     $periodLabel = $isWholeMonth
         ? $monthLabel($month)
@@ -69,6 +69,9 @@
             @if ($filtered || ! $isWholeMonth || substr($start, 0, 7) !== substr($today, 0, 7))
                 <a href="{{ route('finance.index') }}" class="text-slate-600 hover:underline">Limpar filtros</a>
             @endif
+            {{-- Os mesmos filtros da tela, sem nome de paciente na planilha. --}}
+            <a href="{{ route('finance.margin', ['de' => $start, 'ate' => $end]) }}" class="ml-auto text-teal-800 hover:underline">Margem por procedimento</a>
+            <a href="{{ route('finance.export', array_filter($filters, filled(...))) }}" class="text-teal-800 hover:underline">Exportar planilha (CSV)</a>
         </div>
         @foreach (['mes', 'de', 'ate', 'tipo', 'situacao', 'paciente'] as $field)
             @error($field)
@@ -231,23 +234,37 @@
 
     <section class="card mt-6 p-6" aria-labelledby="faturamento">
         <h2 id="faturamento" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Faturamento por período</h2>
-        <p class="mt-1 text-xs text-slate-500">Receitas lançadas em cada mês, pela data do lançamento.</p>
-        <table class="mt-4 w-full text-sm">
-            <tbody class="divide-y divide-slate-100">
-                @foreach ($revenueByMonth as $period => $total)
-                    @php $periodDate = Carbon\CarbonImmutable::createFromFormat('!Y-m', $period); @endphp
-                    <tr>
-                        <th scope="row" class="w-40 py-2 pr-4 text-left font-normal whitespace-nowrap">
-                            <a href="{{ route('finance.index', ['mes' => $period]) }}" class="text-teal-800 hover:underline">{{ $monthLabel($periodDate) }}</a>
-                        </th>
-                        <td class="py-2">
-                            <progress class="block h-2 w-full accent-teal-700" max="{{ $largestRevenue }}" value="{{ $total }}">{{ LocalizedDecimal::money($total) }}</progress>
-                        </td>
-                        <td class="w-36 py-2 pl-4 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::money($total) }}</td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+        <p class="mt-1 text-xs text-slate-500">Lançado: receitas pela data do lançamento. Recebido: o que entrou no mês, pela data do pagamento. A variação compara o lançado com o mesmo mês do ano anterior.</p>
+        <p class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600" aria-hidden="true">
+            <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-teal-600"></span>Lançado</span>
+            <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-emerald-400"></span>Recebido</span>
+        </p>
+        <ul class="mt-3 divide-y divide-slate-100 text-sm">
+            @foreach ($revenueByMonth as $period => $total)
+                @php
+                    $periodDate = Carbon\CarbonImmutable::createFromFormat('!Y-m', $period);
+                    $received = $receivedByMonth[$period] ?? 0;
+                    $yearBefore = $revenueYearBefore[$period] ?? 0;
+                    $yearChange = $yearBefore > 0 ? ($total - $yearBefore) / $yearBefore * 100 : null;
+                @endphp
+                <li class="grid grid-cols-1 gap-x-4 gap-y-1.5 py-2.5 sm:grid-cols-[10rem_minmax(0,1fr)_14rem] sm:items-center">
+                    <a href="{{ route('finance.index', ['mes' => $period]) }}" class="text-teal-800 hover:underline">{{ $monthLabel($periodDate) }}</a>
+                    <div class="space-y-1">
+                        <progress class="bar text-teal-600" max="{{ $largestRevenue }}" value="{{ $total }}" aria-label="Lançado em {{ $monthLabel($periodDate) }}">{{ LocalizedDecimal::money($total) }}</progress>
+                        <progress class="bar text-emerald-400" max="{{ $largestRevenue }}" value="{{ $received }}" aria-label="Recebido em {{ $monthLabel($periodDate) }}">{{ LocalizedDecimal::money($received) }}</progress>
+                    </div>
+                    <p class="text-xs text-slate-600 tabular-nums sm:text-right">
+                        <span class="font-medium text-slate-900">{{ LocalizedDecimal::money($total) }}</span> lançado
+                        · {{ LocalizedDecimal::money($received) }} recebido
+                        @if ($yearChange !== null)
+                            <span @class(['block', 'text-emerald-700' => $yearChange >= 0, 'text-red-700' => $yearChange < 0])>
+                                {{ $yearChange >= 0 ? '+' : '−' }}{{ number_format(abs($yearChange), 0, ',', '.') }}% vs {{ $periodDate->subYear()->format('m/Y') }}
+                            </span>
+                        @endif
+                    </p>
+                </li>
+            @endforeach
+        </ul>
     </section>
 
     @if (auth()->user()->hasPermission(App\Enums\Permission::FinanceReceive))

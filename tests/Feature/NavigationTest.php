@@ -25,7 +25,7 @@ class NavigationTest extends TestCase
 
         $this->assertStringContainsString('href="'.route('patients.index').'"', $sidebar);
         $this->assertStringContainsString('href="'.route('users.index').'"', $sidebar);
-        $this->assertStringContainsString('href="'.route('password.edit').'"', $sidebar);
+        $this->assertStringContainsString('href="'.route('profile.show').'"', $sidebar);
         $this->assertStringContainsString('action="'.route('logout').'"', $sidebar);
         $this->assertStringContainsString('Ana Admin', $sidebar);
         $this->assertStringContainsString('Administrador', $sidebar);
@@ -71,7 +71,7 @@ class NavigationTest extends TestCase
     {
         $html = $this->actingAs(User::factory()->create())->get('/pacientes')->getContent();
 
-        $this->assertStringContainsString('<html lang="pt-BR" data-sidebar="expanded">', $html);
+        $this->assertStringContainsString('<html lang="pt-BR" data-sidebar="expanded"', $html);
         $this->assertMatchesRegularExpression('/data-sidebar-collapse[^>]*aria-expanded="true"[^>]*aria-label="Recolher menu"/s', $html);
     }
 
@@ -82,7 +82,7 @@ class NavigationTest extends TestCase
             ->get('/pacientes')
             ->getContent();
 
-        $this->assertStringContainsString('<html lang="pt-BR" data-sidebar="collapsed">', $html);
+        $this->assertStringContainsString('<html lang="pt-BR" data-sidebar="collapsed"', $html);
         $this->assertMatchesRegularExpression('/data-sidebar-collapse[^>]*aria-expanded="false"[^>]*aria-label="Expandir menu"/s', $html);
         // Recolhida, os módulos continuam todos presentes e com nome acessível.
         $this->assertStringContainsString('Pacientes', $this->sidebar($html));
@@ -116,9 +116,10 @@ class NavigationTest extends TestCase
 
         $this->assertStringNotContainsStringIgnoringCase('Alterar senha', $sidebar);
         $this->assertStringNotContainsStringIgnoringCase('Redefinir senha', $sidebar);
-        $this->assertMatchesRegularExpression('/<a href="'.preg_quote(route('password.edit'), '/').'"[^>]*title="Minha conta".*?Maria Lima.*?<\/a>/s', $sidebar);
+        $this->assertMatchesRegularExpression('/<a href="'.preg_quote(route('profile.show'), '/').'"[^>]*title="Meu perfil".*?Maria Lima.*?<\/a>/s', $sidebar);
 
-        // A tela de troca de senha continua existindo.
+        // A senha se troca no perfil; a tela própria continua para a senha provisória.
+        $this->get('/perfil')->assertOk()->assertSee('Alterar senha');
         $this->get('/senha')->assertOk()->assertSee('Alterar senha');
     }
 

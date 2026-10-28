@@ -7,8 +7,14 @@ use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\CepLookupController;
+use App\Http\Controllers\ClinicIdentityController;
+use App\Http\Controllers\ClinicSettingsController;
+use App\Http\Controllers\ConsentTermController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\FinanceExportController;
+use App\Http\Controllers\FinanceMarginController;
 use App\Http\Controllers\FinancialEntryController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InstallmentPaymentController;
 use App\Http\Controllers\PatientAvatarController;
@@ -19,6 +25,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProcedureController;
 use App\Http\Controllers\ProductBatchController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\StockInventoryController;
 use App\Http\Controllers\StockInvoiceController;
@@ -29,10 +36,28 @@ use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\TreatmentDocumentController;
 use App\Http\Controllers\TreatmentNoteController;
 use App\Http\Controllers\TreatmentPhotoController;
+use App\Http\Controllers\TreatmentPlanController;
+use App\Http\Controllers\TreatmentPlanSessionController;
+use App\Http\Controllers\TreatmentPlanStatusController;
 use App\Http\Controllers\UserController;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 Route::resourceVerbs(['create' => 'novo', 'edit' => 'editar']);
+
+// Marca da clínica e aplicativo instalável: o navegador busca sem a sessão.
+// Respostas públicas e em cache: sem sessão nem cookies, para nenhum proxy
+// guardar o cookie de alguém junto com a imagem.
+Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, AddQueuedCookiesToResponse::class, EncryptCookies::class, PreventRequestForgery::class])
+    ->group(function () {
+        Route::get('manifest.webmanifest', [ClinicIdentityController::class, 'manifest'])->name('pwa.manifest');
+        Route::get('clinica/logo', [ClinicIdentityController::class, 'logo'])->name('clinic.logo');
+        Route::get('clinica/icone-{size}.png', [ClinicIdentityController::class, 'icon'])->whereIn('size', ['180', '192', '512'])->name('clinic.icon');
+    });
 
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'create'])->name('login');
@@ -54,6 +79,15 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
     // Tudo abaixo exige que a senha provisória já tenha sido trocada.
     Route::middleware('password.changed')->group(function () {
         Route::get('/', [HomeController::class, 'index'])->name('home');
+
+        Route::get('perfil', [ProfileController::class, 'show'])->name('profile.show');
+        Route::post('perfil/aparencia', [ProfileController::class, 'updateTheme'])->name('profile.theme');
+        Route::get('busca', GlobalSearchController::class)->middleware('throttle:60,1')->name('search');
+
+        Route::get('configuracoes', [ClinicSettingsController::class, 'edit'])->name('clinic.edit');
+        Route::put('configuracoes', [ClinicSettingsController::class, 'update'])->name('clinic.update');
+        Route::post('configuracoes/logo', [ClinicSettingsController::class, 'updateLogo'])->name('clinic.logo.update');
+        Route::delete('configuracoes/logo', [ClinicSettingsController::class, 'destroyLogo'])->name('clinic.logo.destroy');
 
         Route::get('agenda', [AgendaController::class, 'index'])->name('agenda.index');
         Route::get('agenda/ocupacao', [AgendaController::class, 'occupancy'])->middleware('throttle:60,1')->name('agenda.occupancy');
@@ -93,9 +127,24 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
 
             // Arquivado também: o prontuário segue consultável sem restaurar o cadastro.
             Route::get('prontuario', [PatientRecordController::class, 'show'])->name('record')->withTrashed();
+            Route::get('termo-de-consentimento', [ConsentTermController::class, 'show'])->name('consent-term');
+
+            // Orçamentos e pacotes do paciente.
+            Route::get('orcamentos/novo', [TreatmentPlanController::class, 'create'])->name('plans.create');
+            Route::post('orcamentos', [TreatmentPlanController::class, 'store'])->name('plans.store');
+            Route::get('orcamentos/{treatmentPlan}', [TreatmentPlanController::class, 'show'])->name('plans.show');
+            Route::get('orcamentos/{treatmentPlan}/editar', [TreatmentPlanController::class, 'edit'])->name('plans.edit');
+            Route::put('orcamentos/{treatmentPlan}', [TreatmentPlanController::class, 'update'])->name('plans.update');
+            Route::get('orcamentos/{treatmentPlan}/imprimir', [TreatmentPlanController::class, 'print'])->name('plans.print');
+            Route::post('orcamentos/{treatmentPlan}/aprovacao', [TreatmentPlanStatusController::class, 'approve'])->name('plans.approve');
+            Route::post('orcamentos/{treatmentPlan}/recusa', [TreatmentPlanStatusController::class, 'decline'])->name('plans.decline');
+            Route::post('orcamentos/{treatmentPlan}/encerramento', [TreatmentPlanStatusController::class, 'close'])->name('plans.close');
+            // Sessões de pacote que o paciente ainda pode usar, para o registro do atendimento.
+            Route::get('sessoes-de-pacote', [TreatmentPlanSessionController::class, 'index'])->middleware('throttle:60,1')->name('plan-sessions');
 
             Route::get('ficha-de-saude', [AnamnesisController::class, 'edit'])->name('anamnesis.edit');
             Route::put('ficha-de-saude', [AnamnesisController::class, 'update'])->name('anamnesis.update');
+            Route::get('ficha-de-saude/versoes/{anamnesisVersion}', [AnamnesisController::class, 'version'])->name('anamnesis.version');
             Route::get('alertas-de-saude', [AnamnesisController::class, 'alerts'])->middleware('throttle:60,1')->name('health-alerts');
 
             // Fotos: o envio pela ficha é de fotos avulsas; o de atendimento fica em
@@ -123,6 +172,8 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
 
             Route::post('atendimentos/{treatment}/evolucoes', [TreatmentNoteController::class, 'store'])->name('treatments.notes.store');
         });
+
+        Route::get('orcamentos', [TreatmentPlanController::class, 'index'])->name('plans.index');
 
         Route::resource('procedimentos', ProcedureController::class)
             ->parameters(['procedimentos' => 'procedure'])
@@ -158,6 +209,8 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         Route::post('estoque/{product}/movimentacoes', [StockMovementController::class, 'store'])->name('products.movements.store');
 
         Route::get('financeiro', [FinanceController::class, 'index'])->name('finance.index');
+        Route::get('financeiro/exportar', FinanceExportController::class)->middleware('throttle:10,1')->name('finance.export');
+        Route::get('financeiro/margem', FinanceMarginController::class)->name('finance.margin');
         Route::get('financeiro/lancamentos/novo', [FinancialEntryController::class, 'create'])->name('finance.entries.create');
         Route::post('financeiro/lancamentos', [FinancialEntryController::class, 'store'])->name('finance.entries.store');
         Route::get('financeiro/lancamentos/{entry}/editar', [FinancialEntryController::class, 'edit'])->name('finance.entries.edit');

@@ -3,7 +3,7 @@
     @php
         $page = 'inline-flex min-w-9 items-center justify-center rounded-lg border px-2.5 py-1.5 text-sm tabular-nums';
         $link = $page.' border-slate-200 bg-white text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700';
-        $current = $page.' border-teal-700 bg-teal-700 font-medium text-white';
+        $current = $page.' border-brand bg-brand font-medium text-on-brand';
         $disabled = $page.' border-slate-100 text-slate-400';
     @endphp
     <nav role="navigation" aria-label="Paginação" class="flex flex-wrap items-center justify-between gap-3">

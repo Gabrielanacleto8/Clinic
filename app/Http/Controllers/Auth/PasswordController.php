@@ -29,6 +29,8 @@ class PasswordController extends Controller
 
         $audit->log(AuditAction::PasswordChanged, $user);
 
-        return redirect()->route('home')->with('success', 'Senha alterada com sucesso.');
+        $back = $request->validated('origem') === 'perfil' ? 'profile.show' : 'home';
+
+        return redirect()->route($back)->with('success', 'Senha alterada com sucesso.');
     }
 }

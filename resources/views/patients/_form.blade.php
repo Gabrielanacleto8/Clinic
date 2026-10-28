@@ -84,7 +84,7 @@
     <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Uso de imagem</h2>
     <label class="mt-4 flex items-start gap-2 text-sm">
         <input type="hidden" name="image_use_consent" value="0">
-        <input type="checkbox" name="image_use_consent" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700"
+        <input type="checkbox" name="image_use_consent" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-brand"
                @checked(old('image_use_consent', $patient->image_use_consented_at !== null))>
         <span>
             {{ $minor ? 'O responsável legal autoriza o uso das fotos do paciente em divulgação (redes sociais, portfólio).' : 'O paciente autoriza o uso das fotos dele em divulgação (redes sociais, portfólio).' }}

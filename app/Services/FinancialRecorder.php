@@ -7,6 +7,7 @@ use App\Enums\PaymentMethod;
 use App\Models\FinancialEntry;
 use App\Models\Patient;
 use App\Models\Treatment;
+use App\Models\TreatmentPlan;
 use App\Models\User;
 use App\Support\ClinicTime;
 use App\Support\InstallmentPlan;
@@ -14,8 +15,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Único ponto que cria lançamentos financeiros: grava o lançamento e as
- * parcelas na mesma transação. Usado pelo lançamento manual e pelo
- * registro de atendimentos.
+ * parcelas na mesma transação. Usado pelo lançamento manual, pelo
+ * registro de atendimentos e pela aprovação de orçamentos.
  */
 class FinancialRecorder
 {
@@ -35,8 +36,9 @@ class FinancialRecorder
         ?string $issuedOn = null,
         ?Patient $patient = null,
         ?Treatment $treatment = null,
+        ?TreatmentPlan $plan = null,
     ): FinancialEntry {
-        return DB::transaction(function () use ($category, $description, $total, $paymentMethod, $installments, $firstDueDate, $firstInstallmentPaid, $createdBy, $issuedOn, $patient, $treatment): FinancialEntry {
+        return DB::transaction(function () use ($category, $description, $total, $paymentMethod, $installments, $firstDueDate, $firstInstallmentPaid, $createdBy, $issuedOn, $patient, $treatment, $plan): FinancialEntry {
             $issuedOn ??= ClinicTime::today();
 
             $entry = FinancialEntry::create([
@@ -48,6 +50,7 @@ class FinancialRecorder
                 'payment_method' => $paymentMethod,
                 'patient_id' => $patient?->getKey(),
                 'treatment_id' => $treatment?->getKey(),
+                'treatment_plan_id' => $plan?->getKey(),
                 'created_by' => $createdBy?->getKey(),
             ]);
 

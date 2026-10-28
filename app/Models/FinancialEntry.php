@@ -36,6 +36,15 @@ class FinancialEntry extends Model
     }
 
     /**
+     * Gerado pelo sistema (atendimento ou aprovação de orçamento): faz parte
+     * do histórico de outro registro e não é excluído nem editado à mão.
+     */
+    public function isGenerated(): bool
+    {
+        return $this->treatment_id !== null || $this->treatment_plan_id !== null;
+    }
+
+    /**
      * Alguma parcela já foi paga. Usa o atributo "has_paid_installment"
      * quando a listagem o trouxe por withExists(), para não consultar por linha.
      */
@@ -83,5 +92,13 @@ class FinancialEntry extends Model
     public function treatment(): BelongsTo
     {
         return $this->belongsTo(Treatment::class);
+    }
+
+    /**
+     * @return BelongsTo<TreatmentPlan, $this>
+     */
+    public function treatmentPlan(): BelongsTo
+    {
+        return $this->belongsTo(TreatmentPlan::class);
     }
 }

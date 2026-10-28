@@ -15,7 +15,7 @@
                 <div>
                     <label class="flex items-center gap-2 text-sm">
                         <input type="hidden" name="pregnant_or_lactating" value="0">
-                        <input type="checkbox" name="pregnant_or_lactating" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
+                        <input type="checkbox" name="pregnant_or_lactating" value="1" class="size-4 rounded border-slate-300 accent-brand"
                                @checked(old('pregnant_or_lactating', $anamnesis->pregnant_or_lactating))>
                         Gestante ou lactante
                     </label>
@@ -35,5 +35,9 @@
                 <button type="submit" class="btn btn-primary">Salvar ficha</button>
             </div>
         </form>
+
+        <div class="mt-8">
+            @include('anamnesis._versions')
+        </div>
     </div>
 </x-layouts.app>

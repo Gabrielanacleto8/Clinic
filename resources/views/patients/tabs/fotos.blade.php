@@ -41,7 +41,7 @@
                     @endphp
                     <li class="relative">
                         <label class="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-md bg-white/90 px-1.5 py-0.5 text-xs shadow">
-                            <input type="checkbox" name="fotos[]" value="{{ $photo->id }}" class="size-4 rounded border-slate-300 accent-teal-700" data-compare-pick>
+                            <input type="checkbox" name="fotos[]" value="{{ $photo->id }}" class="size-4 rounded border-slate-300 accent-brand" data-compare-pick>
                             <span class="sr-only">Comparar esta foto</span>
                         </label>
                         <a href="{{ route('patients.photos.show', [$patient, $photo]) }}" target="_blank" rel="noopener"

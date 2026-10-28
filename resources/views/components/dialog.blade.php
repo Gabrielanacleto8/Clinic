@@ -5,7 +5,7 @@
      size="lg" é para formulários longos: a janela rola e o título fica fixo. --}}
 <dialog id="{{ $id }}" aria-labelledby="{{ $id }}-title" @if (old('_dialog') === $id) data-dialog-autoshow @endif
         {{ $attributes->class([
-            'm-auto w-[calc(100%-2rem)] rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/50',
+            'm-auto w-[calc(100%-2rem)] rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-black/50',
             'max-w-md' => $size === 'md',
             'max-w-3xl' => $size === 'lg',
         ]) }}>

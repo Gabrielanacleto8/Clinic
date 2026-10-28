@@ -31,6 +31,15 @@ return [
     */
     'anamnesis_review_months' => (int) env('CLINIC_ANAMNESIS_REVIEW_MONTHS', 12),
 
+    /*
+    | Faixa de horas mostrada na visão do dia da agenda. Agendamento fora dela
+    | alarga a faixa naquele dia, então nada fica escondido.
+    */
+    'agenda' => [
+        'day_view_from' => (int) env('CLINIC_AGENDA_FROM_HOUR', 7),
+        'day_view_until' => (int) env('CLINIC_AGENDA_UNTIL_HOUR', 21),
+    ],
+
     'documents' => [
         'max_upload_kilobytes' => 10240,
     ],

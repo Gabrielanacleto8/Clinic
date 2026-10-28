@@ -40,7 +40,7 @@
                 {{-- Só aparece quando o custo foge muito do da última entrada: o usuário confirma que não é erro de digitação. --}}
                 <label class="flex items-start gap-2 text-sm sm:col-span-2">
                     <input type="hidden" name="confirm_cost" value="0">
-                    <input type="checkbox" name="confirm_cost" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700" @checked(old('confirm_cost'))>
+                    <input type="checkbox" name="confirm_cost" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-brand" @checked(old('confirm_cost'))>
                     Confirmo o custo: o valor está certo, mesmo diferente das entradas anteriores.
                 </label>
             @endif

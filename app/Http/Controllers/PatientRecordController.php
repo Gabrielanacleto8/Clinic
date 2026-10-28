@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AttachmentType;
 use App\Enums\AuditAction;
+use App\Models\ClinicProfile;
 use App\Models\Patient;
 use App\Models\PatientAttachment;
 use App\Services\AuditLogger;
@@ -32,7 +33,7 @@ class PatientRecordController extends Controller
 
         $treatments = $patient->treatments()
             ->with([
-                'professional:id,name',
+                'professional:id,name,professional_registration',
                 'procedure:id,name',
                 'products.batch.product:id,name,unit',
                 'notes.author:id,name',
@@ -70,6 +71,7 @@ class PatientRecordController extends Controller
             'photos' => $attachments->filter(fn (PatientAttachment $attachment) => $attachment->type === AttachmentType::Photo)->values(),
             'documents' => $attachments->filter(fn (PatientAttachment $attachment) => $attachment->type === AttachmentType::Document)->values(),
             'printedBy' => $request->user(),
+            'clinic' => ClinicProfile::current(),
         ]);
     }
 }

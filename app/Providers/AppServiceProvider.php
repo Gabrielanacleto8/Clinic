@@ -4,10 +4,12 @@ namespace App\Providers;
 
 use App\Models\Appointment;
 use App\Models\AuditLog;
+use App\Models\ClinicProfile;
 use App\Models\FinancialEntry;
 use App\Models\FinancialInstallment;
 use App\Models\Patient;
 use App\Models\PatientAnamnesis;
+use App\Models\PatientAnamnesisVersion;
 use App\Models\PatientAttachment;
 use App\Models\Procedure;
 use App\Models\Product;
@@ -16,6 +18,8 @@ use App\Models\StockMovement;
 use App\Models\StockUnit;
 use App\Models\Treatment;
 use App\Models\TreatmentNote;
+use App\Models\TreatmentPlan;
+use App\Models\TreatmentPlanItem;
 use App\Models\TreatmentProduct;
 use App\Models\User;
 use App\Services\RolePermissions;
@@ -58,10 +62,12 @@ class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'appointment' => Appointment::class,
             'audit_log' => AuditLog::class,
+            'clinic_profile' => ClinicProfile::class,
             'financial_entry' => FinancialEntry::class,
             'financial_installment' => FinancialInstallment::class,
             'patient' => Patient::class,
             'patient_anamnesis' => PatientAnamnesis::class,
+            'patient_anamnesis_version' => PatientAnamnesisVersion::class,
             'patient_attachment' => PatientAttachment::class,
             'procedure' => Procedure::class,
             'product' => Product::class,
@@ -70,6 +76,8 @@ class AppServiceProvider extends ServiceProvider
             'stock_unit' => StockUnit::class,
             'treatment' => Treatment::class,
             'treatment_note' => TreatmentNote::class,
+            'treatment_plan' => TreatmentPlan::class,
+            'treatment_plan_item' => TreatmentPlanItem::class,
             'treatment_product' => TreatmentProduct::class,
             'user' => User::class,
         ]);
@@ -96,6 +104,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Definir o que cada perfil acessa é exclusivo do administrador e não é delegável.
         Gate::define('manage-permissions', fn (User $user) => $user->isAdmin());
+
+        // Dados e logo da clínica, impressos nos documentos de todos os pacientes.
+        Gate::define('manage-clinic', fn (User $user) => $user->isAdmin());
 
         // Teto por IP no login, somado ao bloqueio por e-mail + IP do LoginRequest.
         // Freia quem testa uma mesma senha contra muitos e-mails diferentes.

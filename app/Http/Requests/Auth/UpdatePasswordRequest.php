@@ -20,6 +20,8 @@ class UpdatePasswordRequest extends FormRequest
         return [
             'current_password' => ['required', 'string', 'current_password'],
             'password' => ['required', 'string', 'max:255', 'confirmed', 'different:current_password', Password::defaults()],
+            // Página de onde a troca partiu, para voltar a ela.
+            'origem' => ['nullable', 'in:perfil'],
         ];
     }
 

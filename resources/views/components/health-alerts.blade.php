@@ -1,4 +1,4 @@
-@props(['anamnesis'])
+@props(['anamnesis', 'fillUrl' => null])
 @php
     use App\Support\ClinicTime;
 
@@ -11,8 +11,15 @@
 @endphp
 @if ($anamnesis === null)
     <div {{ $attributes->class($classes) }} role="note" data-health-alerts-static>
-        <p class="font-semibold">Ficha de saúde não preenchida</p>
-        <p class="mt-1">Confira alergias, medicamentos e condições de saúde com o paciente antes do procedimento.</p>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <p class="font-semibold">Ficha de saúde não preenchida</p>
+                <p class="mt-1">Confira alergias, medicamentos e condições de saúde com o paciente antes do procedimento.</p>
+            </div>
+            @if ($fillUrl)
+                <a href="{{ $fillUrl }}" class="btn btn-secondary shrink-0">Preencher ficha</a>
+            @endif
+        </div>
     </div>
 @elseif ($alerts !== [] || $stale)
     <div {{ $attributes->class($classes) }} role="note" data-health-alerts-static>

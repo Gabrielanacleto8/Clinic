@@ -22,6 +22,11 @@ class TreatmentWithPatientRequest extends TreatmentRequest
         ];
     }
 
+    protected function patientId(): ?int
+    {
+        return is_numeric($this->input('patient_id')) ? (int) $this->input('patient_id') : null;
+    }
+
     /**
      * @return list<mixed>
      */

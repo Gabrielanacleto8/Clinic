@@ -1,0 +1,110 @@
+/* Cores da interface. As telas usam as classes do tema claro (bg-white,
+   text-slate-600, bg-amber-50...) e aqui cada cor ganha o valor do tema escuro.
+
+   Não é um espelho da escala: cada faixa tem um papel e um valor próprio.
+   - Cinzas: white é a superfície (painel, cartões, campos); slate-50 a 200
+     são preenchimentos e bordas um pouco mais claros que ela; slate-400 a 950
+     são texto, do mais apagado ao principal. Grafite, quase sem azul.
+   - Cores (teal, red, amber...): 50 a 300 viram fundos e bordas escuros com
+     pouca saturação (avisos, etiquetas); 500 continua igual (marcadores);
+     600 a 950 viram texto claro e suave, legível sobre esses fundos.
+   - Fundo da página (canvas) e cor sólida da marca (brand, com texto
+     on-brand) são tokens à parte, porque no escuro não seguem a escala.
+   Família de cor nova nas telas entra aqui, com os mesmos papéis
+   (gerada a partir do croma e do matiz do tom 500). */
+@theme {
+    --color-canvas: oklch(96.8% 0.007 247.896);
+    --color-brand: oklch(51.1% 0.096 186.391);
+    --color-brand-strong: oklch(43.7% 0.078 188.216);
+    --color-on-brand: oklch(100% 0 0);
+}
+
+@layer base {
+    :root {
+        @variant dark {
+            color-scheme: dark;
+            --color-canvas: oklch(16.5% 0.006 260);
+            --color-brand: oklch(51.1% 0.096 186.391);
+            --color-brand-strong: oklch(56.5% 0.104 185);
+            --color-white: oklch(20.5% 0.007 260);
+            --color-black: oklch(0% 0 0);
+            --color-slate-50: oklch(23% 0.007 260);
+            --color-slate-100: oklch(25.5% 0.008 260);
+            --color-slate-200: oklch(30% 0.009 260);
+            --color-slate-300: oklch(38% 0.011 260);
+            --color-slate-400: oklch(56% 0.013 260);
+            --color-slate-500: oklch(68% 0.013 260);
+            --color-slate-600: oklch(76% 0.012 260);
+            --color-slate-700: oklch(85% 0.009 260);
+            --color-slate-800: oklch(90% 0.007 260);
+            --color-slate-900: oklch(95% 0.005 260);
+            --color-slate-950: oklch(98% 0.003 260);
+            --color-teal-50: oklch(24.5% 0.024 182.5);
+            --color-teal-100: oklch(29% 0.038 182.5);
+            --color-teal-200: oklch(36% 0.045 182.5);
+            --color-teal-300: oklch(46% 0.059 182.5);
+            --color-teal-400: oklch(62% 0.098 182.5);
+            --color-teal-500: oklch(70.4% 0.14 182.503);
+            --color-teal-600: oklch(70% 0.112 182.5);
+            --color-teal-700: oklch(76% 0.095 182.5);
+            --color-teal-800: oklch(82% 0.073 182.5);
+            --color-teal-900: oklch(89% 0.046 182.5);
+            --color-teal-950: oklch(94% 0.021 182.5);
+            --color-red-50: oklch(24.5% 0.040 25.3);
+            --color-red-100: oklch(29% 0.064 25.3);
+            --color-red-200: oklch(36% 0.076 25.3);
+            --color-red-300: oklch(46% 0.100 25.3);
+            --color-red-400: oklch(62% 0.166 25.3);
+            --color-red-500: oklch(63.7% 0.237 25.331);
+            --color-red-600: oklch(70% 0.190 25.3);
+            --color-red-700: oklch(76% 0.161 25.3);
+            --color-red-800: oklch(82% 0.123 25.3);
+            --color-red-900: oklch(89% 0.078 25.3);
+            --color-red-950: oklch(94% 0.036 25.3);
+            --color-amber-50: oklch(24.5% 0.032 72);
+            --color-amber-100: oklch(29% 0.051 72);
+            --color-amber-200: oklch(36% 0.060 72);
+            --color-amber-300: oklch(46% 0.079 72);
+            --color-amber-400: oklch(62% 0.132 72);
+            --color-amber-500: oklch(76.9% 0.188 70.08);
+            --color-amber-600: oklch(70% 0.150 72);
+            --color-amber-700: oklch(76% 0.128 72);
+            --color-amber-800: oklch(82% 0.098 72);
+            --color-amber-900: oklch(89% 0.062 72);
+            --color-amber-950: oklch(94% 0.028 72);
+            --color-emerald-50: oklch(24.5% 0.029 162.5);
+            --color-emerald-100: oklch(29% 0.046 162.5);
+            --color-emerald-200: oklch(36% 0.054 162.5);
+            --color-emerald-300: oklch(46% 0.071 162.5);
+            --color-emerald-400: oklch(62% 0.119 162.5);
+            --color-emerald-500: oklch(69.6% 0.17 162.48);
+            --color-emerald-600: oklch(70% 0.136 162.5);
+            --color-emerald-700: oklch(76% 0.116 162.5);
+            --color-emerald-800: oklch(82% 0.088 162.5);
+            --color-emerald-900: oklch(89% 0.056 162.5);
+            --color-emerald-950: oklch(94% 0.026 162.5);
+            --color-sky-50: oklch(24.5% 0.029 237.3);
+            --color-sky-100: oklch(29% 0.046 237.3);
+            --color-sky-200: oklch(36% 0.054 237.3);
+            --color-sky-300: oklch(46% 0.071 237.3);
+            --color-sky-400: oklch(62% 0.118 237.3);
+            --color-sky-500: oklch(68.5% 0.169 237.323);
+            --color-sky-600: oklch(70% 0.135 237.3);
+            --color-sky-700: oklch(76% 0.115 237.3);
+            --color-sky-800: oklch(82% 0.088 237.3);
+            --color-sky-900: oklch(89% 0.056 237.3);
+            --color-sky-950: oklch(94% 0.025 237.3);
+            --color-violet-50: oklch(24.5% 0.043 292.7);
+            --color-violet-100: oklch(29% 0.068 292.7);
+            --color-violet-200: oklch(36% 0.080 292.7);
+            --color-violet-300: oklch(46% 0.105 292.7);
+            --color-violet-400: oklch(62% 0.175 292.7);
+            --color-violet-500: oklch(60.6% 0.25 292.717);
+            --color-violet-600: oklch(70% 0.200 292.7);
+            --color-violet-700: oklch(76% 0.170 292.7);
+            --color-violet-800: oklch(82% 0.130 292.7);
+            --color-violet-900: oklch(89% 0.083 292.7);
+            --color-violet-950: oklch(94% 0.037 292.7);
+        }
+    }
+}

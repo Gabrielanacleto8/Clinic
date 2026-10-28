@@ -22,7 +22,7 @@
 <ul class="divide-y divide-slate-100">
     @foreach ($appointments as $appointment)
         @php $patient = $appointment->patient; @endphp
-        <li @class(['flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6', 'lg:gap-y-1.5 lg:px-4 lg:py-2' => $dense])>
+        <li id="ag-{{ $appointment->id }}" @class(['scroll-mt-20 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6', 'lg:gap-y-1.5 lg:px-4 lg:py-2' => $dense])>
             <p class="w-28 shrink-0 tabular-nums">
                 @if ($showDate)
                     <span class="block text-xs text-slate-500">{{ ClinicTime::format($appointment->scheduled_at, 'd/m/Y') }}</span>
@@ -77,6 +77,12 @@
                             <button type="submit" class="btn btn-secondary {{ $small }}">{{ $confirmed ? 'Desfazer confirmação' : 'Confirmar presença' }}</button>
                         </form>
                     @endcan
+                    {{-- Ações menos frequentes ficam em "Mais", que se abre na própria linha:
+                         a lista do Início e da agenda fica curta no celular. --}}
+                    @if (auth()->user()->can('update', $appointment) || auth()->user()->can('changeStatus', $appointment))
+                    <details class="group/more">
+                        <summary class="btn btn-secondary {{ $small }} list-none">Mais <x-icon name="chevron-down" class="size-3.5 transition-transform group-open/more:rotate-180" /></summary>
+                        <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
                     @can('update', $appointment)
                         <a href="{{ route('appointments.edit', $appointment) }}" class="btn btn-secondary {{ $small }}">Remarcar</a>
                     @endcan
@@ -102,6 +108,9 @@
                             <button type="submit" class="btn btn-danger {{ $small }}">Cancelar</button>
                         </form>
                     @endcan
+                        </div>
+                    </details>
+                    @endif
                 @elseif ($appointment->status === AppointmentStatus::Completed)
                     @if ($appointment->treatment)
                         @can('view', $appointment->treatment)

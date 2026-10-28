@@ -30,7 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Preferência visual gravada pelo JavaScript (barra lateral recolhida).
         // Não é sensível e o servidor só a compara com um valor fixo.
-        $middleware->encryptCookies(except: ['sidebar']);
+        $middleware->encryptCookies(except: ['sidebar', 'theme']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Envio maior que o post_max_size do PHP: o corpo chega vazio, então

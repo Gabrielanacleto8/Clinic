@@ -71,7 +71,7 @@
                     </div>
                     <label class="flex items-center gap-2 text-sm font-medium">
                         <input type="hidden" name="{{ $name('import') }}" value="0">
-                        <input type="checkbox" name="{{ $name('import') }}" value="1" class="size-4 rounded border-slate-300 accent-teal-700" @checked($checked("items.{$index}.import", true))>
+                        <input type="checkbox" name="{{ $name('import') }}" value="1" class="size-4 rounded border-slate-300 accent-brand" @checked($checked("items.{$index}.import", true))>
                         Importar este item
                     </label>
                 </div>
@@ -116,7 +116,7 @@
                         <div class="md:col-span-2 md:pt-7">
                             <label class="flex items-start gap-2 text-sm">
                                 <input type="hidden" name="{{ $name('multi_patient_use') }}" value="0">
-                                <input type="checkbox" name="{{ $name('multi_patient_use') }}" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-teal-700" @checked($checked("items.{$index}.multi_patient_use", false))>
+                                <input type="checkbox" name="{{ $name('multi_patient_use') }}" value="1" class="mt-0.5 size-4 rounded border-slate-300 accent-brand" @checked($checked("items.{$index}.multi_patient_use", false))>
                                 A sobra pode ser usada em outro paciente
                             </label>
                         </div>
@@ -126,7 +126,7 @@
                 <div class="mt-5 border-t border-slate-100 pt-4">
                     <label class="flex items-center gap-2 text-sm font-medium">
                         <input type="hidden" name="{{ $name('enter') }}" value="0">
-                        <input type="checkbox" name="{{ $name('enter') }}" value="1" class="size-4 rounded border-slate-300 accent-teal-700" @checked($checked("items.{$index}.enter", $hasLots))>
+                        <input type="checkbox" name="{{ $name('enter') }}" value="1" class="size-4 rounded border-slate-300 accent-brand" @checked($checked("items.{$index}.enter", $hasLots))>
                         Lançar entrada de estoque
                     </label>
                     @unless ($hasLots)

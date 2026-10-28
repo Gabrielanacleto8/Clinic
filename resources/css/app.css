@@ -2,13 +2,30 @@
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+/* Linhas da visão do dia da agenda: as classes são montadas com números na view. */
+@source inline('row-start-{1..97} row-span-{1..96}');
 
-/* A interface é apenas clara: classes dark: só valem sob uma classe .dark explícita. */
-@custom-variant dark (&:where(.dark, .dark *));
+/* Modo escuro: escolhido no aparelho (data-theme no <html>, ver App\Support\Theme)
+   ou, em "automático", o do sistema. Só na tela: a impressão é sempre clara. */
+@custom-variant dark {
+    @media screen {
+        &:where([data-theme='dark'], [data-theme='dark'] *) {
+            @slot;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            &:where([data-theme='system'], [data-theme='system'] *) {
+                @slot;
+            }
+        }
+    }
+}
 
 /* Barra lateral recolhida a uma faixa de ícones. Combine com lg: (ex.: lg:rail:w-16),
    pois em telas pequenas a barra é um menu deslizante e ignora esse estado. */
 @custom-variant rail (html[data-sidebar='collapsed'] &);
+
+@import './dark-theme.css';
 
 @theme {
     --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -32,7 +49,7 @@
     }
 
     .btn-primary {
-        @apply bg-teal-700 text-white hover:bg-teal-800 focus-visible:outline-teal-700;
+        @apply bg-brand text-on-brand hover:bg-brand-strong focus-visible:outline-teal-700;
     }
 
     .btn-secondary {
@@ -48,7 +65,7 @@
     }
 
     .input {
-        @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
+        @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:bg-canvas
             placeholder:text-slate-400 focus:border-teal-600 focus:outline-2 focus:outline-teal-600/30
             disabled:bg-slate-100 disabled:text-slate-500;
     }
@@ -61,64 +78,116 @@
         @apply rounded-xl border border-slate-200 bg-white shadow-xs;
     }
 
+    /* Barra de <progress> com cor própria (text-*): a nativa do navegador
+       ignora a cor no modo escuro. */
+    .bar {
+        @apply block h-2 w-full appearance-none overflow-hidden rounded-full border-0 bg-slate-100;
+    }
+
+    .bar::-webkit-progress-bar {
+        @apply rounded-full bg-slate-100;
+    }
+
+    .bar::-webkit-progress-value {
+        @apply rounded-full bg-current;
+    }
+
+    .bar::-moz-progress-bar {
+        @apply rounded-full bg-current;
+    }
+
     .badge {
         @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
     }
 }
 
-/* Listagens em telas estreitas (abaixo de "sm"): cada linha da tabela vira um
-   bloco, com o nome da coluna (data-label) à esquerda do valor; célula sem
-   data-label ocupa a linha toda (título, ações). Fica fora das camadas do
-   Tailwind de propósito, para valer sobre os utilitários de espaçamento e
-   alinhamento que as células usam no formato de tabela. */
-@media (width < 40rem) {
-    .table-stack {
-        display: block;
-        min-width: 0;
+/* Em tela de toque, campo com fonte menor que 16px faz o iPhone e o iPad
+   ampliarem a página ao focar. Fora das camadas para valer sobre text-sm/text-xs. */
+@media (pointer: coarse) {
+    :is(input:not([type='checkbox'], [type='radio'], [type='file'], [type='range']), select, textarea) {
+        font-size: 1rem;
     }
+}
 
-    .table-stack thead {
-        @apply sr-only;
-    }
+/* Listagens em espaço estreito: cada linha da tabela vira um bloco, com o nome
+   da coluna (data-label) à esquerda do valor; célula sem data-label ocupa a
+   linha toda (título, ações). A medida é a largura de quem contém a tabela,
+   não a da tela: assim vale igual no celular (em pé ou deitado), no tablet e
+   no computador com o menu lateral aberto, que tira ~250px do conteúdo.
+   48rem é a largura mínima da maioria das listagens (min-w-3xl): abaixo dela
+   a tabela rolaria de lado. Na impressão a tabela continua tabela.
+   Fica fora das camadas do Tailwind de propósito, para valer sobre os
+   utilitários de espaçamento e alinhamento que as células usam no formato de tabela. */
+:has(> .table-stack) {
+    container-type: inline-size;
+}
 
-    .table-stack tbody,
-    .table-stack tr {
-        display: block;
-    }
+@media screen {
+    @container (width < 48rem) {
+        .table-stack {
+            display: block;
+            min-width: 0;
+        }
 
-    .table-stack tr {
-        padding-block: 0.5rem;
-    }
+        .table-stack thead {
+            @apply sr-only;
+        }
 
-    .table-stack :is(td, tbody th) {
-        display: flow-root;
-        padding: 0.25rem 1rem;
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }
+        .table-stack :is(tbody, tfoot),
+        .table-stack tr {
+            display: block;
+        }
 
-    .table-stack td[colspan] {
-        padding-block: 1.5rem;
-    }
+        .table-stack tr {
+            padding-block: 0.5rem;
+        }
 
-    /* Célula sem conteúdo nesta linha (ex.: produto sem alertas) não ocupa espaço. */
-    .table-stack td[data-empty] {
-        display: none;
-    }
+        .table-stack :is(td, tbody th) {
+            display: flow-root;
+            padding: 0.25rem 1rem;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
 
-    .table-stack td[data-label] {
-        text-align: right;
-    }
+        .table-stack tbody td[colspan] {
+            padding-block: 1.5rem;
+        }
 
-    .table-stack td[data-label]::before {
-        @apply text-xs/5 font-normal text-slate-500;
+        /* Rodapé (totais): sem rótulo de coluna, o texto e o valor ficam numa linha só. */
+        .table-stack tfoot tr {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
 
-        content: attr(data-label);
-        float: left;
-        margin-right: 1rem;
-    }
+        .table-stack tfoot td:empty {
+            display: none;
+        }
 
-    .table-stack td[data-label] > .flex {
-        justify-content: flex-end;
+        /* Links e botões de texto nas células ganham área de toque sem mudar o desenho. */
+        .table-stack td :is(a, button):not(.btn, .badge) {
+            padding-block: 0.375rem;
+        }
+
+        /* Célula sem conteúdo nesta linha (ex.: produto sem alertas) não ocupa espaço. */
+        .table-stack td[data-empty] {
+            display: none;
+        }
+
+        .table-stack td[data-label] {
+            text-align: right;
+        }
+
+        .table-stack td[data-label]::before {
+            @apply text-xs/5 font-normal text-slate-500;
+
+            content: attr(data-label);
+            float: left;
+            margin-right: 1rem;
+        }
+
+        .table-stack td[data-label] > .flex {
+            justify-content: flex-end;
+        }
     }
 }

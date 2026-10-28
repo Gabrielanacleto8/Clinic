@@ -6,6 +6,8 @@
 <section class="card space-y-4 p-6">
     <x-form.input name="name" label="Nome completo" :value="$user->name" required maxlength="255" autocomplete="off" />
     <x-form.input name="email" label="E-mail" type="email" :value="$user->email" required maxlength="255" autocomplete="off" />
+    <x-form.input name="professional_registration" label="Registro profissional" :value="$user->professional_registration" maxlength="40" autocomplete="off"
+                  hint="Conselho e número, como CRBM-1 12345. Sai junto do nome no prontuário impresso e nos termos. Deixe em branco para quem não atende." />
 
     @if ($isSelf)
         {{-- A própria conta não pode ser rebaixada nem desativada. --}}
@@ -23,7 +25,7 @@
             <div>
                 <label class="flex items-center gap-2 text-sm">
                     <input type="hidden" name="is_active" value="0">
-                    <input type="checkbox" name="is_active" value="1" class="size-4 rounded border-slate-300 accent-teal-700"
+                    <input type="checkbox" name="is_active" value="1" class="size-4 rounded border-slate-300 accent-brand"
                            @checked(old('is_active', $user->is_active))>
                     Conta ativa
                 </label>

@@ -67,7 +67,8 @@ class AnamnesisTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->get("/pacientes/{$patient->id}")->assertOk()->assertSee('Ficha ainda não preenchida');
+        // Sem ficha, um aviso só, com o botão de preencher.
+        $this->get("/pacientes/{$patient->id}")->assertOk()->assertSee('Ficha de saúde não preenchida')->assertSee('Preencher ficha');
         $this->get("/pacientes/{$patient->id}/ficha-de-saude")->assertOk();
 
         $this->put("/pacientes/{$patient->id}/ficha-de-saude", $this->payload())

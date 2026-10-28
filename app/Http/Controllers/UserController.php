@@ -40,7 +40,7 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): RedirectResponse
     {
         DB::transaction(function () use ($request): void {
-            $user = new User($request->safe()->only(['name', 'email', 'password']));
+            $user = new User($request->safe()->only(['name', 'email', 'password', 'professional_registration']));
             $user->role = UserRole::from($request->validated('role'));
             $user->is_active = true;
             // Senha definida pelo administrador é provisória.
@@ -66,7 +66,7 @@ class UserController extends Controller
         $attendedBefore = $user->is_active && $this->attends($user->role);
 
         DB::transaction(function () use ($request, $user): void {
-            $user->fill($request->safe()->only(['name', 'email']));
+            $user->fill($request->safe()->only(['name', 'email', 'professional_registration']));
             $user->role = UserRole::from($request->validated('role'));
             $user->is_active = $request->boolean('is_active');
 

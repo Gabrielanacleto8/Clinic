@@ -16,9 +16,9 @@
         @can('viewArchived', App\Models\Patient::class)
             <nav class="flex rounded-lg border border-slate-200 p-0.5" aria-label="Situação do cadastro">
                 <a href="{{ route('patients.index', array_filter(['q' => $search])) }}" @if (! $archived) aria-current="page" @endif
-                   @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => ! $archived, 'text-slate-700 hover:bg-slate-100' => $archived])>Ativos</a>
+                   @class(['rounded-md px-3 py-1.5 text-sm', 'bg-brand font-medium text-on-brand' => ! $archived, 'text-slate-700 hover:bg-slate-100' => $archived])>Ativos</a>
                 <a href="{{ route('patients.index', array_filter(['q' => $search, 'arquivados' => 1])) }}" @if ($archived) aria-current="page" @endif
-                   @class(['rounded-md px-3 py-1.5 text-sm', 'bg-teal-700 font-medium text-white' => $archived, 'text-slate-700 hover:bg-slate-100' => ! $archived])>Arquivados</a>
+                   @class(['rounded-md px-3 py-1.5 text-sm', 'bg-brand font-medium text-on-brand' => $archived, 'text-slate-700 hover:bg-slate-100' => ! $archived])>Arquivados</a>
             </nav>
         @endcan
         <div class="min-w-0 flex-1 basis-64">
@@ -93,6 +93,9 @@
                     <tr>
                         <td colspan="5" class="px-4 py-10 text-center text-slate-500">
                             {{ $search !== '' ? 'Nenhum paciente encontrado para esta busca.' : 'Nenhum paciente por aqui ainda.' }}
+                            @can('create', App\Models\Patient::class)
+                                <a href="{{ route('patients.create') }}" class="btn btn-primary mx-auto mt-4 flex w-fit">{{ $search !== '' ? 'Cadastrar paciente' : 'Cadastrar o primeiro paciente' }}</a>
+                            @endcan
                         </td>
                     </tr>
                 @endforelse
