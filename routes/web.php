@@ -6,11 +6,18 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\CashClosingController;
+use App\Http\Controllers\CashFlowController;
 use App\Http\Controllers\CepLookupController;
 use App\Http\Controllers\ClinicIdentityController;
 use App\Http\Controllers\ClinicSettingsController;
+use App\Http\Controllers\CommissionController;
+use App\Http\Controllers\CommissionPayoutController;
+use App\Http\Controllers\CommissionRateController;
 use App\Http\Controllers\ConsentTermController;
+use App\Http\Controllers\FinanceAccountsController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\FinanceDelinquencyController;
 use App\Http\Controllers\FinanceExportController;
 use App\Http\Controllers\FinanceMarginController;
 use App\Http\Controllers\FinancialEntryController;
@@ -26,6 +33,9 @@ use App\Http\Controllers\ProcedureController;
 use App\Http\Controllers\ProductBatchController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\RecurringExpenseController;
+use App\Http\Controllers\RefundController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\StockInventoryController;
 use App\Http\Controllers\StockInvoiceController;
@@ -129,10 +139,10 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             Route::get('prontuario', [PatientRecordController::class, 'show'])->name('record')->withTrashed();
             Route::get('termo-de-consentimento', [ConsentTermController::class, 'show'])->name('consent-term');
 
-            // Orçamentos e pacotes do paciente.
-            Route::get('orcamentos/novo', [TreatmentPlanController::class, 'create'])->name('plans.create');
-            Route::post('orcamentos', [TreatmentPlanController::class, 'store'])->name('plans.store');
+            // Orçamentos e pacotes do paciente. Criar fica no módulo (/orcamentos/novo), com o paciente escolhido no formulário.
             Route::get('orcamentos/{treatmentPlan}', [TreatmentPlanController::class, 'show'])->name('plans.show');
+            // Detalhes para a janela da lista de orçamentos.
+            Route::get('orcamentos/{treatmentPlan}/resumo', [TreatmentPlanController::class, 'summary'])->name('plans.summary');
             Route::get('orcamentos/{treatmentPlan}/editar', [TreatmentPlanController::class, 'edit'])->name('plans.edit');
             Route::put('orcamentos/{treatmentPlan}', [TreatmentPlanController::class, 'update'])->name('plans.update');
             Route::get('orcamentos/{treatmentPlan}/imprimir', [TreatmentPlanController::class, 'print'])->name('plans.print');
@@ -174,6 +184,8 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
         });
 
         Route::get('orcamentos', [TreatmentPlanController::class, 'index'])->name('plans.index');
+        Route::get('orcamentos/novo', [TreatmentPlanController::class, 'create'])->name('plans.create');
+        Route::post('orcamentos', [TreatmentPlanController::class, 'store'])->name('plans.store');
 
         Route::resource('procedimentos', ProcedureController::class)
             ->parameters(['procedimentos' => 'procedure'])
@@ -207,10 +219,32 @@ Route::middleware(['auth', 'auth.session', 'active'])->group(function () {
             ->except(['destroy']);
 
         Route::post('estoque/{product}/movimentacoes', [StockMovementController::class, 'store'])->name('products.movements.store');
+        Route::get('estoque/{product}/resumo', [ProductController::class, 'summary'])->name('products.summary');
 
         Route::get('financeiro', [FinanceController::class, 'index'])->name('finance.index');
         Route::get('financeiro/exportar', FinanceExportController::class)->middleware('throttle:10,1')->name('finance.export');
         Route::get('financeiro/margem', FinanceMarginController::class)->name('finance.margin');
+        Route::get('financeiro/a-receber', [FinanceAccountsController::class, 'receivable'])->name('finance.receivable');
+        Route::get('financeiro/a-pagar', [FinanceAccountsController::class, 'payable'])->name('finance.payable');
+        Route::get('financeiro/inadimplencia', FinanceDelinquencyController::class)->name('finance.delinquency');
+        Route::get('financeiro/fluxo-de-caixa', CashFlowController::class)->name('finance.cashflow');
+        Route::get('financeiro/caixa', [CashClosingController::class, 'show'])->name('finance.cash.show');
+        Route::post('financeiro/caixa', [CashClosingController::class, 'store'])->name('finance.cash.store');
+        Route::delete('financeiro/caixa/{closing}', [CashClosingController::class, 'destroy'])->name('finance.cash.destroy');
+        Route::get('financeiro/conciliacao', [ReconciliationController::class, 'index'])->name('finance.reconciliation');
+        Route::post('financeiro/conciliacao', [ReconciliationController::class, 'store'])->name('finance.reconciliation.store');
+        Route::delete('financeiro/conciliacao/{installment}', [ReconciliationController::class, 'destroy'])->name('finance.reconciliation.destroy');
+        Route::post('financeiro/estornos', [RefundController::class, 'store'])->name('finance.refunds.store');
+        Route::delete('financeiro/estornos/{refund}', [RefundController::class, 'destroy'])->name('finance.refunds.destroy');
+        Route::get('financeiro/despesas-fixas', [RecurringExpenseController::class, 'index'])->name('finance.recurring.index');
+        Route::post('financeiro/despesas-fixas', [RecurringExpenseController::class, 'store'])->name('finance.recurring.store');
+        Route::put('financeiro/despesas-fixas/{recurringExpense}', [RecurringExpenseController::class, 'update'])->name('finance.recurring.update');
+        Route::get('financeiro/comissoes', [CommissionController::class, 'index'])->name('finance.commissions.index');
+        Route::get('financeiro/comissoes/regras', [CommissionRateController::class, 'edit'])->name('finance.commissions.rates');
+        Route::put('financeiro/comissoes/regras', [CommissionRateController::class, 'update'])->name('finance.commissions.rates.update');
+        Route::get('financeiro/comissoes/{professional}', [CommissionController::class, 'show'])->name('finance.commissions.show');
+        Route::post('financeiro/comissoes/{professional}/repasses', [CommissionPayoutController::class, 'store'])->name('finance.commissions.payouts.store');
+        Route::delete('financeiro/repasses/{payout}', [CommissionPayoutController::class, 'destroy'])->name('finance.commissions.payouts.destroy');
         Route::get('financeiro/lancamentos/novo', [FinancialEntryController::class, 'create'])->name('finance.entries.create');
         Route::post('financeiro/lancamentos', [FinancialEntryController::class, 'store'])->name('finance.entries.store');
         Route::get('financeiro/lancamentos/{entry}/editar', [FinancialEntryController::class, 'edit'])->name('finance.entries.edit');

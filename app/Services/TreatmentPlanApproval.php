@@ -60,6 +60,7 @@ class TreatmentPlanApproval
                     issuedOn: ClinicTime::today(),
                     patient: $locked->patient,
                     plan: $locked,
+                    discount: $locked->discount(),
                 );
             }
 

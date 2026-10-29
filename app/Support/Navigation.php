@@ -35,6 +35,8 @@ final class Navigation
                 ['label' => 'Procedimentos', 'route' => 'procedures.index', 'active' => 'procedures.*', 'icon' => 'clipboard', 'can' => ['viewAny', Procedure::class]],
                 ['label' => 'Estoque', 'route' => 'products.index', 'active' => ['products.*', 'stock.*'], 'icon' => 'box', 'can' => ['viewAny', Product::class]],
                 ['label' => 'Financeiro', 'route' => 'finance.index', 'active' => 'finance.*', 'icon' => 'dollar', 'can' => ['viewAny', FinancialEntry::class]],
+                // Quem só fecha o caixa (recepção) não vê o financeiro: o item leva direto ao caixa do dia.
+                ['label' => 'Caixa do dia', 'route' => 'finance.cash.show', 'active' => 'finance.cash.*', 'icon' => 'dollar', 'can' => ['cashOnly', FinancialEntry::class]],
             ],
             'Administração' => [
                 // As permissões ficam numa aba dentro de usuários.

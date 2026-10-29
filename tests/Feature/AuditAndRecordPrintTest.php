@@ -289,6 +289,9 @@ class AuditAndRecordPrintTest extends TestCase
             'product_id' => Product::factory()->create(['name' => 'Ácido hialurônico'])->id, 'batch_code' => 'AH1', 'quantity' => 100, 'expires_on' => '2027-06-30',
         ]);
 
+        // O valor do registro não importa aqui: sem limite de desconto.
+        DB::table('role_discount_limits')->update(['max_percent' => 100]);
+
         $record = function (int $number) use ($professional, $patient, $batch): void {
             $this->actingAs($professional)->post("/pacientes/{$patient->id}/atendimentos", [
                 'performed_at' => '2026-10-0'.$number.'T10:00',

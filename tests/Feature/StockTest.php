@@ -9,6 +9,7 @@ use App\Exceptions\InsufficientStockException;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\StockMovement;
+use App\Models\Treatment;
 use App\Models\User;
 use App\Services\StockLedger;
 use Carbon\CarbonImmutable;
@@ -448,6 +449,110 @@ class StockTest extends TestCase
         $this->assertSame('Agulha 30G', $product->refresh()->name);
     }
 
+    public function test_clicking_a_product_in_the_listing_opens_its_details(): void
+    {
+        $product = Product::factory()->create(['name' => 'Toxina botulínica', 'supplier' => 'Distribuidora Y', 'minimum_stock' => 5]);
+        $batch = ProductBatch::factory()->create(['product_id' => $product->id, 'batch_code' => 'TX-2027', 'quantity' => 0]);
+        app(StockLedger::class)->enter($batch, '8', null, $this->admin, ['invoice_number' => 'NF-123', 'unit_cost' => '12.50']);
+
+        $this->actingAs($this->admin);
+
+        $this->get('/estoque')
+            ->assertSee('data-summary="'.route('products.summary', $product).'"', false)
+            ->assertSee('data-summary-dialog="product-summary"', false)
+            ->assertSee('<dialog id="product-summary"', false);
+
+        // O produto inteiro: saldos, custo, fornecedor, lotes e movimentações.
+        $html = $this->get("/estoque/{$product->id}/resumo")
+            ->assertOk()
+            ->assertSee('data-summary-content', false)
+            ->assertSee('Toxina botulínica')
+            ->assertSee('Custo médio em estoque')
+            ->assertSee('Fornecedor: Distribuidora Y')
+            ->assertSee('TX-2027')
+            ->assertSee('NF NF-123')
+            ->assertSee('Últimas movimentações')
+            ->assertDontSee('Ver todas as movimentações')
+            // Editar abre o diálogo da listagem; as movimentações ficam na página do produto.
+            ->assertSee('data-dialog-open="product-edit"', false)
+            ->assertSee('data-dialog-action="'.route('products.update', $product).'"', false)
+            ->assertSee('Movimentar estoque')
+            ->getContent();
+
+        // Sem layout e sem diálogos próprios: só o conteúdo da janela.
+        $this->assertStringNotContainsString('<h1', $html);
+        $this->assertStringNotContainsString('<dialog', $html);
+        $this->assertStringNotContainsString('Corrigir custo', $html);
+        $this->assertStringNotContainsString('data-dialog-open="stock-exit"', $html);
+    }
+
+    public function test_product_details_window_follows_the_permissions(): void
+    {
+        $product = Product::factory()->create(['name' => 'Seringa 1 mL']);
+
+        $this->get("/estoque/{$product->id}/resumo")->assertRedirect('/login');
+
+        // Recepção: sem acesso ao estoque por padrão.
+        $this->actingAs(User::factory()->create())->get("/estoque/{$product->id}/resumo")->assertForbidden();
+
+        // Profissional: consulta, sem editar nem lançar entrada ou saída.
+        $this->actingAs(User::factory()->professional()->create())->get("/estoque/{$product->id}/resumo")
+            ->assertOk()->assertSee('Seringa 1 mL')->assertDontSee('product-edit', false);
+
+        $this->actingAs($this->admin)->get('/estoque/999999/resumo')->assertNotFound();
+    }
+
+    public function test_product_details_window_shows_only_the_latest_movements(): void
+    {
+        $product = Product::factory()->create();
+        $batch = ProductBatch::factory()->create(['product_id' => $product->id, 'quantity' => 0]);
+        $ledger = app(StockLedger::class);
+
+        foreach (range(1, 11) as $index) {
+            $ledger->enter($batch, '1', null, $this->admin, ['invoice_number' => "NF-{$index}"]);
+        }
+
+        $this->actingAs($this->admin);
+
+        $this->get("/estoque/{$product->id}/resumo")
+            ->assertSee('NF NF-11')
+            ->assertSee('NF NF-2')
+            ->assertDontSee('NF NF-1<', false)
+            ->assertSee('Ver todas as movimentações')
+            ->assertSee(route('products.show', $product).'#movimentacoes', false);
+    }
+
+    public function test_product_details_window_runs_a_fixed_number_of_queries(): void
+    {
+        $ledger = app(StockLedger::class);
+        $count = function (Product $product): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $this->get("/estoque/{$product->id}/resumo")->assertOk();
+
+            return count(DB::getQueryLog());
+        };
+
+        // Os dois com consumo em atendimento, que carrega o atendimento e o profissional.
+        $small = Product::factory()->create();
+        $smallBatch = ProductBatch::factory()->create(['product_id' => $small->id, 'quantity' => 0]);
+        $ledger->enter($smallBatch, '5', null, $this->admin, ['unit_cost' => '1.00']);
+        $ledger->consume($smallBatch, '1', Treatment::factory()->create(), $this->admin);
+
+        $large = Product::factory()->create();
+        foreach (range(1, 4) as $index) {
+            $batch = ProductBatch::factory()->create(['product_id' => $large->id, 'quantity' => 0]);
+            $ledger->enter($batch, '10', null, $this->admin, ['unit_cost' => '2.00']);
+            $ledger->consume($batch, '1', Treatment::factory()->create(), $this->admin);
+        }
+
+        $this->actingAs($this->admin);
+        $count($small);
+
+        $this->assertSame($count($small), $count($large));
+    }
+
     public function test_output_is_escaped(): void
     {
         $product = Product::factory()->create(['name' => '<script>alert(1)</script>', 'supplier' => '<img src=x onerror=alert(2)>']);
@@ -456,9 +561,11 @@ class StockTest extends TestCase
         $this->actingAs($this->admin);
 
         $this->get('/estoque')->assertDontSee('<script>alert(1)</script>', false);
-        $this->get("/estoque/{$product->id}")
-            ->assertDontSee('<script>alert(1)</script>', false)
-            ->assertDontSee('<img src=x onerror=alert(2)>', false)
-            ->assertDontSee('<script>alert(3)</script>', false);
+        foreach (["/estoque/{$product->id}", "/estoque/{$product->id}/resumo"] as $url) {
+            $this->get($url)
+                ->assertDontSee('<script>alert(1)</script>', false)
+                ->assertDontSee('<img src=x onerror=alert(2)>', false)
+                ->assertDontSee('<script>alert(3)</script>', false);
+        }
     }
 }

@@ -52,7 +52,7 @@
         </section>
     @endif
 
-    <p class="mt-6 text-xs text-slate-500">Forma de pagamento e parcelamento são combinados na aprovação. Os valores valem até a data indicada.</p>
+    <p class="mt-6 text-xs text-slate-500">Forma de pagamento e parcelamento são combinados no fechamento da venda. Os valores valem até a data indicada.</p>
 
     <div class="mt-16 grid grid-cols-1 gap-12 sm:grid-cols-2 print:grid-cols-2">
         <div class="border-t border-slate-500 pt-1 text-center text-xs">{{ $patient->name }}</div>

@@ -51,6 +51,22 @@ class TreatmentPlan extends Model
     }
 
     /**
+     * Virou venda: pacote ativo ou encerrado. Em aberto e recusado nunca foram vendidos.
+     */
+    public function wasSold(): bool
+    {
+        return in_array($this->status, [TreatmentPlanStatus::Approved, TreatmentPlanStatus::Closed], true);
+    }
+
+    /**
+     * Como o registro é chamado na tela: o orçamento vendido é o pacote.
+     */
+    public function kindLabel(): string
+    {
+        return $this->wasSold() ? 'Pacote' : 'Orçamento';
+    }
+
+    /**
      * Orçamento em aberto cuja validade passou: precisa de nova data antes de aprovar.
      */
     public function isExpired(): bool
@@ -66,6 +82,24 @@ class TreatmentPlan extends Model
         $cents = $this->items->sum(fn (TreatmentPlanItem $item) => $item->sessions * (int) round((float) $item->unit_price * 100));
 
         return number_format($cents / 100, 2, '.', '');
+    }
+
+    /**
+     * Total pelo preço de tabela de cada item. Item sem preço de tabela conta pelo valor vendido.
+     */
+    public function listTotal(): string
+    {
+        $cents = $this->items->sum(fn (TreatmentPlanItem $item) => $item->sessions * (int) round((float) ($item->list_price ?? $item->unit_price) * 100));
+
+        return number_format($cents / 100, 2, '.', '');
+    }
+
+    /**
+     * Desconto do orçamento: o total de tabela menos o total vendido, nunca negativo.
+     */
+    public function discount(): string
+    {
+        return number_format(max(0, (float) $this->listTotal() - (float) $this->total()), 2, '.', '');
     }
 
     /**

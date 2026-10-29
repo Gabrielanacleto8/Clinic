@@ -663,23 +663,67 @@ document.querySelectorAll('[data-plan-sessions]').forEach((block) => {
 });
 
 // Orçamento: escolher o procedimento preenche o valor do catálogo (se a linha
-// ainda não tem valor) e o total é refeito a cada mudança.
+// ainda não tem valor) e o total é refeito a cada mudança. "Remover" limpa a
+// linha, que volta a ser uma linha em branco (não gravada).
 document.querySelectorAll('[data-plan-items]').forEach((list) => {
     const total = list.closest('form').querySelector('[data-plan-total]');
     const parse = (text) => Number(String(text).replace(/\./g, '').replace(',', '.')) || 0;
     const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
+    const discount = list.closest('form').querySelector('[data-plan-discount]');
+
     const refresh = () => {
         let sum = 0;
+        let listSum = 0;
 
         list.querySelectorAll('[data-plan-item]').forEach((row) => {
-            if (row.querySelector('[data-plan-procedure]').value === '') return;
+            const procedure = row.querySelector('[data-plan-procedure]');
 
-            sum += parse(row.querySelector('[data-plan-sessions-input]').value) * parse(row.querySelector('[data-plan-price]').value);
+            if (procedure.value === '') return;
+
+            const sessions = parse(row.querySelector('[data-plan-sessions-input]').value);
+            const price = parse(row.querySelector('[data-plan-price]').value);
+
+            sum += sessions * price;
+            listSum += sessions * (procedure.selectedOptions[0]?.dataset.price ? parse(procedure.selectedOptions[0].dataset.price) : price);
         });
 
         total.textContent = money.format(sum);
+
+        // Desconto sobre o preço de tabela: o servidor confere o limite de quem orça.
+        if (discount) {
+            const off = listSum - sum;
+
+            discount.hidden = off < 0.005;
+            discount.textContent = off < 0.005 ? '' : `Tabela ${money.format(listSum)} · desconto ${money.format(off)} (${(off / listSum * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)`;
+        }
     };
+
+    const fields = (row) => row.querySelectorAll('select, input');
+
+    // O botão só aparece na linha com algo preenchido.
+    const syncRemoveButton = (row) => {
+        row.querySelector('[data-plan-remove]').hidden = [...fields(row)].every((field) => field.value === '');
+    };
+
+    list.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-plan-remove]');
+
+        if (!button) return;
+
+        const row = button.closest('[data-plan-item]');
+
+        fields(row).forEach((field) => {
+            field.value = '';
+            field.classList.remove('input-error');
+            field.removeAttribute('aria-invalid');
+        });
+        row.querySelectorAll('[data-plan-error]').forEach((error) => error.remove());
+        syncRemoveButton(row);
+        refresh();
+        // O botão some: o foco vai para o procedimento da mesma linha.
+        row.querySelector('[data-plan-procedure]').focus();
+    });
 
     list.addEventListener('change', (event) => {
         const row = event.target.closest('[data-plan-item]');
@@ -693,10 +737,16 @@ document.querySelectorAll('[data-plan-items]').forEach((list) => {
             if (sessions.value === '' && event.target.value !== '') sessions.value = '1';
         }
 
+        if (row) syncRemoveButton(row);
         refresh();
     });
 
-    list.addEventListener('input', refresh);
+    list.addEventListener('input', (event) => {
+        const row = event.target.closest('[data-plan-item]');
+
+        if (row) syncRemoveButton(row);
+        refresh();
+    });
     refresh();
 });
 
@@ -869,17 +919,72 @@ if (procedureSelect) {
         }
 
         previous = next;
+        showDiscount();
     });
+
+    // Desconto sobre o preço de tabela (o valor do catálogo): "10%" ou "50,00"
+    // recalcula o valor cobrado, e a nota mostra o desconto do valor digitado.
+    // Só ajuda a digitar: o servidor confere o limite de quem registra.
+    const discountInput = form.querySelector('[data-discount-input]');
+    const discountNote = form.querySelector('[data-discount-note]');
+    const limitText = discountNote?.textContent.trim() ?? '';
+    const parseMoney = (text) => Number(String(text).trim().replace(/\./g, '').replace(',', '.'));
+    const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const listPrice = () => parseMoney(suggestionFor(procedureSelect.value).amount ?? '') || 0;
+
+    const showDiscount = () => {
+        if (!discountNote) return;
+
+        const list = listPrice();
+        const charged = parseMoney(amount.value);
+        const off = list - charged;
+
+        discountNote.textContent = list > 0 && charged > 0 && off >= 0.005
+            ? `Tabela ${brl.format(list)} · desconto ${brl.format(off)} (${(off / list * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%). ${limitText}`
+            : limitText;
+    };
+
+    discountInput?.addEventListener('input', () => {
+        const list = listPrice();
+        const text = discountInput.value.trim();
+
+        if (list <= 0 || text === '') return;
+
+        const value = parseMoney(text.replace('%', ''));
+
+        if (!Number.isFinite(value) || value < 0) return;
+
+        const charged = text.endsWith('%') ? list * (1 - Math.min(value, 100) / 100) : Math.max(list - value, 0);
+
+        amount.value = charged.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
+        showDiscount();
+    });
+
+    amount.addEventListener('input', showDiscount);
+    showDiscount();
 }
 
-// Lista de atendimentos: clicar na linha (ou no procedimento) abre o resumo
-// em uma janela, buscado no servidor só nessa hora. Ctrl/Cmd+clique e o botão
-// do meio continuam abrindo a página completa em outra aba.
-const summaryDialog = document.getElementById('treatment-summary');
+// Listas com resumo em janela (atendimentos, orçamentos): clicar na linha (ou
+// no link marcado com data-summary-link) abre o resumo na janela indicada em
+// data-summary-dialog, buscado no servidor só nessa hora. Ctrl/Cmd+clique e o
+// botão do meio continuam abrindo a página completa em outra aba. Botões,
+// campos e outros links da linha seguem com a ação própria.
+document.addEventListener('click', async (event) => {
+    const row = event.target.closest('[data-summary]');
 
-if (summaryDialog) {
-    const body = summaryDialog.querySelector('[data-treatment-summary-body]');
-    let current = null;
+    if (!row || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    if (event.target.closest('button, input, select, textarea, label')) return;
+
+    const link = event.target.closest('a');
+
+    if (link && !link.hasAttribute('data-summary-link')) return;
+
+    const dialog = document.getElementById(row.dataset.summaryDialog);
+    const body = dialog?.querySelector('[data-summary-body]');
+
+    if (!body) return;
+
+    event.preventDefault();
 
     const message = (text) => {
         const paragraph = document.createElement('p');
@@ -888,40 +993,28 @@ if (summaryDialog) {
         body.replaceChildren(paragraph);
     };
 
-    document.addEventListener('click', async (event) => {
-        const row = event.target.closest('[data-treatment-summary]');
+    // Só a última linha clicada preenche a janela, se as respostas chegarem fora de ordem.
+    const url = row.dataset.summary;
+    dialog.dataset.summaryCurrent = url;
+    message('Carregando…');
+    dialog.showModal();
 
-        if (!row || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    try {
+        const response = await fetch(url, { headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' } });
 
-        // Outros links da linha (como o do paciente) seguem normalmente.
-        const link = event.target.closest('a');
+        if (!response.ok) throw new Error(String(response.status));
 
-        if (link && !link.hasAttribute('data-treatment-summary-link')) return;
+        // HTML do próprio servidor, já escapado pelo Blade. O DOMParser não executa scripts.
+        const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const content = page.querySelector('[data-summary-content]');
 
-        event.preventDefault();
-
-        const url = row.dataset.treatmentSummary;
-        current = url;
-        message('Carregando…');
-        summaryDialog.showModal();
-
-        try {
-            const response = await fetch(url, { headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' } });
-
-            if (!response.ok) throw new Error(String(response.status));
-
-            // HTML do próprio servidor, já escapado pelo Blade. O DOMParser não executa scripts.
-            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
-            const content = page.querySelector('[data-treatment-summary-content]');
-
-            if (current === url && content) {
-                body.replaceChildren(document.importNode(content, true));
-            }
-        } catch {
-            if (current === url) message('Não foi possível carregar o atendimento. Tente de novo ou abra a página completa.');
+        if (dialog.dataset.summaryCurrent === url && content) {
+            body.replaceChildren(document.importNode(content, true));
         }
-    });
-}
+    } catch {
+        if (dialog.dataset.summaryCurrent === url) message(body.dataset.summaryError ?? 'Não foi possível carregar. Tente de novo ou abra a página completa.');
+    }
+});
 
 // Janelas modais (<dialog>). O botão que abre pode preencher campos do
 // formulário, como o lote da linha clicada: data-dialog-values='{"campo": valor}'.

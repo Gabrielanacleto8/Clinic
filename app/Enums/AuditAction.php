@@ -15,6 +15,7 @@ enum AuditAction: string
     case UserPasswordReset = 'user.password_reset';
     case PermissionsUpdated = 'permissions.updated';
     case PermissionsViewed = 'permissions.viewed';
+    case DiscountLimitsUpdated = 'permissions.discount_limits_updated';
     case AuditViewed = 'audit.viewed';
     case ClinicProfileUpdated = 'clinic.profile_updated';
     case ClinicLogoUpdated = 'clinic.logo_updated';
@@ -42,6 +43,18 @@ enum AuditAction: string
     case FinanceViewed = 'finance.viewed';
     case FinanceExported = 'finance.exported';
     case FinanceMarginViewed = 'finance.margin_viewed';
+    case RefundRecorded = 'finance.refund_recorded';
+    case RefundUndone = 'finance.refund_undone';
+    case InstallmentReconciled = 'finance.installment_reconciled';
+    case InstallmentUnreconciled = 'finance.installment_unreconciled';
+    case CashClosed = 'finance.cash_closed';
+    case CashReopened = 'finance.cash_reopened';
+    case RecurringExpenseCreated = 'finance.recurring_created';
+    case RecurringExpenseUpdated = 'finance.recurring_updated';
+    case RecurringExpenseGenerated = 'finance.recurring_generated';
+    case CommissionRatesUpdated = 'finance.commission_rates_updated';
+    case CommissionPaid = 'finance.commission_paid';
+    case CommissionPayoutDeleted = 'finance.commission_payout_deleted';
 
     case ProcedureCreated = 'procedure.created';
     case ProcedureUpdated = 'procedure.updated';
@@ -101,6 +114,7 @@ enum AuditAction: string
             self::UserPasswordReset => 'Redefiniu a senha de usuário',
             self::PermissionsUpdated => 'Alterou permissões',
             self::PermissionsViewed => 'Consultou permissões',
+            self::DiscountLimitsUpdated => 'Alterou o desconto máximo dos perfis',
             self::AuditViewed => 'Consultou a auditoria',
             self::ClinicProfileUpdated => 'Alterou os dados da clínica',
             self::ClinicLogoUpdated => 'Trocou o logo da clínica',
@@ -124,7 +138,19 @@ enum AuditAction: string
             self::InstallmentReopened => 'Desfez pagamento',
             self::FinanceViewed => 'Consultou o financeiro',
             self::FinanceExported => 'Exportou a planilha do financeiro',
-            self::FinanceMarginViewed => 'Consultou a margem por procedimento',
+            self::FinanceMarginViewed => 'Consultou receitas e margem por procedimento ou profissional',
+            self::RefundRecorded => 'Registrou estorno ao paciente',
+            self::RefundUndone => 'Desfez estorno ao paciente',
+            self::InstallmentReconciled => 'Conciliou recebimento com o extrato',
+            self::InstallmentUnreconciled => 'Desfez conciliação de recebimento',
+            self::CashClosed => 'Fechou o caixa do dia',
+            self::CashReopened => 'Reabriu o caixa do dia',
+            self::RecurringExpenseCreated => 'Cadastrou despesa recorrente',
+            self::RecurringExpenseUpdated => 'Alterou despesa recorrente',
+            self::RecurringExpenseGenerated => 'Gerou despesas recorrentes do mês',
+            self::CommissionRatesUpdated => 'Alterou regras de comissão',
+            self::CommissionPaid => 'Registrou repasse de comissão',
+            self::CommissionPayoutDeleted => 'Excluiu repasse de comissão',
             self::ProcedureCreated => 'Cadastrou procedimento',
             self::ProcedureUpdated => 'Alterou procedimento',
             self::ProductCreated => 'Cadastrou produto',
@@ -150,7 +176,7 @@ enum AuditAction: string
             self::TreatmentPlanViewed => 'Abriu orçamento',
             self::TreatmentPlansListed => 'Consultou a lista de orçamentos',
             self::TreatmentPlanPrinted => 'Imprimiu orçamento',
-            self::TreatmentPlanApproved => 'Aprovou orçamento (gerou o pacote e a cobrança)',
+            self::TreatmentPlanApproved => 'Converteu orçamento em venda (gerou o pacote e a cobrança)',
             self::TreatmentPlanDeclined => 'Marcou orçamento como recusado',
             self::TreatmentPlanClosed => 'Encerrou pacote',
             self::PhotoUploaded => 'Enviou foto',

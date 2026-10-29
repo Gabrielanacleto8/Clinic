@@ -73,13 +73,13 @@
             <tbody class="divide-y divide-slate-100">
                 @forelse ($treatments as $treatment)
                     {{-- Clique na linha abre o resumo em uma janela (app.js); o link do procedimento é o caminho pelo teclado. --}}
-                    <tr class="cursor-pointer hover:bg-slate-50" data-treatment-summary="{{ route('patients.treatments.summary', [$treatment->patient, $treatment]) }}">
+                    <tr class="cursor-pointer hover:bg-slate-50" data-summary="{{ route('patients.treatments.summary', [$treatment->patient, $treatment]) }}" data-summary-dialog="treatment-summary">
                         <td data-label="Data" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ ClinicTime::format($treatment->performed_at) }}</td>
                         <td data-label="Paciente" class="px-4 py-3">
                             <a href="{{ route('patients.show', $treatment->patient) }}" class="text-teal-800 hover:underline">{{ $treatment->patient->name }}</a>
                         </td>
                         <td data-label="Procedimento" class="px-4 py-3 font-medium">
-                            <a href="{{ route('patients.treatments.show', [$treatment->patient, $treatment]) }}" class="text-teal-800 hover:underline" data-treatment-summary-link>{{ $treatment->procedure->name }}</a>
+                            <a href="{{ route('patients.treatments.show', [$treatment->patient, $treatment]) }}" class="text-teal-800 hover:underline" data-summary-link>{{ $treatment->procedure->name }}</a>
                             @if ($treatment->isVoided())
                                 <span class="badge ml-1 bg-red-100 text-red-800">Anulado</span>
                             @endif
@@ -110,7 +110,7 @@
     </div>
 
     <x-dialog id="treatment-summary" title="Atendimento" size="lg">
-        <div data-treatment-summary-body aria-live="polite"></div>
+        <div data-summary-body data-summary-error="Não foi possível carregar o atendimento. Tente de novo ou abra a página completa." aria-live="polite"></div>
     </x-dialog>
 
     @if ($treatmentForm)

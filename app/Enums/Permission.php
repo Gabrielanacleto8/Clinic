@@ -33,6 +33,7 @@ enum Permission: string
     case FinanceView = 'finance.view';
     case FinanceManage = 'finance.manage';
     case FinanceReceive = 'finance.receive';
+    case FinanceCash = 'finance.cash';
     case PlansView = 'plans.view';
     case PlansManage = 'plans.manage';
 
@@ -56,8 +57,9 @@ enum Permission: string
             self::FinanceView => 'Ver todo o financeiro, inclusive despesas e salários',
             self::FinanceManage => 'Lançar e excluir receitas e despesas, registrar e desfazer pagamentos',
             self::FinanceReceive => 'Registrar o recebimento de cobranças de pacientes',
+            self::FinanceCash => 'Fechar o caixa do dia (conferir o recebido em cada forma de pagamento)',
             self::PlansView => 'Ver orçamentos e pacotes dos pacientes',
-            self::PlansManage => 'Criar orçamentos, aprovar (gera a cobrança) e encerrar pacotes',
+            self::PlansManage => 'Criar orçamentos, converter em venda (gera a cobrança) e encerrar pacotes',
         };
     }
 
@@ -72,7 +74,7 @@ enum Permission: string
             self::AgendaView, self::AgendaManage => 'Agenda',
             self::ProceduresView, self::ProceduresManage => 'Procedimentos',
             self::StockView, self::StockManage, self::StockAdjust, self::StockDiscard => 'Estoque',
-            self::FinanceView, self::FinanceManage, self::FinanceReceive => 'Financeiro',
+            self::FinanceView, self::FinanceManage, self::FinanceReceive, self::FinanceCash => 'Financeiro',
             self::PlansView, self::PlansManage => 'Orçamentos e pacotes',
         };
     }
@@ -99,6 +101,8 @@ enum Permission: string
             self::FinanceManage => [self::FinanceView, self::FinanceReceive],
             // Receber é dar baixa na cobrança de um paciente: não exige ver o financeiro.
             self::FinanceReceive => [self::PatientsView],
+            // Fecha o caixa quem recebe: a conferência é do que entrou.
+            self::FinanceCash => [self::FinanceReceive],
             self::PlansView => [self::PatientsView],
             self::PlansManage => [self::PlansView],
             default => [],
@@ -124,7 +128,7 @@ enum Permission: string
             UserRole::Receptionist => [
                 self::PatientsView, self::PatientsManage,
                 self::AgendaView, self::AgendaManage,
-                self::FinanceReceive,
+                self::FinanceReceive, self::FinanceCash,
                 self::PlansView, self::PlansManage,
             ],
             UserRole::Admin => self::cases(),

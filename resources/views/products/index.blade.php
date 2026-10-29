@@ -67,9 +67,10 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
                 @forelse ($products as $product)
-                    <tr class="hover:bg-slate-50">
+                    {{-- Clicar na linha (ou no nome) abre o produto em janela; ver app.js. --}}
+                    <tr class="cursor-pointer hover:bg-slate-50" data-summary="{{ route('products.summary', $product) }}" data-summary-dialog="product-summary">
                         <td class="px-4 py-3">
-                            <a href="{{ route('products.show', $product) }}" class="font-medium text-teal-800 hover:underline">{{ $product->name }}</a>
+                            <a href="{{ route('products.show', $product) }}" class="font-medium text-teal-800 hover:underline" data-summary-link>{{ $product->name }}</a>
                             @if ($product->code || $product->brand)
                                 <span class="block text-xs text-slate-500">{{ implode(' · ', array_filter([$product->code, $product->brand])) }}</span>
                             @endif
@@ -103,29 +104,7 @@
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             @can('update', $product)
-                                @php
-                                    // Dados desta linha, que o botão coloca no diálogo de edição (ver app.js).
-                                    $values = [
-                                        'product_id' => $product->id,
-                                        'name' => $product->name,
-                                        'code' => $product->code,
-                                        'category' => $product->category->value,
-                                        'brand' => $product->brand,
-                                        'manufacturer' => $product->manufacturer,
-                                        'supplier' => $product->supplier,
-                                        'unit' => $product->unit->value,
-                                        'minimum_stock' => LocalizedDecimal::quantityInput($product->minimum_stock),
-                                        'unit_content' => LocalizedDecimal::quantityInput($product->unit_content),
-                                        'hours_after_opening' => $product->hours_after_opening,
-                                        'multi_patient_use' => $product->multi_patient_use,
-                                        'cost' => LocalizedDecimal::unitMoneyInput($product->cost),
-                                        'is_active' => $product->is_active,
-                                    ];
-                                @endphp
-                                <button type="button" class="cursor-pointer font-medium text-teal-800 hover:underline" data-dialog-open="product-edit"
-                                        data-dialog-action="{{ route('products.update', $product) }}"
-                                        data-dialog-summary="{{ $product->name }}"
-                                        data-dialog-values="{{ json_encode($values) }}">Editar</button>
+                                @include('products._edit_button', ['class' => 'cursor-pointer font-medium text-teal-800 hover:underline'])
                             @endcan
                         </td>
                     </tr>
@@ -151,6 +130,10 @@
     <div class="mt-4">
         {{ $products->links() }}
     </div>
+
+    <x-dialog id="product-summary" title="Produto" size="lg">
+        <div data-summary-body data-summary-error="Não foi possível carregar o produto. Tente de novo." aria-live="polite"></div>
+    </x-dialog>
 
     @if ($canEdit)
         {{-- Um só diálogo para a página: o botão "Editar" de cada linha o preenche.

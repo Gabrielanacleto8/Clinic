@@ -50,6 +50,17 @@
             </table>
         </div>
 
+        <section class="card p-6" aria-labelledby="desconto-maximo">
+            <h2 id="desconto-maximo" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Desconto máximo</h2>
+            <p class="mt-1 text-sm text-slate-600">Quanto cada perfil pode descontar do preço de tabela no atendimento e no orçamento. O administrador não tem limite.</p>
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                @foreach ($roles as $role)
+                    <x-form.input name="discount_limits[{{ $role->value }}]" id="discount-limit-{{ $role->value }}" :label="$role->label().' (%)'" inputmode="decimal" autocomplete="off"
+                                  :value="number_format($discountLimits->for($role), 2, ',', '')" />
+                @endforeach
+            </div>
+        </section>
+
         <p class="text-xs text-slate-500">
             Permissões dependentes são concedidas juntas e aparecem marcadas e travadas: quem pode editar também pode ver, anular atendimento inclui o financeiro, e o prontuário exige acesso ao cadastro de pacientes.
         </p>

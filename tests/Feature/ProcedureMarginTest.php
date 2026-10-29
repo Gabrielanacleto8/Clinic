@@ -86,7 +86,7 @@ class ProcedureMarginTest extends TestCase
         $rows = $this->actingAs(User::factory()->admin()->create())
             ->get('/financeiro/margem?de=2026-10-01&ate=2026-10-31')
             ->assertOk()
-            ->assertSee('Margem por procedimento')
+            ->assertSee('Receitas e margem')
             ->viewData('rows')
             ->keyBy('name');
 

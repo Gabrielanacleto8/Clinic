@@ -159,7 +159,7 @@ class PermissionTest extends TestCase
         $this->assertSame($admin->id, $log->user_id);
         $this->assertSame('receptionist', $log->metadata['role']);
         $this->assertSame(['finance.view'], $log->metadata['added']);
-        $this->assertEqualsCanonicalizing(['patients.manage', 'agenda.manage', 'finance.receive', 'plans.view', 'plans.manage'], $log->metadata['removed']);
+        $this->assertEqualsCanonicalizing(['patients.manage', 'agenda.manage', 'finance.receive', 'finance.cash', 'plans.view', 'plans.manage'], $log->metadata['removed']);
     }
 
     public function test_permissions_are_read_from_the_database_once_per_request(): void

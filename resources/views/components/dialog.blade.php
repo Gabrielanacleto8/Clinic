@@ -1,9 +1,10 @@
-@props(['id', 'title', 'size' => 'md'])
+@props(['id', 'title', 'size' => 'md', 'autoshow' => false, 'reopens' => true])
 {{-- Janela modal nativa. Abre por [data-dialog-open="id"] e fecha por
      [data-dialog-close] (ver app.js). Reabre sozinha quando o formulário
      dela volta com erro: o formulário envia o campo oculto "_dialog".
+     autoshow abre a janela ao carregar a página (fluxo que continua nela).
      size="lg" é para formulários longos: a janela rola e o título fica fixo. --}}
-<dialog id="{{ $id }}" aria-labelledby="{{ $id }}-title" @if (old('_dialog') === $id) data-dialog-autoshow @endif
+<dialog id="{{ $id }}" aria-labelledby="{{ $id }}-title" @if ($autoshow || ($reopens && old('_dialog') === $id)) data-dialog-autoshow @endif
         {{ $attributes->class([
             'm-auto w-[calc(100%-2rem)] rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-black/50',
             'max-w-md' => $size === 'md',

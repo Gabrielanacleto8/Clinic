@@ -3,7 +3,8 @@
     use App\Support\ClinicTime;
     use App\Support\LocalizedDecimal;
 
-    $canCorrectCost = auth()->user()->can('adjust', App\Models\Product::class);
+    // $readOnly: na janela do produto, sem a correção de custo (o diálogo dela é da página).
+    $canCorrectCost = ! ($readOnly ?? false) && auth()->user()->can('adjust', App\Models\Product::class);
 @endphp
 {{-- Linhas do livro de estoque. Espera $movements com user e treatment.professional
      carregados. $product e $batch são sempre informados: na página de um produto

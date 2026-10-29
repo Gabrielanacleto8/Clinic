@@ -20,6 +20,8 @@ class FinancialInstallment extends Model
             'amount' => 'decimal:2',
             'due_date' => 'immutable_date',
             'paid_at' => 'immutable_date',
+            'reconciled_on' => 'immutable_date',
+            'fee' => 'decimal:2',
         ];
     }
 
@@ -34,6 +36,11 @@ class FinancialInstallment extends Model
     public function isPaid(): bool
     {
         return $this->paid_at !== null;
+    }
+
+    public function isReconciled(): bool
+    {
+        return $this->reconciled_on !== null;
     }
 
     public function isOverdue(): bool

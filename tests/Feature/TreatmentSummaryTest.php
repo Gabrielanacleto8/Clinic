@@ -80,7 +80,7 @@ class TreatmentSummaryTest extends TestCase
         $this->actingAs($this->professional)->get('/atendimentos')
             ->assertOk()
             ->assertSee('<dialog id="treatment-summary"', false)
-            ->assertSee('data-treatment-summary="'.route('patients.treatments.summary', [$this->patient, $treatment]).'"', false)
+            ->assertSee('data-summary="'.route('patients.treatments.summary', [$this->patient, $treatment]).'" data-summary-dialog="treatment-summary"', false)
             // Sem JavaScript, o procedimento continua levando à página completa.
             ->assertSee('href="'.route('patients.treatments.show', [$this->patient, $treatment]).'"', false);
     }
@@ -91,7 +91,7 @@ class TreatmentSummaryTest extends TestCase
 
         $this->actingAs($this->professional)->get($this->summaryUrl($treatment))
             ->assertOk()
-            ->assertSee('data-treatment-summary-content', false)
+            ->assertSee('data-summary-content', false)
             ->assertDontSee('<html', false)
             ->assertSeeInOrder(['Toxina botulínica', 'Marina Duarte', '08/10/2026 às 12:00', 'Dra. Helena'])
             ->assertSee('Aplicados 20 U na glabela.')

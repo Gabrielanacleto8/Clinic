@@ -66,4 +66,60 @@ class FinancialEntryPolicy
     {
         return $user->hasPermission(Permission::FinanceManage) && $entry->isGenerated() && ! $entry->hasPaidInstallment();
     }
+
+    /**
+     * Ver o caixa do dia: quem fecha e quem vê o financeiro.
+     */
+    public function viewCash(User $user): bool
+    {
+        return $user->hasPermission(Permission::FinanceCash) || $user->hasPermission(Permission::FinanceView);
+    }
+
+    /**
+     * Fechar o caixa do dia: conferir o recebido em cada forma de pagamento.
+     */
+    public function closeCash(User $user): bool
+    {
+        return $user->hasPermission(Permission::FinanceCash);
+    }
+
+    /**
+     * Reabrir um dia fechado libera alterar pagamentos já conferidos: só o administrador.
+     */
+    public function reopenCash(User $user): bool
+    {
+        return $user->isAdmin();
+    }
+
+    /**
+     * Quem fecha o caixa sem ver o financeiro: o menu leva direto ao caixa do dia.
+     */
+    public function cashOnly(User $user): bool
+    {
+        return $user->hasPermission(Permission::FinanceCash) && ! $user->hasPermission(Permission::FinanceView);
+    }
+
+    /**
+     * Conferir recebimentos no extrato e registrar a taxa da operadora.
+     */
+    public function reconcile(User $user): bool
+    {
+        return $user->hasPermission(Permission::FinanceManage);
+    }
+
+    /**
+     * Devolver ao paciente parte do que ele pagou. Só cobrança de paciente.
+     */
+    public function refund(User $user, FinancialEntry $entry): bool
+    {
+        return $user->hasPermission(Permission::FinanceManage) && $entry->isPatientCharge();
+    }
+
+    /**
+     * Despesas recorrentes, regras de comissão e repasses.
+     */
+    public function manage(User $user): bool
+    {
+        return $user->hasPermission(Permission::FinanceManage);
+    }
 }

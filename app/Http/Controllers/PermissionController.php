@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Enums\UserRole;
 use App\Http\Requests\UpdatePermissionsRequest;
 use App\Services\AuditLogger;
+use App\Services\DiscountLimits;
 use App\Services\RolePermissions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ use Illuminate\View\View;
  */
 class PermissionController extends Controller
 {
-    public function edit(RolePermissions $rolePermissions, AuditLogger $audit): View
+    public function edit(RolePermissions $rolePermissions, DiscountLimits $discountLimits, AuditLogger $audit): View
     {
         Gate::authorize('manage-permissions');
 
@@ -28,14 +29,21 @@ class PermissionController extends Controller
             'modules' => collect(Permission::cases())->groupBy(fn (Permission $permission) => $permission->module()),
             'roles' => UserRole::configurable(),
             'rolePermissions' => $rolePermissions,
+            'discountLimits' => $discountLimits,
         ]);
     }
 
-    public function update(UpdatePermissionsRequest $request, RolePermissions $rolePermissions, AuditLogger $audit): RedirectResponse
+    public function update(UpdatePermissionsRequest $request, RolePermissions $rolePermissions, DiscountLimits $discountLimits, AuditLogger $audit): RedirectResponse
     {
         $implied = [];
 
-        DB::transaction(function () use ($request, $rolePermissions, $audit, &$implied): void {
+        DB::transaction(function () use ($request, $rolePermissions, $discountLimits, $audit, &$implied): void {
+            $limits = $discountLimits->sync($request->discountLimits());
+
+            if ($limits !== []) {
+                $audit->log(AuditAction::DiscountLimitsUpdated, null, ['limits' => array_map(fn (array $change) => $change['from'].' → '.$change['to'], $limits)]);
+            }
+
             foreach (UserRole::configurable() as $role) {
                 $requested = $request->permissionsFor($role);
                 $changes = $rolePermissions->sync($role, $requested);

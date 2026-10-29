@@ -8,6 +8,7 @@ use App\Http\Requests\InstallmentPaymentRequest;
 use App\Models\FinancialEntry;
 use App\Models\FinancialInstallment;
 use App\Services\AuditLogger;
+use App\Services\CashRegister;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,7 @@ class InstallmentPaymentController extends Controller
     /** Lançamento travado na transação, para a auditoria e as regras de recebimento. */
     private ?FinancialEntry $entry = null;
 
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(private readonly AuditLogger $audit, private readonly CashRegister $cash) {}
 
     /**
      * Só identificadores e valores do pagamento, nunca dados pessoais.
@@ -58,6 +59,8 @@ class InstallmentPaymentController extends Controller
                 throw ValidationException::withMessages(['installment_id' => 'Esta parcela não está mais em aberto.']);
             }
 
+            $this->cash->assertOpen($validated['paid_at']);
+
             $this->confirmPaymentMethod($validated['payment_method'] ?? null);
 
             foreach ($settled as $each) {
@@ -89,6 +92,15 @@ class InstallmentPaymentController extends Controller
             // Outra pessoa já desfez este pagamento enquanto a tela estava aberta.
             if ($reopened->doesntContain('id', $installment->id)) {
                 throw ValidationException::withMessages(['installment_id' => 'Esta parcela já está em aberto.']);
+            }
+
+            // Com estorno, o dinheiro devolvido sairia de um pagamento que deixou de existir.
+            if ($this->entry->refunds()->exists()) {
+                throw ValidationException::withMessages(['installment_id' => 'Esta cobrança tem estorno registrado. Desfaça o estorno antes de desfazer o pagamento.']);
+            }
+
+            foreach ($reopened as $each) {
+                $this->cash->assertOpen($each->paid_at->format('Y-m-d'), 'installment_id');
             }
 
             foreach ($reopened as $each) {

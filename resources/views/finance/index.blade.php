@@ -25,20 +25,16 @@
     };
     // Uma só ação de excluir por lançamento, na primeira parcela que aparece na página.
     $deleteShown = [];
+    // Um só "Estornar" por cobrança, na primeira parcela paga que aparece.
+    $refundShown = [];
 @endphp
-<x-layouts.app title="Financeiro">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-            <h1 class="text-xl font-semibold tracking-tight">Financeiro</h1>
-            <p class="mt-1 text-sm text-slate-600">{{ $periodLabel }}</p>
-        </div>
-        @if ($canManage)
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{{ route('finance.entries.create', ['tipo' => FinancialEntryType::Expense->value]) }}" class="btn btn-secondary">Nova despesa</a>
-                <a href="{{ route('finance.entries.create', ['tipo' => FinancialEntryType::Income->value]) }}" class="btn btn-primary">Nova receita</a>
-            </div>
-        @endif
-    </div>
+<x-finance.page active="geral" :subtitle="$periodLabel">
+    @if ($canManage)
+        <x-slot:actions>
+            <a href="{{ route('finance.entries.create', ['tipo' => FinancialEntryType::Expense->value]) }}" class="btn btn-secondary">Nova despesa</a>
+            <a href="{{ route('finance.entries.create', ['tipo' => FinancialEntryType::Income->value]) }}" class="btn btn-primary">Nova receita</a>
+        </x-slot:actions>
+    @endif
 
     <form method="GET" action="{{ route('finance.index') }}" class="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-12" role="search">
         @include('stock._period_fields', ['span' => 'sm:col-span-2'])
@@ -70,8 +66,7 @@
                 <a href="{{ route('finance.index') }}" class="text-slate-600 hover:underline">Limpar filtros</a>
             @endif
             {{-- Os mesmos filtros da tela, sem nome de paciente na planilha. --}}
-            <a href="{{ route('finance.margin', ['de' => $start, 'ate' => $end]) }}" class="ml-auto text-teal-800 hover:underline">Margem por procedimento</a>
-            <a href="{{ route('finance.export', array_filter($filters, filled(...))) }}" class="text-teal-800 hover:underline">Exportar planilha (CSV)</a>
+            <a href="{{ route('finance.export', array_filter($filters, filled(...))) }}" class="ml-auto text-teal-800 hover:underline">Exportar planilha (CSV)</a>
         </div>
         @foreach (['mes', 'de', 'ate', 'tipo', 'situacao', 'paciente'] as $field)
             @error($field)
@@ -178,7 +173,20 @@
                             </td>
                             <td class="px-4 py-3 text-right whitespace-nowrap sm:px-6">
                                 <span class="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
-                                    @if ($installment->isPaid())
+                                    @if ($installment->isPaid() && ! isset($refundShown[$entry->id]) && auth()->user()->can('refund', $entry))
+                                        @php $refundShown[$entry->id] = true; @endphp
+                                        <button type="button" class="cursor-pointer font-medium text-slate-600 hover:underline" data-dialog-open="refund"
+                                                data-dialog-values="{{ json_encode(['entry_id' => $entry->id, 'payment_method' => $entry->payment_method->value]) }}"
+                                                data-dialog-summary="{{ $entry->description }} · {{ $entry->patient?->name }} · total {{ LocalizedDecimal::money($entry->total()) }}">Estornar</button>
+                                    @endif
+                                    @if ($entry->refund_of_id !== null && $firstOfEntry && auth()->user()->can('manage', App\Models\FinancialEntry::class))
+                                        <form method="POST" action="{{ route('finance.refunds.destroy', $entry) }}" class="inline"
+                                              data-confirm="Desfazer o estorno {{ $entry->description }} ({{ LocalizedDecimal::money($entry->total()) }})? A saída sai do caixa do dia.">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="cursor-pointer font-medium text-slate-600 hover:underline">Desfazer estorno</button>
+                                        </form>
+                                    @elseif ($installment->isPaid())
                                         @if ($canManage)
                                             <form method="POST" action="{{ route('finance.payments.destroy', $installment) }}" class="inline"
                                                   data-confirm="Desfazer o pagamento de {{ $entry->description }}? {{ $entry->payment_method->settlesAllInstallments($entry->type) && $entry->installments_count > 1 ? 'As '.$entry->installments_count.' parcelas do cartão voltam a ficar em aberto.' : 'A parcela volta a ficar em aberto.' }}">
@@ -272,6 +280,10 @@
     @endif
 
     @if ($canManage)
+        @include('finance._refund_dialog')
+    @endif
+
+    @if ($canManage)
         <x-dialog id="charge-adjust" title="Ajustar cobrança do atendimento">
             {{-- O destino vem do botão que abre (data-dialog-action); ao voltar com erro, do lançamento guardado em _entry. --}}
             <form method="POST" action="{{ old('_dialog') === 'charge-adjust' && is_numeric(old('_entry')) ? route('finance.entries.charge', (int) old('_entry')) : route('finance.index') }}" class="space-y-4" novalidate>
@@ -295,4 +307,4 @@
             </form>
         </x-dialog>
     @endif
-</x-layouts.app>
+</x-finance.page>

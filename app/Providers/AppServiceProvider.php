@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Models\Appointment;
 use App\Models\AuditLog;
+use App\Models\CashClosing;
 use App\Models\ClinicProfile;
+use App\Models\CommissionPayout;
 use App\Models\FinancialEntry;
 use App\Models\FinancialInstallment;
 use App\Models\Patient;
@@ -14,6 +16,7 @@ use App\Models\PatientAttachment;
 use App\Models\Procedure;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\RecurringExpense;
 use App\Models\StockMovement;
 use App\Models\StockUnit;
 use App\Models\Treatment;
@@ -22,6 +25,7 @@ use App\Models\TreatmentPlan;
 use App\Models\TreatmentPlanItem;
 use App\Models\TreatmentProduct;
 use App\Models\User;
+use App\Services\DiscountLimits;
 use App\Services\RolePermissions;
 use App\Support\ProductionConfig;
 use Carbon\CarbonImmutable;
@@ -47,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Uma instância por requisição: as permissões são lidas do banco uma única vez.
         $this->app->scoped(RolePermissions::class);
+        $this->app->scoped(DiscountLimits::class);
     }
 
     /**
@@ -62,7 +67,9 @@ class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'appointment' => Appointment::class,
             'audit_log' => AuditLog::class,
+            'cash_closing' => CashClosing::class,
             'clinic_profile' => ClinicProfile::class,
+            'commission_payout' => CommissionPayout::class,
             'financial_entry' => FinancialEntry::class,
             'financial_installment' => FinancialInstallment::class,
             'patient' => Patient::class,
@@ -71,6 +78,7 @@ class AppServiceProvider extends ServiceProvider
             'patient_attachment' => PatientAttachment::class,
             'procedure' => Procedure::class,
             'product' => Product::class,
+            'recurring_expense' => RecurringExpense::class,
             'product_batch' => ProductBatch::class,
             'stock_movement' => StockMovement::class,
             'stock_unit' => StockUnit::class,

@@ -17,7 +17,7 @@ enum TreatmentPlanStatus: string
     {
         return match ($this) {
             self::Open => 'Orçamento em aberto',
-            self::Approved => 'Aprovado',
+            self::Approved => 'Vendido',
             self::Declined => 'Recusado',
             self::Closed => 'Encerrado',
         };

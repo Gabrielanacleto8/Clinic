@@ -70,7 +70,7 @@ class FinanceTest extends TestCase
             $this->get('/financeiro/lancamentos/novo')->assertForbidden();
             $this->post('/financeiro/lancamentos', $this->payload())->assertForbidden();
             $this->delete("/financeiro/lancamentos/{$entry->id}")->assertForbidden();
-            $this->get('/')->assertDontSee(route('finance.index'), false);
+            $this->get('/')->assertDontSee('href="'.route('finance.index').'"', false);
         }
 
         $this->actingAs(User::factory()->professional()->create())

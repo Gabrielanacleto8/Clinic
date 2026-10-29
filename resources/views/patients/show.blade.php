@@ -61,7 +61,7 @@
                             <a href="{{ route('patients.consent-term', $patient) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Termo de consentimento</a>
                         @endif
                         @can('create', App\Models\TreatmentPlan::class)
-                            <a href="{{ route('patients.plans.create', $patient) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Novo orçamento</a>
+                            <a href="{{ route('plans.create', ['paciente' => $patient->id]) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Novo orçamento</a>
                         @endcan
                         @can('viewAny', App\Models\AuditLog::class)
                             <a href="{{ route('audit.index', ['paciente' => $patient->id]) }}" class="block px-3 py-2 text-sm hover:bg-slate-50">Ver acessos</a>

@@ -45,6 +45,7 @@ class Treatment extends Model
             'complications' => 'encrypted',
             'voided_at' => 'immutable_datetime',
             'void_reason' => 'encrypted',
+            'commission_rate' => 'decimal:2',
         ];
     }
 

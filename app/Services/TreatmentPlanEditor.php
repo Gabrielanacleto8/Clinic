@@ -19,7 +19,7 @@ class TreatmentPlanEditor
 
     /**
      * @param  array{valid_until: ?string, notes: ?string}  $data
-     * @param  list<array{procedure_id: int, sessions: int, unit_price: string}>  $items
+     * @param  list<array{procedure_id: int, sessions: int, unit_price: string, list_price?: string}>  $items
      */
     public function create(Patient $patient, array $data, array $items, User $user): TreatmentPlan
     {
@@ -40,7 +40,7 @@ class TreatmentPlanEditor
 
     /**
      * @param  array{valid_until: ?string, notes: ?string}  $data
-     * @param  list<array{procedure_id: int, sessions: int, unit_price: string}>  $items
+     * @param  list<array{procedure_id: int, sessions: int, unit_price: string, list_price?: string}>  $items
      *
      * @throws ValidationException
      */

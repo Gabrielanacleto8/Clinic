@@ -23,6 +23,7 @@
     // escolhido no próprio formulário, em vez de vir do prontuário.
     $scope ??= null;
     $section = $scope ? 'border-t border-slate-200 pt-5' : 'card p-6';
+    $discountLimit = app(App\Services\DiscountLimits::class)->for($user->role);
 @endphp
 @csrf
 
@@ -219,7 +220,7 @@
                         @selected($sessionInScope && (string) old('treatment_plan_item_id') === (string) $item->id)>{{ $item->sessionLabel() }}</option>
             @endforeach
         </select>
-        <p class="mt-1 text-xs text-emerald-900">O pacote já foi cobrado na aprovação: usando uma sessão, este atendimento não gera cobrança.</p>
+        <p class="mt-1 text-xs text-emerald-900">O pacote já foi cobrado na venda: usando uma sessão, este atendimento não gera cobrança.</p>
         @if ($sessionError)
             <p id="{{ $sessionId }}-error" class="mt-1 text-sm text-red-700">{{ $sessionError }}</p>
         @endif
@@ -228,6 +229,16 @@
     <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-6" data-charge-fields>
         <x-form.input :scope="$scope" class="md:col-span-2" name="amount" label="Valor do atendimento (R$)" required inputmode="decimal" autocomplete="off"
                       :value="$suggested['amount']" hint="Use 0 para atendimento sem cobrança." data-treatment-amount />
+        {{-- Ajuda de desconto (app.js): "10%" ou "50,00" recalcula o valor a partir do preço de tabela. Não é enviado: vale o valor. --}}
+        <div class="md:col-span-4" data-discount-helper>
+            <label for="{{ $scope ? $scope.'-' : '' }}discount-helper" class="label">Desconto sobre a tabela</label>
+            <input id="{{ $scope ? $scope.'-' : '' }}discount-helper" type="text" inputmode="decimal" autocomplete="off" class="input max-w-40" placeholder="10% ou 50,00" data-discount-input>
+            <p class="mt-1 text-xs text-slate-500" data-discount-note aria-live="polite">
+                @if ($discountLimit !== null)
+                    Seu desconto máximo: {{ number_format($discountLimit, 1, ',', '.') }}% do preço de tabela.
+                @endif
+            </p>
+        </div>
         <x-form.select :scope="$scope" class="md:col-span-2" name="payment_method" label="Forma de pagamento" :options="PaymentMethod::options()" placeholder="Selecione" />
         <x-form.select :scope="$scope" class="md:col-span-2" name="installments" label="Parcelas" :options="$installmentOptions" selected="1" />
         <x-form.input :scope="$scope" class="md:col-span-2" name="first_due_date" label="Primeiro vencimento" type="date" :value="ClinicTime::today()"

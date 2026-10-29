@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AppointmentStatus;
 use App\Enums\AuditAction;
+use App\Enums\FinancialEntryType;
 use App\Enums\Permission;
 use App\Http\Requests\PatientRequest;
 use App\Models\Appointment;
@@ -208,6 +209,7 @@ class PatientController extends Controller
         return DB::table('financial_installments as i')
             ->join('financial_entries as e', 'e.id', '=', 'i.financial_entry_id')
             ->where('e.patient_id', $patient->getKey())
+            ->where('e.type', FinancialEntryType::Income->value)
             ->whereNull('i.paid_at')
             ->selectRaw('coalesce(sum(i.amount), 0) as pending')
             ->selectRaw('coalesce(sum(case when i.due_date < ? then i.amount end), 0) as overdue', [ClinicTime::today()])
@@ -294,10 +296,11 @@ class PatientController extends Controller
                 'financialTotals' => DB::table('financial_installments as i')
                     ->join('financial_entries as e', 'e.id', '=', 'i.financial_entry_id')
                     ->where('e.patient_id', $patient->getKey())
-                    ->selectRaw('coalesce(sum(case when i.paid_at is not null then i.amount end), 0) as paid')
-                    ->selectRaw('coalesce(sum(case when i.paid_at is null then i.amount end), 0) as pending')
-                    ->selectRaw('coalesce(sum(case when i.paid_at is null and i.due_date < ? then i.amount end), 0) as overdue', [ClinicTime::today()])
-                    ->selectRaw('coalesce(sum(case when i.paid_at is null and i.due_date >= ? then i.amount end), 0) as upcoming', [ClinicTime::today()])
+                    // Pago já descontado o que foi estornado (saída ligada ao paciente).
+                    ->selectRaw('coalesce(sum(case when i.paid_at is not null then (case when e.type = ? then i.amount else -i.amount end) end), 0) as paid', [FinancialEntryType::Income->value])
+                    ->selectRaw('coalesce(sum(case when e.type = ? and i.paid_at is null then i.amount end), 0) as pending', [FinancialEntryType::Income->value])
+                    ->selectRaw('coalesce(sum(case when e.type = ? and i.paid_at is null and i.due_date < ? then i.amount end), 0) as overdue', [FinancialEntryType::Income->value, ClinicTime::today()])
+                    ->selectRaw('coalesce(sum(case when e.type = ? and i.paid_at is null and i.due_date >= ? then i.amount end), 0) as upcoming', [FinancialEntryType::Income->value, ClinicTime::today()])
                     ->first(),
             ],
         };

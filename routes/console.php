@@ -14,3 +14,10 @@ Schedule::command('clinic:prune')
     ->timezone((string) config('clinic.timezone'))
     ->withoutOverlapping()
     ->onOneServer();
+
+// Despesas fixas do mês (aluguel, salários): lançadas em aberto no primeiro dia.
+Schedule::command('clinic:recurring-expenses')
+    ->dailyAt('05:00')
+    ->timezone((string) config('clinic.timezone'))
+    ->withoutOverlapping()
+    ->onOneServer();

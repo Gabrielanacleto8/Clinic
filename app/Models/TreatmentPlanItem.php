@@ -15,7 +15,7 @@ class TreatmentPlanItem extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['procedure_id', 'sessions', 'unit_price'];
+    protected $fillable = ['procedure_id', 'sessions', 'unit_price', 'list_price'];
 
     /**
      * @return array<string, string>
@@ -25,6 +25,7 @@ class TreatmentPlanItem extends Model
         return [
             'sessions' => 'integer',
             'unit_price' => 'decimal:2',
+            'list_price' => 'decimal:2',
         ];
     }
 

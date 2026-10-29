@@ -9,7 +9,7 @@
             <p class="mt-0.5 text-sm text-slate-600">{{ $records->total() }} {{ $records->total() === 1 ? 'registro' : 'registros' }}</p>
         </div>
         @can('create', App\Models\TreatmentPlan::class)
-            <a href="{{ route('patients.plans.create', $patient) }}" class="btn btn-primary">Novo orçamento</a>
+            <a href="{{ route('plans.create', ['paciente' => $patient->id]) }}" class="btn btn-primary">Novo orçamento</a>
         @endcan
     </div>
 

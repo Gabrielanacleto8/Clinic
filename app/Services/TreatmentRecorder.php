@@ -34,12 +34,13 @@ class TreatmentRecorder
         private readonly StockLedger $stock,
         private readonly FinancialRecorder $finance,
         private readonly AuditLogger $audit,
+        private readonly CommissionRules $commissions,
     ) {}
 
     /**
      * @param  Treatment  $treatment  Ainda não gravado, já com paciente, profissional, procedimento e autor.
      * @param  list<array{product_batch_id: int, stock_unit_id?: int|null, quantity: string}>  $products  No fracionado, sem unidade abre uma nova do lote.
-     * @param  array{amount: string, payment_method: PaymentMethod, installments: int, first_due_date: string, first_installment_paid: bool}|null  $payment  Nulo quando não há cobrança.
+     * @param  array{amount: string, discount?: string, payment_method: PaymentMethod, installments: int, first_due_date: string, first_installment_paid: bool}|null  $payment  Nulo quando não há cobrança.
      * @param  int|null  $appointmentId  Agendamento que este atendimento encerra, se houver.
      * @param  int|null  $planItemId  Item de pacote cuja sessão este atendimento usa; sem cobrança própria.
      *
@@ -53,6 +54,8 @@ class TreatmentRecorder
                 $payment = null;
             }
 
+            // A comissão do atendimento é a regra que vale hoje: mudar a regra depois não altera o passado.
+            $treatment->commission_rate = $this->commissions->rateFor($treatment->professional_id, $treatment->procedure_id);
             $treatment->save();
 
             $this->withdrawProducts($treatment, $products, $user);
@@ -73,6 +76,7 @@ class TreatmentRecorder
                     issuedOn: ClinicTime::format($treatment->performed_at, 'Y-m-d'),
                     patient: $treatment->patient,
                     treatment: $treatment,
+                    discount: $payment['discount'] ?? '0',
                 );
             }
 

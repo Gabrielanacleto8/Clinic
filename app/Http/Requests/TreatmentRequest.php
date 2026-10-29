@@ -13,6 +13,7 @@ use App\Models\StockUnit;
 use App\Models\Treatment;
 use App\Models\TreatmentPlanItem;
 use App\Models\User;
+use App\Services\DiscountLimits;
 use App\Services\RolePermissions;
 use App\Services\TreatmentRecorder;
 use App\Support\ClinicTime;
@@ -29,6 +30,8 @@ use Illuminate\Validation\Validator;
 class TreatmentRequest extends FormRequest
 {
     public const MAX_PRODUCTS = 10;
+
+    private ?float $listPrice = null;
 
     public function authorize(): bool
     {
@@ -220,6 +223,15 @@ class TreatmentRequest extends FormRequest
                     $validator->errors()->add('installments', InstallmentPlan::TOO_MANY_MESSAGE);
                 }
 
+                // Desconto sobre o preço de tabela do procedimento, dentro do limite do perfil de quem registra.
+                if ($this->hasCharge() && ! $validator->errors()->hasAny(['amount', 'procedure_id'])) {
+                    $violation = app(DiscountLimits::class)->violation($this->user(), $this->listPrice(), (float) $this->input('amount'));
+
+                    if ($violation !== null) {
+                        $validator->errors()->add('amount', $violation);
+                    }
+                }
+
                 if ($this->filled('return_date') && ! $validator->errors()->has('return_date')
                     && $this->input('return_date') < ClinicTime::local($performedAt)->format('Y-m-d')) {
                     $validator->errors()->add('return_date', 'O retorno não pode ser anterior ao atendimento.');
@@ -292,6 +304,14 @@ class TreatmentRequest extends FormRequest
         }
     }
 
+    /**
+     * Preço de tabela do procedimento escolhido, lido uma vez.
+     */
+    private function listPrice(): float
+    {
+        return $this->listPrice ??= (float) Procedure::query()->whereKey((int) $this->input('procedure_id'))->value('price');
+    }
+
     public function planItemId(): ?int
     {
         return $this->usesPlanSession() ? (int) $this->validated('treatment_plan_item_id') : null;
@@ -318,7 +338,7 @@ class TreatmentRequest extends FormRequest
     /**
      * Dados de pagamento prontos para o TreatmentRecorder, ou nulo quando não há cobrança.
      *
-     * @return array{amount: string, payment_method: PaymentMethod, installments: int, first_due_date: string, first_installment_paid: bool}|null
+     * @return array{amount: string, discount: string, payment_method: PaymentMethod, installments: int, first_due_date: string, first_installment_paid: bool}|null
      */
     public function payment(): ?array
     {
@@ -328,6 +348,8 @@ class TreatmentRequest extends FormRequest
 
         return [
             'amount' => (string) $this->validated('amount'),
+            // O desconto concedido fica gravado: o preço de tabela muda depois.
+            'discount' => number_format(max(0, $this->listPrice() - (float) $this->validated('amount')), 2, '.', ''),
             'payment_method' => PaymentMethod::from($this->validated('payment_method')),
             'installments' => (int) $this->validated('installments'),
             'first_due_date' => $this->validated('first_due_date'),

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\ClinicTime;
 use App\Support\InstallmentPlan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Único ponto que cria lançamentos financeiros: grava o lançamento e as
@@ -20,9 +21,15 @@ use Illuminate\Support\Facades\DB;
  */
 class FinancialRecorder
 {
+    public function __construct(private readonly CashRegister $cash) {}
+
     /**
      * @param  bool  $firstInstallmentPaid  A primeira parcela (ou o valor à vista) já foi paga na data de competência.
      *                                      Na receita no cartão de crédito, vale para todas as parcelas.
+     * @param  string  $discount  Desconto concedido sobre o preço de tabela, em reais.
+     * @param  array{refund_of_id?: int, recurring_expense_id?: int, commission_payout_id?: int}  $links
+     *
+     * @throws ValidationException Dia de competência com o caixa fechado, quando já pago.
      */
     public function record(
         FinancialCategory $category,
@@ -37,9 +44,16 @@ class FinancialRecorder
         ?Patient $patient = null,
         ?Treatment $treatment = null,
         ?TreatmentPlan $plan = null,
+        string $discount = '0',
+        array $links = [],
     ): FinancialEntry {
-        return DB::transaction(function () use ($category, $description, $total, $paymentMethod, $installments, $firstDueDate, $firstInstallmentPaid, $createdBy, $issuedOn, $patient, $treatment, $plan): FinancialEntry {
+        return DB::transaction(function () use ($category, $description, $total, $paymentMethod, $installments, $firstDueDate, $firstInstallmentPaid, $createdBy, $issuedOn, $patient, $treatment, $plan, $discount, $links): FinancialEntry {
             $issuedOn ??= ClinicTime::today();
+
+            // Já pago na data de competência: entra no caixa desse dia, que precisa estar aberto.
+            if ($firstInstallmentPaid) {
+                $this->cash->assertOpen($issuedOn, 'first_installment_paid');
+            }
 
             $entry = FinancialEntry::create([
                 // O tipo decorre da categoria: não há como lançar "aluguel" como receita.
@@ -51,7 +65,10 @@ class FinancialRecorder
                 'patient_id' => $patient?->getKey(),
                 'treatment_id' => $treatment?->getKey(),
                 'treatment_plan_id' => $plan?->getKey(),
+                'discount' => $discount,
                 'created_by' => $createdBy?->getKey(),
+                // Origem gerada pelo sistema: estorno, recorrência ou repasse de comissão.
+                ...array_intersect_key($links, array_flip(['refund_of_id', 'recurring_expense_id', 'commission_payout_id'])),
             ]);
 
             $all = $paymentMethod->settlesAllInstallments($category->type());

@@ -8,7 +8,7 @@
     ])->filter()->implode(' e ');
 @endphp
 {{-- Conteúdo da janela de atendimento da lista, buscado por app.js ao clicar na linha. Sem layout. --}}
-<div data-treatment-summary-content>
+<div data-summary-content>
     <h3 class="text-lg font-semibold tracking-tight">{{ $treatment->procedure->name }}</h3>
     <p class="mt-1 text-sm text-slate-600">
         <a href="{{ route('patients.show', $patient) }}" class="font-medium text-teal-800 hover:underline">{{ $patient->name }}</a>

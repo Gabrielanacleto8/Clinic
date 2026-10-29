@@ -8,7 +8,7 @@
 @endphp
 <dl class="mt-4 grid grid-cols-3 gap-4">
     <div class="card px-4 py-3">
-        <dt class="text-xs text-slate-500">Pago</dt>
+        <dt class="text-xs text-slate-500">Pago (menos estornos)</dt>
         <dd class="mt-0.5 text-xl font-semibold tabular-nums">{{ LocalizedDecimal::money($financialTotals->paid) }}</dd>
     </div>
     <div class="card px-4 py-3">
@@ -56,7 +56,8 @@
                                 {{ $entry->payment_method->label() }} · {{ $entry->installments_count > 1 ? 'Parcela '.$installment->number.'/'.$entry->installments_count : 'À vista' }}
                             </span>
                         </td>
-                        <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::money($installment->amount) }}</td>
+                        {{-- Estorno é dinheiro devolvido ao paciente: sai com sinal de menos. --}}
+                        <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ $entry->type === FinancialEntryType::Expense ? '− ' : '' }}{{ LocalizedDecimal::money($installment->amount) }}</td>
                         <td data-label="Situação" class="px-4 py-3 whitespace-nowrap">
                             <span class="badge {{ $badge['classes'] }}">{{ $badge['label'] }}</span>
                             @if ($installment->isPaid())

@@ -36,7 +36,18 @@ class ApproveTreatmentPlanRequest extends FormRequest
             'installments' => ['required', 'integer', 'min:1', 'max:'.InstallmentPlan::MAX_INSTALLMENTS],
             'first_due_date' => ['required', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
             'first_installment_paid' => ['required', 'boolean'],
+            // De onde veio a conversão: só a lista é destino válido além da própria página.
+            'voltar' => ['nullable', Rule::in(['lista'])],
+            'plan_id' => ['nullable', 'integer'],
         ];
+    }
+
+    /**
+     * Convertido pela lista de orçamentos: volta para ela.
+     */
+    public function backToList(): bool
+    {
+        return $this->validated('voltar') === 'lista';
     }
 
     /**

@@ -7,9 +7,12 @@ use App\Enums\ProductCategory;
 use App\Enums\StockMovementType;
 use App\Http\Requests\ProductRequest;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\StockMovement;
 use App\Services\AuditLogger;
 use App\Services\StockAlerts;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +30,9 @@ class ProductController extends Controller
 
     /** Dias sem movimentação para um produto com saldo contar como parado. */
     public const IDLE_DAYS = 90;
+
+    /** Movimentações mostradas na janela do produto; o histórico completo fica na página. */
+    private const SUMMARY_MOVEMENTS = 10;
 
     /**
      * Aba Produtos: o cadastro, com o saldo disponível e os alertas de cada item.
@@ -111,23 +117,60 @@ class ProductController extends Controller
     {
         Gate::authorize('view', $product);
 
+        return view('products.show', [
+            ...$this->details($product),
+            'movements' => $this->movements($product)->paginate(15),
+        ]);
+    }
+
+    /**
+     * Conteúdo da janela do produto na listagem, buscado só ao clicar na linha:
+     * os mesmos dados da página, com as movimentações mais recentes.
+     */
+    public function summary(Product $product): View
+    {
+        Gate::authorize('view', $product);
+
+        // Uma a mais que o exibido, só para saber se há histórico além delas.
+        $movements = $this->movements($product)->limit(self::SUMMARY_MOVEMENTS + 1)->get();
+
+        return view('products._summary', [
+            ...$this->details($product),
+            'movements' => $movements->take(self::SUMMARY_MOVEMENTS),
+            'hasMoreMovements' => $movements->count() > self::SUMMARY_MOVEMENTS,
+        ]);
+    }
+
+    /**
+     * Produto com saldos, custo médio e lotes, comum à página e à janela.
+     *
+     * @return array{product: Product, averageCost: ?string, batches: Collection<int, ProductBatch>}
+     */
+    private function details(Product $product): array
+    {
         // Saldo disponível e a descartar, pela mesma regra da listagem.
         $quantities = Product::query()->withAvailableQuantity()->whereKey($product->getKey())->first(['products.id']);
         $product->setAttribute('available_quantity', $quantities->available_quantity);
         $product->setAttribute('discard_quantity', $quantities->discard_quantity);
         $product->loadCount(['units as open_units_count' => fn ($query) => $query->withBalance()]);
 
-        return view('products.show', [
+        return [
             'product' => $product,
             'averageCost' => $this->averageCost($product),
             // Lotes com saldo primeiro, do vencimento mais próximo ao mais distante.
             'batches' => $product->batches()->withOpenQuantity()->orderByRaw('quantity = 0')->firstToExpire()->get(),
-            'movements' => StockMovement::query()
-                ->whereIn('product_batch_id', $product->batches()->select('id'))
-                ->with(['batch:id,batch_code', 'user:id,name', 'treatment:id,patient_id,professional_id', 'treatment.professional:id,name'])
-                ->latest('id')
-                ->paginate(15),
-        ]);
+        ];
+    }
+
+    /**
+     * @return Builder<StockMovement>
+     */
+    private function movements(Product $product): Builder
+    {
+        return StockMovement::query()
+            ->whereIn('product_batch_id', $product->batches()->select('id'))
+            ->with(['batch:id,batch_code', 'user:id,name', 'treatment:id,patient_id,professional_id', 'treatment.professional:id,name'])
+            ->latest('id');
     }
 
     /**

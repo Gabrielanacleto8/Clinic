@@ -7,6 +7,7 @@ use App\Enums\FinancialCategory;
 use App\Enums\FinancialEntryType;
 use App\Enums\PaymentMethod;
 use App\Enums\Permission;
+use App\Enums\RefundReason;
 use App\Enums\StockMovementType;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
@@ -21,6 +22,8 @@ final class AuditDescription
     private const SUBJECTS = [
         'appointment' => 'Agendamento',
         'audit_log' => 'Registro de auditoria',
+        'cash_closing' => 'Fechamento de caixa',
+        'commission_payout' => 'Repasse de comissão',
         'clinic_profile' => 'Dados da clínica',
         'financial_entry' => 'Lançamento',
         'financial_installment' => 'Parcela',
@@ -29,6 +32,7 @@ final class AuditDescription
         'patient_anamnesis_version' => 'Versão da ficha de saúde',
         'patient_attachment' => 'Anexo',
         'procedure' => 'Procedimento',
+        'recurring_expense' => 'Despesa recorrente',
         'product' => 'Produto',
         'product_batch' => 'Lote',
         'stock_movement' => 'Movimentação',
@@ -90,6 +94,23 @@ final class AuditDescription
         'rows' => 'Linhas exportadas',
         'items' => 'Itens',
         'plan_item_id' => 'Sessão de pacote (item)',
+        'day' => 'Dia',
+        'lines' => 'Formas de pagamento',
+        'expected' => 'Esperado',
+        'counted' => 'Contado',
+        'difference' => 'Diferença',
+        'fee' => 'Taxa',
+        'reconciled_on' => 'Data no extrato',
+        'refund_of_id' => 'Lançamento estornado',
+        'discount' => 'Desconto',
+        'rate' => 'Comissão (%)',
+        'rates' => 'Regras de comissão',
+        'limits' => 'Desconto máximo (%)',
+        'until' => 'Atendimentos até',
+        'count' => 'Quantidade',
+        'months' => 'Meses',
+        'recurring_expense_id' => 'Despesa recorrente',
+        'commission_payout_id' => 'Repasse de comissão',
     ];
 
     private const FIELDS = [
@@ -106,6 +127,7 @@ final class AuditDescription
         'multi_patient_use' => 'uso em vários pacientes', 'legal_name' => 'razão social', 'cnpj' => 'CNPJ', 'address' => 'endereço',
         'technical_lead' => 'responsável técnico', 'professional_registration' => 'registro profissional', 'consent_template' => 'termo de consentimento',
         'valid_until' => 'validade',
+        'amount' => 'valor', 'due_day' => 'dia do vencimento', 'starts_on' => 'início', 'ends_on' => 'fim',
     ];
 
     private const REASONS = [
@@ -176,9 +198,9 @@ final class AuditDescription
             'category' => FinancialCategory::tryFrom($text)?->label() ?? $text,
             'payment_method' => PaymentMethod::tryFrom($text)?->label() ?? $text,
             'from', 'to', 'status' => AppointmentStatus::tryFrom($text)?->label() ?? PaymentMethod::tryFrom($text)?->label() ?? $text,
-            'reason' => self::REASONS[$text] ?? $text,
-            'amount', 'total', 'price', 'price_from', 'price_to' => is_numeric($text) ? LocalizedDecimal::money($text) : $text,
-            'paid_at', 'issued_on', 'first_due_date' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $text) ? substr($text, 8, 2).'/'.substr($text, 5, 2).'/'.substr($text, 0, 4) : $text,
+            'reason' => self::REASONS[$text] ?? RefundReason::tryFrom($text)?->label() ?? $text,
+            'amount', 'total', 'price', 'price_from', 'price_to', 'expected', 'counted', 'difference', 'fee', 'discount' => is_numeric($text) ? LocalizedDecimal::money($text) : $text,
+            'paid_at', 'issued_on', 'first_due_date', 'day', 'reconciled_on', 'until' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $text) ? substr($text, 8, 2).'/'.substr($text, 5, 2).'/'.substr($text, 0, 4) : $text,
             default => $text,
         };
     }
