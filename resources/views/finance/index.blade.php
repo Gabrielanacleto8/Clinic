@@ -5,7 +5,6 @@
 
     $canManage = auth()->user()->can('create', App\Models\FinancialEntry::class);
     $monthLabel = fn ($date) => ucfirst($date->locale('pt_BR')->translatedFormat('F \d\e Y'));
-    $largestRevenue = max(1, max($revenueByMonth), max($receivedByMonth));
     $today = ClinicTime::today();
     $periodLabel = $isWholeMonth
         ? $monthLabel($month)
@@ -31,8 +30,8 @@
 <x-finance.page active="geral" :subtitle="$periodLabel">
     @if ($canManage)
         <x-slot:actions>
-            <a href="{{ route('finance.entries.create', ['tipo' => FinancialEntryType::Expense->value]) }}" class="btn btn-secondary">Nova despesa</a>
-            <a href="{{ route('finance.entries.create', ['tipo' => FinancialEntryType::Income->value]) }}" class="btn btn-primary">Nova receita</a>
+            <button type="button" class="btn btn-secondary" data-dialog-open="entry-expense">Nova despesa</button>
+            <button type="button" class="btn btn-primary" data-dialog-open="entry-income">Nova receita</button>
         </x-slot:actions>
     @endif
 
@@ -60,13 +59,13 @@
         </div>
         <button type="submit" class="btn btn-secondary sm:col-span-1">Filtrar</button>
         <div class="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:col-span-12">
-            <a href="{{ route('finance.index', ['de' => $today, 'ate' => $today]) }}" class="text-teal-800 hover:underline">Hoje</a>
-            <a href="{{ route('finance.index', ['mes' => substr($today, 0, 7)]) }}" class="text-teal-800 hover:underline">Este mês</a>
+            <a href="{{ route('finance.index', ['de' => $today, 'ate' => $today]) }}" class="text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline">Hoje</a>
+            <a href="{{ route('finance.index', ['mes' => substr($today, 0, 7)]) }}" class="text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline">Este mês</a>
             @if ($filtered || ! $isWholeMonth || substr($start, 0, 7) !== substr($today, 0, 7))
                 <a href="{{ route('finance.index') }}" class="text-slate-600 hover:underline">Limpar filtros</a>
             @endif
             {{-- Os mesmos filtros da tela, sem nome de paciente na planilha. --}}
-            <a href="{{ route('finance.export', array_filter($filters, filled(...))) }}" class="ml-auto text-teal-800 hover:underline">Exportar planilha (CSV)</a>
+            <a href="{{ route('finance.export', array_filter($filters, filled(...))) }}" class="ml-auto text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline">Exportar planilha (CSV)</a>
         </div>
         @foreach (['mes', 'de', 'ate', 'tipo', 'situacao', 'paciente'] as $field)
             @error($field)
@@ -101,6 +100,8 @@
             <a href="{{ route('finance.index', ['tipo' => 'receitas', 'situacao' => 'vencidas_todas']) }}" class="font-medium underline">Ver todas as vencidas</a>
         </p>
     @endif
+
+    @include('finance._flow_chart')
 
     <section class="card mt-6 p-6" aria-labelledby="caixa">
         <h2 id="caixa" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Recebido {{ $periodWord }} por forma de pagamento</h2>
@@ -158,7 +159,7 @@
                                 <p class="mt-0.5 text-xs text-slate-500">
                                     {{ $entry->category->label() }} · {{ $entry->payment_method->label() }} · {{ $parcel }}
                                     @if ($entry->patient)
-                                        · <a href="{{ route('patients.show', [$entry->patient, 'aba' => 'financeiro']) }}" class="text-teal-800 hover:underline">{{ $entry->patient->name }}</a>
+                                        · <a href="{{ route('patients.show', [$entry->patient, 'aba' => 'financeiro']) }}" class="text-slate-800 hover:underline">{{ $entry->patient->name }}</a>
                                     @endif
                                 </p>
                             </td>
@@ -240,40 +241,10 @@
         {{ $installments->links() }}
     </div>
 
-    <section class="card mt-6 p-6" aria-labelledby="faturamento">
-        <h2 id="faturamento" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Faturamento por período</h2>
-        <p class="mt-1 text-xs text-slate-500">Lançado: receitas pela data do lançamento. Recebido: o que entrou no mês, pela data do pagamento. A variação compara o lançado com o mesmo mês do ano anterior.</p>
-        <p class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600" aria-hidden="true">
-            <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-teal-600"></span>Lançado</span>
-            <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-emerald-400"></span>Recebido</span>
-        </p>
-        <ul class="mt-3 divide-y divide-slate-100 text-sm">
-            @foreach ($revenueByMonth as $period => $total)
-                @php
-                    $periodDate = Carbon\CarbonImmutable::createFromFormat('!Y-m', $period);
-                    $received = $receivedByMonth[$period] ?? 0;
-                    $yearBefore = $revenueYearBefore[$period] ?? 0;
-                    $yearChange = $yearBefore > 0 ? ($total - $yearBefore) / $yearBefore * 100 : null;
-                @endphp
-                <li class="grid grid-cols-1 gap-x-4 gap-y-1.5 py-2.5 sm:grid-cols-[10rem_minmax(0,1fr)_14rem] sm:items-center">
-                    <a href="{{ route('finance.index', ['mes' => $period]) }}" class="text-teal-800 hover:underline">{{ $monthLabel($periodDate) }}</a>
-                    <div class="space-y-1">
-                        <progress class="bar text-teal-600" max="{{ $largestRevenue }}" value="{{ $total }}" aria-label="Lançado em {{ $monthLabel($periodDate) }}">{{ LocalizedDecimal::money($total) }}</progress>
-                        <progress class="bar text-emerald-400" max="{{ $largestRevenue }}" value="{{ $received }}" aria-label="Recebido em {{ $monthLabel($periodDate) }}">{{ LocalizedDecimal::money($received) }}</progress>
-                    </div>
-                    <p class="text-xs text-slate-600 tabular-nums sm:text-right">
-                        <span class="font-medium text-slate-900">{{ LocalizedDecimal::money($total) }}</span> lançado
-                        · {{ LocalizedDecimal::money($received) }} recebido
-                        @if ($yearChange !== null)
-                            <span @class(['block', 'text-emerald-700' => $yearChange >= 0, 'text-red-700' => $yearChange < 0])>
-                                {{ $yearChange >= 0 ? '+' : '−' }}{{ number_format(abs($yearChange), 0, ',', '.') }}% vs {{ $periodDate->subYear()->format('m/Y') }}
-                            </span>
-                        @endif
-                    </p>
-                </li>
-            @endforeach
-        </ul>
-    </section>
+    @if ($canManage)
+        @include('finance._entry_dialog', ['type' => FinancialEntryType::Expense])
+        @include('finance._entry_dialog', ['type' => FinancialEntryType::Income])
+    @endif
 
     @if (auth()->user()->hasPermission(App\Enums\Permission::FinanceReceive))
         @include('finance._payment_dialog')

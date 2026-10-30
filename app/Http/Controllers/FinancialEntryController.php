@@ -52,7 +52,7 @@ class FinancialEntryController extends Controller
             }
         }
 
-        return view('finance.create', ['type' => $type, 'defaults' => $defaults, 'patient' => $this->oldPatient($request)]);
+        return view('finance.create', ['type' => $type, 'defaults' => $defaults, 'patient' => FinancialEntryRequest::oldPatient($request)]);
     }
 
     public function store(FinancialEntryRequest $request, FinancialRecorder $recorder): RedirectResponse
@@ -78,9 +78,12 @@ class FinancialEntryController extends Controller
             return $entry;
         });
 
-        return redirect()
-            ->route('finance.index', ['mes' => $entry->issued_on->format('Y-m')])
-            ->with('success', $entry->type->label().' lançada.');
+        // Pela janela, o usuário continua na tela de onde abriu (visão geral ou contas a pagar).
+        $redirect = $request->filled('_dialog')
+            ? redirect()->back()
+            : redirect()->route('finance.index', ['mes' => $entry->issued_on->format('Y-m')]);
+
+        return $redirect->with('success', $entry->type->label().' lançada.');
     }
 
     public function edit(FinancialEntry $entry): View
@@ -146,16 +149,5 @@ class FinancialEntryController extends Controller
         });
 
         return redirect()->back(fallback: route('finance.index'))->with('success', 'Lançamento excluído.');
-    }
-
-    /**
-     * Paciente devolvido pelo formulário que voltou com erro, para o seletor
-     * reabrir com ele escolhido.
-     */
-    private function oldPatient(Request $request): ?Patient
-    {
-        $id = $request->old('patient_id');
-
-        return is_numeric($id) ? Patient::query()->find((int) $id, ['id', 'name']) : null;
     }
 }

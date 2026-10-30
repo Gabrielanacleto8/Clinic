@@ -9,12 +9,12 @@
 <x-layouts.app title="Meu perfil">
     <div class="mx-auto max-w-3xl space-y-6">
         <section class="card flex flex-wrap items-center gap-4 p-6" aria-label="Seus dados">
-            <span class="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-teal-100 text-xl font-semibold text-teal-800" aria-hidden="true">{{ $initials }}</span>
+            <span class="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-semibold text-slate-800" aria-hidden="true">{{ $initials }}</span>
             <div class="min-w-0 flex-1">
                 <h1 class="text-xl font-semibold tracking-tight">{{ $user->name }}</h1>
                 <p class="mt-0.5 text-sm break-all text-slate-600">{{ $user->email }}</p>
                 <p class="mt-2 flex flex-wrap gap-2">
-                    <span class="badge bg-teal-50 text-teal-800">{{ $user->role->label() }}</span>
+                    <span class="badge bg-slate-50 text-slate-800">{{ $user->role->label() }}</span>
                     @if ($user->professional_registration)
                         <span class="badge bg-slate-100 text-slate-700">{{ $user->professional_registration }}</span>
                     @endif
@@ -41,7 +41,7 @@
                 <fieldset class="flex flex-wrap gap-2">
                     <legend class="sr-only">Tema</legend>
                     @foreach (App\Support\Theme::OPTIONS as $value => $label)
-                        <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm has-checked:border-teal-600 has-checked:bg-teal-50">
+                        <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm has-checked:border-slate-600 has-checked:bg-slate-50">
                             <input type="radio" name="theme" value="{{ $value }}" class="accent-brand" @checked($theme === $value)>
                             {{ $label }}
                         </label>

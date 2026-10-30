@@ -3,7 +3,7 @@
         @if ($logoVersion = app(App\Services\ClinicLogo::class)->version())
             <img src="{{ route('clinic.logo', ['v' => $logoVersion]) }}" alt="" class="mx-auto mb-3 size-16 rounded-xl bg-white object-contain">
         @endif
-        <h1 class="text-2xl font-semibold tracking-tight text-teal-800">{{ config('app.name') }}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-800">{{ config('app.name') }}</h1>
         <p class="mt-1 text-sm text-slate-600">Acesse com seu e-mail e senha</p>
     </div>
 

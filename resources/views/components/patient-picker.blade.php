@@ -21,6 +21,6 @@
         <p class="mt-1 text-sm text-red-700">{{ $errors->first('patient_id') }}</p>
     @endif
     @can('create', App\Models\Patient::class)
-        <p class="mt-1 text-xs"><a href="{{ route('patients.create') }}" class="text-teal-800 hover:underline">Paciente novo? Cadastre primeiro.</a></p>
+        <p class="mt-1 text-xs"><a href="{{ route('patients.create') }}" class="text-slate-800 hover:underline">Paciente novo? Cadastre primeiro.</a></p>
     @endcan
 </div>

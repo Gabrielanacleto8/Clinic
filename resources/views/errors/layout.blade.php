@@ -15,7 +15,7 @@
     <body class="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10 text-slate-900 antialiased">
         <main class="w-full max-w-md">
             <div class="card p-6 text-center">
-                <p class="text-sm font-semibold tracking-wide text-teal-800 uppercase">Erro @yield('code')</p>
+                <p class="text-sm font-semibold tracking-wide text-slate-800 uppercase">Erro @yield('code')</p>
                 <h1 class="mt-2 text-xl font-semibold tracking-tight">@yield('title')</h1>
                 <p class="mt-3 text-sm text-slate-600">@yield('message')</p>
                 <div class="mt-6 flex justify-center">

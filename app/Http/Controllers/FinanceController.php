@@ -6,8 +6,10 @@ use App\Enums\AuditAction;
 use App\Enums\FinancialEntryType;
 use App\Enums\PaymentMethod;
 use App\Http\Requests\FinanceFilterRequest;
+use App\Http\Requests\FinancialEntryRequest;
 use App\Services\AuditLogger;
 use App\Services\FinanceListing;
+use App\Services\MonthlyFinance;
 use App\Support\ClinicTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -15,9 +17,9 @@ use Illuminate\View\View;
 
 class FinanceController extends Controller
 {
-    private const REVENUE_MONTHS = 6;
+    private const CHART_MONTHS = 6;
 
-    public function index(FinanceFilterRequest $request, AuditLogger $audit, FinanceListing $listing): View
+    public function index(FinanceFilterRequest $request, AuditLogger $audit, FinanceListing $listing, MonthlyFinance $monthly): View
     {
         [$start, $end] = $request->period();
         $type = $request->type();
@@ -40,9 +42,8 @@ class FinanceController extends Controller
             'summary' => $summary,
             'previous' => $this->summary($previousStart, $previousEnd),
             'receivedByMethod' => $this->receivedByMethod($start, $end),
-            'revenueByMonth' => $this->revenueByMonth($month),
-            'receivedByMonth' => $this->receivedByMonth($month),
-            'revenueYearBefore' => $this->revenueYearBefore($month),
+            // Gráfico de receitas e despesas: os seis meses até o do período.
+            'flow' => $monthly->months($month, self::CHART_MONTHS),
             // Paciente arquivado continua identificado no lançamento dele. O total e a
             // existência de parcela paga decidem as ações da linha sem consulta extra.
             'installments' => (clone $installments)
@@ -59,6 +60,8 @@ class FinanceController extends Controller
             'typeOptions' => FinanceFilterRequest::TYPES,
             'statusOptions' => FinanceFilterRequest::STATUSES,
             'paymentMethods' => PaymentMethod::options(),
+            // A janela de nova receita voltou com erro: reabre com o paciente escolhido.
+            'entryPatient' => $request->old('_dialog') === 'entry-income' ? FinancialEntryRequest::oldPatient($request) : null,
         ]);
     }
 
@@ -127,64 +130,5 @@ class FinanceController extends Controller
             ->pluck('total', 'payment_method')
             ->map(fn ($total) => (float) $total)
             ->all();
-    }
-
-    /**
-     * Faturamento (receitas lançadas, pela data de competência) dos últimos meses.
-     *
-     * @return array<string, float> Mês (Y-m) => total, do mais antigo ao mais recente.
-     */
-    private function revenueByMonth(CarbonImmutable $month): array
-    {
-        return $this->monthlyIncome('e.issued_on', $month->subMonths(self::REVENUE_MONTHS - 1), $month);
-    }
-
-    /**
-     * Receitas recebidas em cada um dos mesmos meses, pela data do pagamento.
-     *
-     * @return array<string, float> Mês (Y-m) => total.
-     */
-    private function receivedByMonth(CarbonImmutable $month): array
-    {
-        return $this->monthlyIncome('i.paid_at', $month->subMonths(self::REVENUE_MONTHS - 1), $month);
-    }
-
-    /**
-     * Faturamento dos mesmos meses um ano antes, com a chave do mês atual, para comparar.
-     *
-     * @return array<string, float> Mês (Y-m) deste ano => total do mesmo mês do ano anterior.
-     */
-    private function revenueYearBefore(CarbonImmutable $month): array
-    {
-        $series = $this->monthlyIncome('e.issued_on', $month->subMonths(self::REVENUE_MONTHS - 1)->subYear(), $month->subYear());
-
-        return array_combine(
-            array_map(fn (string $period) => CarbonImmutable::createFromFormat('!Y-m', $period)->addYear()->format('Y-m'), array_keys($series)),
-            array_values($series),
-        );
-    }
-
-    /**
-     * Soma das parcelas de receita por mês da coluna de data dada, com os meses sem movimento em zero.
-     *
-     * @return array<string, float>
-     */
-    private function monthlyIncome(string $dateColumn, CarbonImmutable $first, CarbonImmutable $last): array
-    {
-        $totals = DB::table('financial_entries as e')
-            ->join('financial_installments as i', 'i.financial_entry_id', '=', 'e.id')
-            ->where('e.type', FinancialEntryType::Income->value)
-            ->whereBetween($dateColumn, [$first->startOfMonth()->format('Y-m-d'), $last->endOfMonth()->format('Y-m-d')])
-            ->groupByRaw("date_format({$dateColumn}, '%Y-%m')")
-            ->selectRaw("date_format({$dateColumn}, '%Y-%m') as period, sum(i.amount) as total")
-            ->pluck('total', 'period');
-
-        $series = [];
-
-        for ($cursor = $first->startOfMonth(); $cursor->lessThanOrEqualTo($last); $cursor = $cursor->addMonth()) {
-            $series[$cursor->format('Y-m')] = (float) ($totals[$cursor->format('Y-m')] ?? 0);
-        }
-
-        return $series;
     }
 }

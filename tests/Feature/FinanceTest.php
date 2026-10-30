@@ -210,7 +210,8 @@ class FinanceTest extends TestCase
         $this->entry('123', '2026-04-01', issuedOn: '2026-04-30');   // antes da janela de seis meses
         $this->entry('400', '2026-10-01', issuedOn: '2026-10-01', expense: true);
 
-        $series = $this->actingAs($this->admin)->get('/financeiro')->viewData('revenueByMonth');
+        $months = $this->actingAs($this->admin)->get('/financeiro/comparativo?meses=6')->assertOk()->viewData('months');
+        $series = array_map(fn (object $month) => $month->issued, $months);
 
         $this->assertSame(['2026-05' => 0.0, '2026-06' => 0.0, '2026-07' => 900.0, '2026-08' => 0.0, '2026-09' => 0.0, '2026-10' => 750.0], $series);
     }

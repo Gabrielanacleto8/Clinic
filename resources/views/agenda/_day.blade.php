@@ -38,9 +38,9 @@
                             @foreach ($dayGrid->halfHours() as $slot)
                                 @if ($iso.' '.$slot['time'] > $now)
                                     <a href="{{ route('appointments.create', ['data' => $iso, 'hora' => $slot['time'], 'profissional' => $column['id']]) }}"
-                                       class="group col-start-1 row-start-{{ $slot['row'] }} row-span-2 flex items-center justify-center hover:bg-teal-50"
+                                       class="group col-start-1 row-start-{{ $slot['row'] }} row-span-2 flex items-center justify-center hover:bg-slate-50"
                                        tabindex="-1" aria-hidden="true" title="Agendar às {{ $slot['time'] }} com {{ $column['name'] }}">
-                                        <span class="hidden text-xs font-medium text-teal-800 group-hover:inline">+ {{ $slot['time'] }}</span>
+                                        <span class="hidden text-xs font-medium text-slate-800 group-hover:inline">+ {{ $slot['time'] }}</span>
                                     </a>
                                 @endif
                             @endforeach

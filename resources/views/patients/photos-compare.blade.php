@@ -23,11 +23,11 @@
                     <p class="text-slate-600">
                         {{ $photo->takenOn()->format('d/m/Y') }} ·
                         @if ($treatment)
-                            <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-teal-800 hover:underline">{{ $treatment->procedure->name }}</a>
+                            <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-slate-800 hover:underline">{{ $treatment->procedure->name }}</a>
                         @else
                             Foto avulsa
                         @endif
-                        · <a href="{{ route('patients.photos.show', [$patient, $photo]) }}" target="_blank" rel="noopener" class="text-teal-800 hover:underline">Tamanho real</a>
+                        · <a href="{{ route('patients.photos.show', [$patient, $photo]) }}" target="_blank" rel="noopener" class="text-slate-800 hover:underline">Tamanho real</a>
                     </p>
                 </figcaption>
             </figure>

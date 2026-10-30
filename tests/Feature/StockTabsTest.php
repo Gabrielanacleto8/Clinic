@@ -530,4 +530,33 @@ class StockTabsTest extends TestCase
                 ->assertDontSee('<i>nf</i>', false);
         }
     }
+
+    public function test_tabs_are_grouped_in_three_main_tabs_with_subtabs(): void
+    {
+        $this->actingAs($this->admin);
+
+        $labels = function (string $html, string $navLabel): string {
+            preg_match('/<nav[^>]*aria-label="'.preg_quote($navLabel, '/').'"[^>]*>(.*?)<\/nav>/s', $html, $nav);
+
+            return implode(' | ', array_map(fn (string $link) => trim(strip_tags($link)), array_slice(explode('</a>', $nav[1] ?? ''), 0, -1)));
+        };
+
+        foreach ([
+            '/estoque' => ['Produtos', null],
+            '/estoque/entradas' => ['Movimentações', 'Entradas | Histórico'],
+            '/estoque/movimentacoes' => ['Movimentações', 'Entradas | Histórico'],
+            '/estoque/lotes' => ['Validade', 'Lotes e validade | Unidades abertas'],
+            '/estoque/unidades' => ['Validade', 'Lotes e validade | Unidades abertas'],
+        ] as $url => [$group, $subtabs]) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            $this->assertSame('Produtos | Movimentações | Validade', $labels($html, 'Seções do estoque'), $url);
+            $this->assertMatchesRegularExpression('/aria-current="(page|true)"\s*>'.$group.'<\/a>/', $html, $url);
+            $subtabs === null
+                ? $this->assertStringNotContainsString('aria-label="Abas de', $html)
+                : $this->assertSame($subtabs, $labels($html, 'Abas de '.$group), $url);
+            // Nenhuma barra de abas rola.
+            $this->assertDoesNotMatchRegularExpression('/<nav[^>]*overflow-x-auto[^>]*aria-label="Seções do estoque"/', $html);
+        }
+    }
 }

@@ -1,6 +1,7 @@
 @props(['name'])
-{{-- Ícones em SVG inline (traços do conjunto Feather, licença MIT). --}}
-<svg {{ $attributes->class('size-5 shrink-0') }} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+{{-- Ícones em SVG inline (traços do conjunto Feather, licença MIT). O tamanho padrão só
+     entra sem size-* informado: no CSS ele viria depois e venceria o tamanho pedido. --}}
+<svg {{ $attributes->class(['size-5' => ! preg_match('/(^|\s)size-/', (string) $attributes->get('class')), 'shrink-0']) }} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
     @switch($name)
         @case('home')
@@ -51,9 +52,13 @@
             <path d="M16 17l5-5-5-5" />
             <path d="M21 12H9" />
             @break
-        @case('sidebar')
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <path d="M9 3v18" />
+        @case('chevrons-left')
+            <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
+            @break
+        @case('bar-chart')
+            <rect x="3" y="12" width="4" height="9" rx="1" />
+            <rect x="10" y="3" width="4" height="18" rx="1" />
+            <rect x="17" y="8" width="4" height="13" rx="1" />
             @break
         @case('sliders')
             <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
@@ -81,6 +86,19 @@
             @break
         @case('chevron-down')
             <path d="M6 9l6 6 6-6" />
+            @break
+        @case('check-square')
+            <polyline points="9 11 12 14 22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            @break
+        @case('check')
+            <polyline points="20 6 9 17 4 12" />
+            @break
+        @case('paperclip')
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            @break
+        @case('message')
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             @break
     @endswitch
 </svg>

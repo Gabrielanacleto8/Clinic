@@ -13,8 +13,8 @@ use Illuminate\Http\Response;
  */
 class ClinicIdentityController extends Controller
 {
-    /** Cor da barra do aplicativo instalado: o verde dos botões principais (teal-700). */
-    private const THEME_COLOR = '#0f766e';
+    /** Cor da barra do aplicativo instalado: o grafite dos botões principais (slate-800). */
+    private const THEME_COLOR = '#1e293b';
 
     private const BACKGROUND_COLOR = '#f1f5f9';
 

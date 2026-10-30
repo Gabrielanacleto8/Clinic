@@ -14,7 +14,7 @@
     $confirm = $allAtOnce ? 'Confirmar o recebimento das '.$entry->installments_count.' parcelas ('.LocalizedDecimal::money($entry->total()).')?' : '';
     $values = json_encode(['installment_id' => $installment->id, 'payment_method' => $entry->payment_method->value]);
 @endphp
-<button type="button" class="cursor-pointer font-medium text-teal-800 hover:underline" data-dialog-open="installment-payment"
+<button type="button" class="cursor-pointer font-medium text-slate-800 hover:underline" data-dialog-open="installment-payment"
         data-dialog-values="{{ $values }}"
         data-dialog-summary="{{ $summary }}" data-dialog-confirm="{{ $confirm }}">
     {{ $isIncome ? 'Receber' : 'Pagar' }}

@@ -52,7 +52,7 @@ enum AppointmentStatus: string
     {
         return match ($this) {
             self::Scheduled => 'bg-sky-100 text-sky-800',
-            self::Confirmed => 'bg-teal-100 text-teal-800',
+            self::Confirmed => 'bg-violet-100 text-violet-800',
             self::Completed => 'bg-emerald-100 text-emerald-800',
             self::NoShow => 'bg-amber-100 text-amber-800',
             self::Cancelled => 'bg-slate-200 text-slate-700',
@@ -66,7 +66,7 @@ enum AppointmentStatus: string
     {
         return match ($this) {
             self::Scheduled => 'border-sky-500 bg-sky-50 text-sky-950',
-            self::Confirmed => 'border-teal-500 bg-teal-50 text-teal-950',
+            self::Confirmed => 'border-violet-500 bg-violet-50 text-violet-950',
             self::Completed => 'border-emerald-500 bg-emerald-50 text-emerald-950',
             self::NoShow => 'border-amber-500 bg-amber-50 text-amber-950',
             self::Cancelled => 'border-slate-400 bg-slate-50 text-slate-500',
@@ -80,7 +80,7 @@ enum AppointmentStatus: string
     {
         return match ($this) {
             self::Scheduled => 'bg-sky-500',
-            self::Confirmed => 'bg-teal-500',
+            self::Confirmed => 'bg-violet-500',
             self::Completed => 'bg-emerald-500',
             self::NoShow => 'bg-amber-500',
             self::Cancelled => 'bg-slate-400',

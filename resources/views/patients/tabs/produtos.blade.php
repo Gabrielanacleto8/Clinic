@@ -27,7 +27,7 @@
                         </td>
                         <td data-label="Quantidade" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::quantity($used->quantity) }} {{ $used->batch->product->unit->symbol() }}</td>
                         <td data-label="Atendimento" class="px-4 py-3">
-                            <a href="{{ route('patients.treatments.show', [$patient, $used->treatment]) }}" class="text-teal-800 hover:underline">{{ $used->treatment->procedure->name }}</a>
+                            <a href="{{ route('patients.treatments.show', [$patient, $used->treatment]) }}" class="text-slate-800 hover:underline">{{ $used->treatment->procedure->name }}</a>
                         </td>
                     </tr>
                 @endforeach

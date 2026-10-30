@@ -9,8 +9,8 @@
             @foreach ($versions as $item)
                 <li>
                     <a href="{{ route('patients.anamnesis.version', [$patient, $item]) }}" @if (($current ?? null) === $item->id) aria-current="page" @endif
-                       class="flex flex-wrap justify-between gap-x-4 gap-y-0.5 rounded px-2 py-2 hover:bg-slate-50 aria-[current=page]:bg-teal-50">
-                        <span class="font-medium text-teal-800">Válida até {{ ClinicTime::format($item->created_at, 'd/m/Y H:i') }}</span>
+                       class="flex flex-wrap justify-between gap-x-4 gap-y-0.5 rounded px-2 py-2 hover:bg-slate-50 aria-[current=page]:bg-slate-50">
+                        <span class="font-medium text-slate-800">Válida até {{ ClinicTime::format($item->created_at, 'd/m/Y H:i') }}</span>
                         <span class="text-slate-500">
                             {{ $item->recorded_at ? 'gravada em '.ClinicTime::format($item->recorded_at, 'd/m/Y') : 'gravada antes do histórico' }}
                             por {{ $item->author?->name ?? 'usuário removido' }}

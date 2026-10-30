@@ -1,11 +1,7 @@
 @php
-    use App\Enums\FinancialCategory;
     use App\Enums\FinancialEntryType;
-    use App\Support\ClinicTime;
-    use App\Support\InstallmentPlan;
 
     $isIncome = $type === FinancialEntryType::Income;
-    $installmentOptions = collect(range(1, InstallmentPlan::MAX_INSTALLMENTS))->mapWithKeys(fn ($count) => [$count => $count === 1 ? 'À vista' : $count.'x'])->all();
     $defaults ??= [];
     $tab = fn (bool $active) => 'rounded-lg px-4 py-2 text-sm font-medium '.($active ? 'bg-brand text-on-brand' : 'text-slate-700 hover:bg-slate-100');
 @endphp
@@ -32,38 +28,7 @@
             @enderror
 
             <section class="card p-6">
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-6">
-                    <x-form.input class="md:col-span-4" name="description" label="Descrição" required maxlength="200" autocomplete="off" :value="$defaults['description'] ?? null"
-                                  :placeholder="$isIncome ? 'Ex.: venda de produto' : 'Ex.: aluguel de outubro'" />
-                    <x-form.select class="md:col-span-2" name="category" label="Categoria" :options="FinancialCategory::optionsFor($type)" required placeholder="Selecione" :selected="$defaults['category'] ?? null" />
-
-                    @if ($isIncome)
-                        {{-- Receita de paciente fora do atendimento (venda de produto, pacote) entra na ficha dele. --}}
-                        <x-patient-picker class="md:col-span-6" :patient="$patient" :required="false" />
-                    @endif
-
-                    <x-form.input class="md:col-span-2" name="total" label="Valor total (R$)" required inputmode="decimal" autocomplete="off" placeholder="0,00" :value="$defaults['total'] ?? null" />
-                    <x-form.input class="md:col-span-2" name="issued_on" label="Data do lançamento" type="date" required :value="ClinicTime::today()" :max="ClinicTime::today()" />
-                    <x-form.select class="md:col-span-2" name="payment_method" label="Forma de pagamento" :options="App\Enums\PaymentMethod::options()" required placeholder="Selecione" :selected="$defaults['payment_method'] ?? null" />
-
-                    <x-form.select class="md:col-span-2" name="installments" label="Parcelas" :options="$installmentOptions" :selected="$defaults['installments'] ?? 1" required />
-                    <x-form.input class="md:col-span-2" name="first_due_date" label="Primeiro vencimento" type="date" required :value="ClinicTime::today()"
-                                  hint="As demais parcelas vencem de mês em mês." />
-                    <div class="md:col-span-2 md:pt-7">
-                        <label class="flex items-center gap-2 text-sm">
-                            <input type="hidden" name="first_installment_paid" value="0">
-                            <input type="checkbox" name="first_installment_paid" value="1" class="size-4 rounded border-slate-300 accent-brand"
-                                   @checked(old('first_installment_paid'))>
-                            {{ $isIncome ? 'Primeira parcela já recebida' : 'Primeira parcela já paga' }}
-                        </label>
-                        <p class="mt-1 text-xs text-slate-500">
-                            À vista, marca o valor inteiro como pago na data do lançamento.
-                            @if ($isIncome)
-                                No cartão de crédito, todas as parcelas ficam como recebidas.
-                            @endif
-                        </p>
-                    </div>
-                </div>
+                @include('finance._entry_fields')
             </section>
 
             <div class="flex flex-wrap items-center justify-end gap-3">

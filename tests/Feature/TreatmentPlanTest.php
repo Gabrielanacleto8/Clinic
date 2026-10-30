@@ -507,7 +507,7 @@ class TreatmentPlanTest extends TestCase
             ->assertSee('<dialog id="plan-summary"', false)
             ->assertSee('data-summary="'.$summaryUrl.'" data-summary-dialog="plan-summary"', false)
             // Sem JavaScript, o número continua levando à página completa.
-            ->assertSee('href="'.route('patients.plans.show', [$this->patient, $plan]).'" class="font-medium text-teal-800 hover:underline" data-summary-link', false);
+            ->assertSee('href="'.route('patients.plans.show', [$this->patient, $plan]).'" class="font-medium text-slate-800 hover:underline" data-summary-link', false);
 
         // Só o conteúdo, sem o layout, com o orçamento completo. A leitura é auditada.
         $this->get($summaryUrl)->assertOk()

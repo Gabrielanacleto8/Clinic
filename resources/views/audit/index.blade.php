@@ -51,7 +51,7 @@
 
     @if ($patient)
         <p class="mt-3 text-sm">
-            <a href="{{ route('audit.index', array_filter([...$filters, 'paciente' => null])) }}" class="text-teal-800 hover:underline">Ver a auditoria de todos os registros</a>
+            <a href="{{ route('audit.index', array_filter([...$filters, 'paciente' => null])) }}" class="text-slate-800 hover:underline">Ver a auditoria de todos os registros</a>
         </p>
     @endif
 
@@ -82,7 +82,7 @@
                                 <span class="block"><span class="text-slate-500">{{ $label }}:</span> {{ $text }}</span>
                             @endforeach
                             @if (isset($log->metadata['patient_id']) && ! $patient)
-                                <a href="{{ route('audit.index', ['paciente' => $log->metadata['patient_id']]) }}" class="mt-0.5 block text-teal-800 hover:underline">Ver tudo deste paciente</a>
+                                <a href="{{ route('audit.index', ['paciente' => $log->metadata['patient_id']]) }}" class="mt-0.5 block text-slate-800 hover:underline">Ver tudo deste paciente</a>
                             @endif
                         </td>
                         <td data-label="Origem" class="px-4 py-3 text-xs text-slate-500">

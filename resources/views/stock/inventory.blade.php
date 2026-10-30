@@ -44,7 +44,7 @@
         <p class="card mt-4 px-4 py-10 text-center text-sm text-slate-500">
             @if ($filtered)
                 Nenhum lote com saldo para conferir com estes filtros.
-                <a href="{{ route('stock.inventory.edit') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                <a href="{{ route('stock.inventory.edit') }}" class="font-medium text-slate-800 hover:underline">Limpar filtros</a>
             @else
                 Nenhum lote com saldo para conferir.
             @endif

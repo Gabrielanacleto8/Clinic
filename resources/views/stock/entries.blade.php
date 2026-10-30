@@ -51,13 +51,13 @@
                     <tr class="hover:bg-slate-50">
                         <td data-label="Data" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ ClinicTime::format($entry->created_at) }}</td>
                         <td data-label="Produto" class="px-4 py-3">
-                            <a href="{{ route('products.show', $product) }}" class="font-medium text-teal-800 hover:underline">{{ $product->name }}</a>
+                            <a href="{{ route('products.show', $product) }}" class="font-medium text-slate-800 hover:underline">{{ $product->name }}</a>
                             @if ($entry->reason)
                                 <span class="block text-xs break-words text-slate-500">{{ $entry->reason }}</span>
                             @endif
                         </td>
                         <td data-label="Lote" class="px-4 py-3 tabular-nums">
-                            <a href="{{ route('stock.batches.show', $batch) }}" class="text-teal-800 hover:underline">{{ $batch->batch_code }}</a>
+                            <a href="{{ route('stock.batches.show', $batch) }}" class="text-slate-800 hover:underline">{{ $batch->batch_code }}</a>
                         </td>
                         <td data-label="Fabricação" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $batch->manufactured_on?->format('d/m/Y') ?? '—' }}</td>
                         <td data-label="Validade" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $batch->expires_on?->format('d/m/Y') ?? 'Sem validade' }}</td>
@@ -67,7 +67,7 @@
                         <td data-label="Custo unit." class="px-4 py-3 text-right whitespace-nowrap tabular-nums">
                             {{ $entry->unit_cost !== null ? LocalizedDecimal::unitMoney($entry->unit_cost) : '—' }}
                             @if ($canCorrectCost)
-                                <button type="button" class="block w-full cursor-pointer text-right text-xs text-teal-800 hover:underline" data-dialog-open="entry-cost"
+                                <button type="button" class="block w-full cursor-pointer text-right text-xs text-slate-800 hover:underline" data-dialog-open="entry-cost"
                                         data-dialog-action="{{ route('stock.movements.cost', $entry) }}"
                                         data-dialog-summary="Entrada de {{ ClinicTime::format($entry->created_at) }} · {{ $product->name }} · lote {{ $batch->batch_code }}"
                                         data-dialog-values="{{ json_encode(['unit_cost' => LocalizedDecimal::unitMoneyInput($entry->unit_cost)]) }}">Corrigir custo</button>
@@ -83,9 +83,9 @@
                         <td colspan="11" class="px-4 py-10 text-center text-slate-500">
                             Nenhuma entrada encontrada.
                             @if ($filtered)
-                                <a href="{{ route('stock.entries.index') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                                <a href="{{ route('stock.entries.index') }}" class="font-medium text-slate-800 hover:underline">Limpar filtros</a>
                             @elseif ($canEnter)
-                                <button type="button" class="cursor-pointer font-medium text-teal-800 hover:underline" data-dialog-open="stock-entry">Lançar a primeira entrada</button>
+                                <button type="button" class="cursor-pointer font-medium text-slate-800 hover:underline" data-dialog-open="stock-entry">Lançar a primeira entrada</button>
                             @endif
                         </td>
                     </tr>

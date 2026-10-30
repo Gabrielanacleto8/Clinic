@@ -21,7 +21,7 @@
     // No calendário, cancelados aparecem riscados.
     $struck = fn ($appointment) => $appointment->status === AppointmentStatus::Cancelled ? 'text-slate-400 line-through' : '';
 @endphp
-<x-layouts.app title="Agenda" wide>
+<x-layouts.app title="Agenda">
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h1 class="text-xl font-semibold tracking-tight">Agenda</h1>
@@ -95,7 +95,7 @@
                             $items = $appointmentsByDay->get($key, collect());
                             $selected = $key === $iso;
                         @endphp
-                        <section @class(['card min-h-24 p-2', 'ring-2 ring-teal-600' => $selected]) aria-label="{{ $pt($day, 'l, j \d\e F') }}">
+                        <section @class(['card min-h-24 p-2', 'ring-2 ring-slate-600' => $selected]) aria-label="{{ $pt($day, 'l, j \d\e F') }}">
                             <a href="{{ $dayLink($key) }}" @if ($selected) aria-current="true" @endif
                                class="flex items-baseline justify-between gap-1 rounded px-1 text-xs font-medium text-slate-500 uppercase hover:bg-slate-100">
                                 <span>{{ $pt($day, 'D') }}</span>
@@ -151,13 +151,13 @@
                                         'relative h-16 p-1 text-center align-top @xl:h-28 @xl:p-1.5 @xl:text-left @4xl:h-32 @4xl:p-2',
                                         'bg-slate-50/70 text-slate-400' => $day->month !== $date->month,
                                         'hover:bg-slate-100' => ! $selected,
-                                        'bg-teal-50 ring-2 ring-teal-600 ring-inset' => $selected,
+                                        'bg-slate-50 ring-2 ring-slate-600 ring-inset' => $selected,
                                     ])>
                                         {{-- O link do número cobre a célula inteira: tocar em qualquer ponto escolhe o dia. --}}
                                         <a href="{{ $dayLink($key) }}" title="{{ $pt($day, 'l, j \d\e F') }}" @if ($selected) aria-current="true" @endif
                                            @class(['inline-flex size-7 items-center justify-center rounded-full text-sm tabular-nums after:absolute after:inset-0', 'bg-brand font-semibold text-on-brand' => $key === $today])>{{ $day->day }}</a>
                                         @if ($items->isNotEmpty())
-                                            <p class="mx-auto mt-1 flex size-6 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-800 tabular-nums @xl:hidden">
+                                            <p class="mx-auto mt-1 flex size-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-800 tabular-nums @xl:hidden">
                                                 {{ $items->count() }}<span class="sr-only"> {{ $items->count() === 1 ? 'agendamento' : 'agendamentos' }}</span>
                                             </p>
                                             <ul class="mt-1 hidden space-y-0.5 @xl:block">
@@ -171,7 +171,7 @@
                                                 @endforeach
                                             </ul>
                                             @if ($items->count() > 3)
-                                                <p class="mt-0.5 hidden text-xs font-medium text-teal-800 @xl:block">+{{ $items->count() - 3 }} no dia</p>
+                                                <p class="mt-0.5 hidden text-xs font-medium text-slate-800 @xl:block">+{{ $items->count() - 3 }} no dia</p>
                                             @endif
                                         @endif
                                     </td>

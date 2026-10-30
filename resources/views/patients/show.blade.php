@@ -37,7 +37,7 @@
                         @endif
                     </p>
                     @can('update', $patient)
-                        <button type="button" class="mt-1 cursor-pointer text-sm font-medium text-teal-800 hover:underline" data-dialog-open="patient-avatar">
+                        <button type="button" class="mt-1 cursor-pointer text-sm font-medium text-slate-800 hover:underline" data-dialog-open="patient-avatar">
                             {{ $patient->avatar_path ? 'Trocar foto' : 'Adicionar foto' }}
                         </button>
                     @endcan
@@ -85,7 +85,7 @@
                 <h2 id="agendamentos-do-paciente" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Agendamentos</h2>
                 <p class="text-xs text-slate-500">
                     {{ $noShowCount === 0 ? 'Nenhuma falta' : $noShowCount.' '.($noShowCount === 1 ? 'falta' : 'faltas') }}
-                    · <a href="{{ route('patients.show', [$patient, 'aba' => 'agendamentos']) }}#historico" class="text-teal-800 hover:underline">Ver todos</a>
+                    · <a href="{{ route('patients.show', [$patient, 'aba' => 'agendamentos']) }}#historico" class="text-slate-800 hover:underline">Ver todos</a>
                 </p>
             </div>
             @if ($upcomingAppointments->isNotEmpty())
@@ -96,7 +96,7 @@
                             <span class="min-w-0 flex-1">{{ $appointment->procedure?->name ?? 'Sem procedimento definido' }} · {{ $appointment->professional->name }}</span>
                             <span class="badge {{ $appointment->status->badgeClasses() }}">{{ $appointment->status->label() }}</span>
                             @can('viewAny', App\Models\Appointment::class)
-                                <a href="{{ route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')]) }}" class="text-teal-800 hover:underline">Agenda</a>
+                                <a href="{{ route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')]) }}" class="text-slate-800 hover:underline">Agenda</a>
                             @endcan
                         </li>
                     @endforeach
@@ -138,8 +138,8 @@
                     <dt class="text-xs text-slate-500">Telefone</dt>
                     <dd class="mt-0.5 text-sm tabular-nums">
                         @if ($patient->phone)
-                            <a href="tel:+55{{ $patient->phoneDigits() }}" class="text-teal-800 hover:underline">{{ $patient->formattedPhone() }}</a>
-                            · <a href="https://wa.me/55{{ $patient->phoneDigits() }}" target="_blank" rel="noopener" class="text-teal-800 hover:underline">WhatsApp</a>
+                            <a href="tel:+55{{ $patient->phoneDigits() }}" class="text-slate-800 hover:underline">{{ $patient->formattedPhone() }}</a>
+                            · <a href="https://wa.me/55{{ $patient->phoneDigits() }}" target="_blank" rel="noopener" class="text-slate-800 hover:underline">WhatsApp</a>
                         @else
                             —
                         @endif
@@ -149,7 +149,7 @@
                     <dt class="text-xs text-slate-500">E-mail</dt>
                     <dd class="mt-0.5 text-sm break-words">
                         @if ($patient->email)
-                            <a href="mailto:{{ $patient->email }}" class="text-teal-800 hover:underline">{{ $patient->email }}</a>
+                            <a href="mailto:{{ $patient->email }}" class="text-slate-800 hover:underline">{{ $patient->email }}</a>
                         @else
                             —
                         @endif
@@ -175,7 +175,7 @@
                             <dt class="text-xs text-slate-500">Telefone</dt>
                             <dd class="mt-0.5 text-sm tabular-nums">
                                 @if ($patient->guardian_phone)
-                                    <a href="tel:+55{{ $patient->guardian_phone }}" class="text-teal-800 hover:underline">{{ $patient->formattedGuardianPhone() }}</a>
+                                    <a href="tel:+55{{ $patient->guardian_phone }}" class="text-slate-800 hover:underline">{{ $patient->formattedGuardianPhone() }}</a>
                                 @else
                                     —
                                 @endif

@@ -48,11 +48,12 @@
         <table class="table-stack w-full min-w-2xl text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
                 <tr>
+                    {{-- O nome fica com o espaço que sobra; as demais colunas têm largura fixa, para os títulos alinharem com os valores em qualquer largura de tela. --}}
                     <th scope="col" class="px-4 py-3 font-medium">Procedimento</th>
-                    <th scope="col" class="px-4 py-3 font-medium">Categoria</th>
-                    <th scope="col" class="px-4 py-3 font-medium">Duração</th>
-                    <th scope="col" class="px-4 py-3 text-right font-medium">Valor</th>
-                    <th scope="col" class="px-4 py-3 font-medium">Situação</th>
+                    <th scope="col" class="w-44 px-4 py-3 font-medium">Categoria</th>
+                    <th scope="col" class="w-32 px-4 py-3 font-medium">Duração</th>
+                    <th scope="col" class="w-36 px-4 py-3 text-right font-medium">Valor</th>
+                    <th scope="col" class="w-32 py-3 pr-4 pl-8 font-medium">Situação</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -60,7 +61,7 @@
                     {{-- A linha inteira abre os detalhes; o nome é um botão para valer também no teclado. --}}
                     <tr class="cursor-pointer hover:bg-slate-50" data-dialog-open="procedure-{{ $procedure->id }}">
                         <td class="px-4 py-3">
-                            <button type="button" class="cursor-pointer text-left font-medium text-teal-800 hover:underline" data-dialog-open="procedure-{{ $procedure->id }}">{{ $procedure->name }}</button>
+                            <button type="button" class="cursor-pointer text-left font-medium text-slate-800 hover:underline" data-dialog-open="procedure-{{ $procedure->id }}">{{ $procedure->name }}</button>
                             @if ($procedure->description)
                                 <p class="mt-0.5 max-w-md truncate text-xs text-slate-500" title="{{ $procedure->description }}">{{ $procedure->description }}</p>
                             @endif
@@ -68,7 +69,7 @@
                         <td data-label="Categoria" class="px-4 py-3 text-slate-600">{{ $procedure->category->label() }}</td>
                         <td data-label="Duração" class="px-4 py-3 whitespace-nowrap text-slate-600">{{ Duration::label($procedure->duration_minutes) }}</td>
                         <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap tabular-nums">{{ LocalizedDecimal::money($procedure->price) }}</td>
-                        <td data-label="Situação" class="px-4 py-3">
+                        <td data-label="Situação" class="py-3 pr-4 pl-8">
                             @if ($procedure->is_active)
                                 <span class="badge bg-emerald-100 text-emerald-800">Ativo</span>
                             @else

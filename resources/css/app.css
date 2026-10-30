@@ -49,7 +49,7 @@
     }
 
     .btn-primary {
-        @apply bg-brand text-on-brand hover:bg-brand-strong focus-visible:outline-teal-700;
+        @apply bg-brand text-on-brand hover:bg-brand-strong focus-visible:outline-slate-700;
     }
 
     .btn-secondary {
@@ -66,7 +66,7 @@
 
     .input {
         @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:bg-canvas
-            placeholder:text-slate-400 focus:border-teal-600 focus:outline-2 focus:outline-teal-600/30
+            placeholder:text-slate-400 focus:border-slate-600 focus:outline-2 focus:outline-slate-600/30
             disabled:bg-slate-100 disabled:text-slate-500;
     }
 

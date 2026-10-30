@@ -18,18 +18,18 @@
                 <p class="mt-1 text-sm">
                     @if ($cpfOwnerPatient->trashed())
                         @can('restore', $cpfOwnerPatient)
-                            <a href="{{ route('patients.record', $cpfOwnerPatient) }}" class="text-teal-800 hover:underline">Ver o prontuário</a>
+                            <a href="{{ route('patients.record', $cpfOwnerPatient) }}" class="text-slate-800 hover:underline">Ver o prontuário</a>
                             ·
                             <form method="POST" action="{{ route('patients.restore', $cpfOwnerPatient) }}" class="inline" data-confirm="Restaurar o cadastro arquivado com este CPF?">
                                 @csrf
                                 @method('PATCH')
-                                <button type="submit" class="cursor-pointer font-medium text-teal-800 hover:underline">Restaurar o cadastro</button>
+                                <button type="submit" class="cursor-pointer font-medium text-slate-800 hover:underline">Restaurar o cadastro</button>
                             </form>
                         @else
                             <span class="text-slate-600">Peça ao administrador para restaurar o cadastro arquivado.</span>
                         @endcan
                     @else
-                        <a href="{{ route('patients.show', $cpfOwnerPatient) }}" class="font-medium text-teal-800 hover:underline">Abrir o cadastro existente</a>
+                        <a href="{{ route('patients.show', $cpfOwnerPatient) }}" class="font-medium text-slate-800 hover:underline">Abrir o cadastro existente</a>
                     @endif
                 </p>
             @endif

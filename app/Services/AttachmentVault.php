@@ -19,7 +19,15 @@ class AttachmentVault
      */
     public function store(int $patientId, string $contents): string
     {
-        $path = $patientId.'/'.Str::ulid().'.enc';
+        return $this->storeIn((string) $patientId, $contents);
+    }
+
+    /**
+     * Mesma guarda, numa pasta própria: "tasks" para os anexos de tarefas.
+     */
+    public function storeIn(string $folder, string $contents): string
+    {
+        $path = $folder.'/'.Str::ulid().'.enc';
 
         $this->disk()->put($path, Crypt::encryptString($contents));
 

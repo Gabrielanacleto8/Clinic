@@ -56,7 +56,7 @@
             <p class="px-4 py-10 text-center text-sm text-slate-500">
                 Nenhuma movimentação encontrada.
                 @if ($filtered)
-                    <a href="{{ route('stock.movements.index') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                    <a href="{{ route('stock.movements.index') }}" class="font-medium text-slate-800 hover:underline">Limpar filtros</a>
                 @endif
             </p>
         @else

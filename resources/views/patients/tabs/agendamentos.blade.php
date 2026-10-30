@@ -18,7 +18,7 @@
                     <tr class="hover:bg-slate-50">
                         <td data-label="Data" class="px-4 py-3 whitespace-nowrap tabular-nums">
                             @can('viewAny', App\Models\Appointment::class)
-                                <a href="{{ route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')]) }}" class="text-teal-800 hover:underline">{{ ClinicTime::format($appointment->scheduled_at) }}</a>
+                                <a href="{{ route('agenda.index', ['data' => ClinicTime::format($appointment->scheduled_at, 'Y-m-d')]) }}" class="text-slate-800 hover:underline">{{ ClinicTime::format($appointment->scheduled_at) }}</a>
                             @else
                                 {{ ClinicTime::format($appointment->scheduled_at) }}
                             @endcan

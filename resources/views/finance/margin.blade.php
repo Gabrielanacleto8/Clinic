@@ -16,19 +16,13 @@
     $format = fn (string $date) => Carbon\CarbonImmutable::createFromFormat('!Y-m-d', $date)->format('d/m/Y');
     $byProfessional = $group === 'profissional';
 @endphp
-<x-finance.page active="receitas" title="Receitas e margem"
+<x-finance.page :active="$byProfessional ? 'profissionais' : 'receitas'" title="Receitas e margem"
                 :subtitle="$format($start).' a '.$format($end).($professionalId && $professionals->has($professionalId) ? ' · '.$professionals[$professionalId] : '')">
     <form method="GET" action="{{ route('finance.margin') }}" class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-12" role="search">
         @include('stock._period_fields', ['span' => 'sm:col-span-3'])
-        <div class="col-span-2 sm:col-span-2">
-            <label for="agrupar" class="sr-only">Agrupar</label>
-            <select id="agrupar" name="agrupar" class="input">
-                @foreach ($groups as $value => $label)
-                    <option value="{{ $value }}" @selected($group === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div class="col-span-2 sm:col-span-2">
+        {{-- O agrupamento é escolhido pelas subabas; o filtro o mantém. --}}
+        <input type="hidden" name="agrupar" value="{{ $group }}">
+        <div class="col-span-2 sm:col-span-3">
             <label for="profissional" class="sr-only">Profissional</label>
             <select id="profissional" name="profissional" class="input">
                 <option value="">Todos os profissionais</option>

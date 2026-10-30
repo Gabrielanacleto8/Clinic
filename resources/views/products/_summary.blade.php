@@ -14,7 +14,7 @@
 
     @if ($hasMoreMovements)
         <p class="mt-3 text-right text-sm">
-            <a href="{{ route('products.show', $product) }}#movimentacoes" class="font-medium text-teal-800 hover:underline">Ver todas as movimentações</a>
+            <a href="{{ route('products.show', $product) }}#movimentacoes" class="font-medium text-slate-800 hover:underline">Ver todas as movimentações</a>
         </p>
     @endif
 </div>

@@ -21,7 +21,7 @@
         </div>
         <button type="submit" class="btn btn-secondary">Ver</button>
         @if ($day !== $today)
-            <a href="{{ route('finance.cash.show') }}" class="text-sm text-teal-800 hover:underline sm:ml-2">Hoje</a>
+            <a href="{{ route('finance.cash.show') }}" class="text-sm text-slate-800 hover:underline sm:ml-2">Hoje</a>
         @endif
         @error('dia')
             <p class="w-full text-sm text-red-700">{{ $message }}</p>
@@ -179,7 +179,7 @@
                 @foreach ($recent as $previous)
                     @php $difference = $previous->difference(); @endphp
                     <li class="flex flex-wrap items-center justify-between gap-2 py-2">
-                        <a href="{{ route('finance.cash.show', ['dia' => $previous->day->format('Y-m-d')]) }}" class="text-teal-800 hover:underline">{{ $previous->day->format('d/m/Y') }}</a>
+                        <a href="{{ route('finance.cash.show', ['dia' => $previous->day->format('Y-m-d')]) }}" class="text-slate-800 hover:underline">{{ $previous->day->format('d/m/Y') }}</a>
                         <span @class(['tabular-nums', 'text-slate-600' => $difference == 0, 'text-red-700' => $difference < 0, 'text-amber-700' => $difference > 0])>
                             {{ $difference == 0 ? 'Sem diferença' : ($difference < 0 ? 'Falta de ' : 'Sobra de ').LocalizedDecimal::money(abs($difference)) }}
                         </span>

@@ -53,7 +53,7 @@
                     @php $product = $batch->product; $empty = (float) $batch->quantity === 0.0; @endphp
                     <tr @class(['hover:bg-slate-50', 'text-slate-400' => $empty])>
                         <td data-label="Lote" class="px-4 py-3 font-medium tabular-nums">
-                            <a href="{{ route('stock.batches.show', $batch) }}" class="text-teal-800 hover:underline">{{ $batch->batch_code }}</a>
+                            <a href="{{ route('stock.batches.show', $batch) }}" class="text-slate-800 hover:underline">{{ $batch->batch_code }}</a>
                         </td>
                         <td data-label="Produto" class="px-4 py-3">
                             <a href="{{ route('products.show', $product) }}" class="hover:underline">{{ $product->name }}</a>
@@ -74,7 +74,7 @@
                                         data-dialog-summary="{{ $product->name }} · lote {{ $batch->batch_code }} · {{ LocalizedDecimal::quantity($batch->quantity) }} {{ $product->unit->symbol() }}"
                                         data-dialog-values="{{ json_encode(['reason' => 'Vencido em '.$batch->expires_on->format('d/m/Y')], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}">Baixar vencido</button>
                             @else
-                                <a href="{{ route('stock.batches.show', $batch) }}" class="font-medium text-teal-800 hover:underline">Rastrear</a>
+                                <a href="{{ route('stock.batches.show', $batch) }}" class="font-medium text-slate-800 hover:underline">Rastrear</a>
                             @endif
                         </td>
                     </tr>
@@ -83,7 +83,7 @@
                         <td colspan="6" class="px-4 py-10 text-center text-slate-500">
                             Nenhum lote encontrado.
                             @if ($filtered)
-                                <a href="{{ route('stock.batches.index') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                                <a href="{{ route('stock.batches.index') }}" class="font-medium text-slate-800 hover:underline">Limpar filtros</a>
                             @endif
                         </td>
                     </tr>

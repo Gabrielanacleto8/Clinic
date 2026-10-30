@@ -11,7 +11,7 @@
 <div data-summary-content>
     <h3 class="text-lg font-semibold tracking-tight">{{ $treatment->procedure->name }}</h3>
     <p class="mt-1 text-sm text-slate-600">
-        <a href="{{ route('patients.show', $patient) }}" class="font-medium text-teal-800 hover:underline">{{ $patient->name }}</a>
+        <a href="{{ route('patients.show', $patient) }}" class="font-medium text-slate-800 hover:underline">{{ $patient->name }}</a>
         · {{ ClinicTime::format($treatment->performed_at, 'd/m/Y') }} às {{ ClinicTime::format($treatment->performed_at, 'H:i') }}
         · {{ $treatment->professional->nameWithRegistration() }}
     </p>

@@ -11,6 +11,7 @@ use App\Support\ClinicTime;
 use App\Support\InstallmentPlan;
 use App\Support\LocalizedDecimal;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -98,5 +99,16 @@ class FinancialEntryRequest extends FormRequest
             'issued_on.before_or_equal' => 'A data do lançamento não pode estar no futuro.',
             'patient_id.exists' => 'Busque e selecione um paciente na lista.',
         ];
+    }
+
+    /**
+     * Paciente devolvido pelo formulário que voltou com erro, para o seletor
+     * reabrir com ele escolhido (na página ou na janela de nova receita).
+     */
+    public static function oldPatient(Request $request): ?Patient
+    {
+        $id = $request->old('patient_id');
+
+        return is_numeric($id) ? Patient::query()->find((int) $id, ['id', 'name']) : null;
     }
 }

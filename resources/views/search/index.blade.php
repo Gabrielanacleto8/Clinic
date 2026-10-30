@@ -30,7 +30,7 @@
                         <h2 id="r-modulos" class="{{ $groupHeading }}">Módulos</h2>
                         <ul>
                             @foreach ($modules as $item)
-                                <li><a href="{{ route($item['route']) }}" class="{{ $row }}"><span class="flex items-center gap-2"><x-icon :name="$item['icon']" class="text-teal-600" />{{ $item['label'] }}</span></a></li>
+                                <li><a href="{{ route($item['route']) }}" class="{{ $row }}"><span class="flex items-center gap-2"><x-icon :name="$item['icon']" class="text-slate-600" />{{ $item['label'] }}</span></a></li>
                             @endforeach
                         </ul>
                     </section>
@@ -43,14 +43,14 @@
                             @foreach ($patients as $patient)
                                 <li>
                                     <a href="{{ route('patients.show', $patient) }}" class="{{ $row }}">
-                                        <span class="font-medium text-teal-800">{{ $patient->name }}</span>
+                                        <span class="font-medium text-slate-800">{{ $patient->name }}</span>
                                         <span class="text-xs text-slate-500 tabular-nums">{{ $patient->age() }} anos{{ $patient->phone ? ' · '.$patient->formattedPhone() : '' }}</span>
                                     </a>
                                 </li>
                             @endforeach
                         </ul>
                         @if ($patients->count() === 8)
-                            <a href="{{ route('patients.index', ['q' => $term]) }}" class="block px-4 pb-3 text-sm text-teal-800 hover:underline sm:px-6">Ver todos os pacientes encontrados</a>
+                            <a href="{{ route('patients.index', ['q' => $term]) }}" class="block px-4 pb-3 text-sm text-slate-800 hover:underline sm:px-6">Ver todos os pacientes encontrados</a>
                         @endif
                     </section>
                 @endif
@@ -62,7 +62,7 @@
                             @foreach ($procedures as $procedure)
                                 <li>
                                     <a href="{{ route('procedures.index', ['q' => $procedure->name, 'situacao' => 'todos']) }}" class="{{ $row }}">
-                                        <span class="font-medium text-teal-800">{{ $procedure->name }}</span>
+                                        <span class="font-medium text-slate-800">{{ $procedure->name }}</span>
                                         @unless ($procedure->is_active)<span class="badge bg-slate-100 text-slate-600">Inativo</span>@endunless
                                     </a>
                                 </li>
@@ -78,7 +78,7 @@
                             @foreach ($products as $product)
                                 <li>
                                     <a href="{{ route('products.show', $product) }}" class="{{ $row }}">
-                                        <span class="font-medium text-teal-800">{{ $product->name }}</span>
+                                        <span class="font-medium text-slate-800">{{ $product->name }}</span>
                                         @unless ($product->is_active)<span class="badge bg-slate-100 text-slate-600">Inativo</span>@endunless
                                     </a>
                                 </li>

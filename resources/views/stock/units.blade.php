@@ -8,7 +8,7 @@
 <x-stock.page active="unidades" :alerts="$alerts" :subtitle="($product ? $product->name.' · ' : '').$total.' '.($total === 1 ? 'unidade aberta' : 'unidades abertas')">
     @if ($product)
         <p class="mt-4 text-sm">
-            <a href="{{ route('stock.units.index') }}" class="text-teal-800 hover:underline">Ver as unidades abertas de todos os produtos</a>
+            <a href="{{ route('stock.units.index') }}" class="text-slate-800 hover:underline">Ver as unidades abertas de todos os produtos</a>
         </p>
     @endif
 
@@ -41,7 +41,7 @@
                         @php $unitProduct = $unit->batch->product; $reason = $unit->discardReason(); @endphp
                         <tr>
                             <td data-label="Unidade" class="px-4 py-3 font-medium">
-                                <a href="{{ route('stock.units.show', $unit) }}" class="text-teal-800 hover:underline">{{ $unit->label() }}</a>
+                                <a href="{{ route('stock.units.show', $unit) }}" class="text-slate-800 hover:underline">{{ $unit->label() }}</a>
                             </td>
                             <td data-label="Produto e lote" class="px-4 py-3">
                                 <a href="{{ route('products.show', $unitProduct) }}" class="hover:underline">{{ $unitProduct->name }}</a>
@@ -103,7 +103,7 @@
                         @php $unitProduct = $unit->batch->product; $until = $unit->usableUntil(); @endphp
                         <tr>
                             <td data-label="Unidade" class="px-4 py-3 font-medium">
-                                <a href="{{ route('stock.units.show', $unit) }}" class="text-teal-800 hover:underline">{{ $unit->label() }}</a>
+                                <a href="{{ route('stock.units.show', $unit) }}" class="text-slate-800 hover:underline">{{ $unit->label() }}</a>
                             </td>
                             <td data-label="Produto e lote" class="px-4 py-3">
                                 <a href="{{ route('products.show', $unitProduct) }}" class="hover:underline">{{ $unitProduct->name }}</a>

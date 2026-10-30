@@ -39,7 +39,7 @@
             @endif
         </{{ $titleTag }}>
         <p class="mt-1 text-sm text-slate-600">
-            <a href="{{ route('patients.show', $patient) }}" class="font-medium text-teal-800 hover:underline">{{ $patient->name }}</a>
+            <a href="{{ route('patients.show', $patient) }}" class="font-medium text-slate-800 hover:underline">{{ $patient->name }}</a>
             · {{ Plural::of(count($plan->items), 'procedimento', 'procedimentos') }}, {{ Plural::of($totalSessions, 'sessão', 'sessões') }}
         </p>
     </div>
@@ -98,7 +98,7 @@
                             <span class="text-slate-600">Sessões usadas</span>
                             <span class="font-medium tabular-nums">{{ $usedSessions }} de {{ $totalSessions }}</span>
                         </div>
-                        <progress class="bar mt-1.5 text-teal-600" max="{{ max($totalSessions, 1) }}" value="{{ $usedSessions }}" aria-label="Sessões usadas">{{ $usedSessions }}</progress>
+                        <progress class="bar mt-1.5 text-slate-600" max="{{ max($totalSessions, 1) }}" value="{{ $usedSessions }}" aria-label="Sessões usadas">{{ $usedSessions }}</progress>
                         <p class="mt-1 text-xs text-slate-500">{{ $remaining === 0 ? 'Todas as sessões foram usadas.' : Plural::of($remaining, 'sessão restante', 'sessões restantes') }}</p>
                     </div>
                 @endif
@@ -113,7 +113,7 @@
                         <p class="mt-1 text-xs text-slate-500">
                             {{ $entry->payment_method->label() }} · {{ $entry->installments->count() > 1 ? $entry->installments->count().' parcelas' : 'à vista' }}
                             {{-- Pelo id na ficha, nunca pelo nome na URL (logs e histórico do navegador). --}}
-                            · <a href="{{ route('patients.show', [$patient, 'aba' => 'financeiro']) }}#historico" class="text-teal-800 hover:underline">receber na ficha</a>
+                            · <a href="{{ route('patients.show', [$patient, 'aba' => 'financeiro']) }}#historico" class="text-slate-800 hover:underline">receber na ficha</a>
                         </p>
                     </div>
                 @endif

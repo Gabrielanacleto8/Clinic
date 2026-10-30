@@ -28,7 +28,7 @@
                 @forelse ($records as $plan)
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 tabular-nums">
-                            <a href="{{ route('patients.plans.show', [$patient, $plan]) }}" class="font-medium text-teal-800 hover:underline">nº {{ $plan->id }}</a>
+                            <a href="{{ route('patients.plans.show', [$patient, $plan]) }}" class="font-medium text-slate-800 hover:underline">nº {{ $plan->id }}</a>
                             <span class="block text-xs text-slate-500">{{ ClinicTime::format($plan->created_at, 'd/m/Y') }}</span>
                         </td>
                         <td data-label="Procedimentos" class="px-4 py-3 text-slate-600">{{ $plan->items->map(fn ($item) => $item->procedure->name.' ('.$item->sessions.')')->implode(', ') }}</td>

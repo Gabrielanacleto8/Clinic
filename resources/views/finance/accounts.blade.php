@@ -10,14 +10,14 @@
                 :subtitle="LocalizedDecimal::money($grand).' em aberto, somando todos os meses'">
     @if (! $isIncome && auth()->user()->can('create', App\Models\FinancialEntry::class))
         <x-slot:actions>
-            <a href="{{ route('finance.entries.create', ['tipo' => 'expense']) }}" class="btn btn-primary">Nova despesa</a>
+            <button type="button" class="btn btn-primary" data-dialog-open="entry-expense">Nova despesa</button>
         </x-slot:actions>
     @endif
 
     <dl class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         @foreach ($buckets as $key => $label)
             @php $current = $filters['faixa'] === $key; @endphp
-            <div @class(['card px-4 py-3', 'ring-2 ring-teal-600' => $current])>
+            <div @class(['card px-4 py-3', 'ring-2 ring-slate-600' => $current])>
                 <dt class="text-xs text-slate-500">
                     <a href="{{ route($route, array_filter(['faixa' => $current ? null : $key, 'q' => $filters['q']])) }}" class="hover:underline" @if ($current) aria-current="true" @endif>{{ $label }}</a>
                 </dt>
@@ -73,7 +73,7 @@
                                     {{ $entry->category->label() }} · {{ $entry->payment_method->label() }}
                                     · {{ $entry->installments_count > 1 ? 'Parcela '.$installment->number.'/'.$entry->installments_count : 'À vista' }}
                                     @if ($entry->patient)
-                                        · <a href="{{ route('patients.show', [$entry->patient, 'aba' => 'financeiro']) }}" class="text-teal-800 hover:underline">{{ $entry->patient->name }}</a>
+                                        · <a href="{{ route('patients.show', [$entry->patient, 'aba' => 'financeiro']) }}" class="text-slate-800 hover:underline">{{ $entry->patient->name }}</a>
                                     @endif
                                 </p>
                             </td>
@@ -96,5 +96,8 @@
 
     @if (auth()->user()->hasPermission(Permission::FinanceReceive))
         @include('finance._payment_dialog')
+    @endif
+    @if (! $isIncome && auth()->user()->can('create', App\Models\FinancialEntry::class))
+        @include('finance._entry_dialog', ['type' => App\Enums\FinancialEntryType::Expense])
     @endif
 </x-finance.page>

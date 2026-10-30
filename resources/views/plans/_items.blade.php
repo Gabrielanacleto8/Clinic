@@ -21,7 +21,7 @@
                     </p>
                     @if ($sold)
                         <div class="mt-2 flex items-center gap-3">
-                            <progress class="bar max-w-40 text-teal-600" max="{{ max($item->sessions, 1) }}" value="{{ $used }}" aria-label="Sessões usadas de {{ $item->procedure->name }}">{{ $used }}</progress>
+                            <progress class="bar max-w-40 text-slate-600" max="{{ max($item->sessions, 1) }}" value="{{ $used }}" aria-label="Sessões usadas de {{ $item->procedure->name }}">{{ $used }}</progress>
                             <span class="shrink-0 text-xs text-slate-500 tabular-nums">{{ $used }} de {{ $item->sessions }} usadas</span>
                         </div>
                     @endif

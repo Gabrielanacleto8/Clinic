@@ -167,9 +167,9 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// <select data-autosubmit>: trocar a opção já envia o formulário de filtro.
+// <select data-autosubmit> ou <input type="checkbox" data-autosubmit>: mudar já envia o formulário de filtro.
 document.addEventListener('change', (event) => {
-    if (event.target.matches('select[data-autosubmit]')) {
+    if (event.target.matches('select[data-autosubmit], input[type="checkbox"][data-autosubmit]')) {
         event.target.form?.requestSubmit();
     }
 });
@@ -498,7 +498,7 @@ if (picker) {
             option.id = `patient-option-${i}`;
             option.setAttribute('role', 'option');
             option.setAttribute('aria-selected', 'false');
-            option.className = 'cursor-pointer px-3 py-2 text-sm hover:bg-slate-50 aria-selected:bg-teal-50';
+            option.className = 'cursor-pointer px-3 py-2 text-sm hover:bg-slate-50 aria-selected:bg-slate-50';
             name.className = 'block font-medium text-slate-900';
             name.textContent = patient.name;
             details.className = 'block text-xs text-slate-500';
@@ -1057,11 +1057,11 @@ document.addEventListener('click', (event) => {
 
     // Fecha pelo botão de fechar ou por um clique fora da janela (no fundo escurecido).
     // Arrastar uma seleção de texto para fora da janela também termina num clique no
-    // fundo: só fecha se o clique começou ali. Janelas de formulário longo (size="lg")
-    // fecham só pelo X ou por "Cancelar".
+    // fundo: só fecha se o clique começou ali. Janelas de formulário longo (size="lg"
+    // e "xl") fecham só pelo X ou por "Cancelar".
     if (event.target.closest('[data-dialog-close]')) {
         event.target.closest('dialog')?.close();
-    } else if (event.target instanceof HTMLDialogElement && backdropPressed === event.target && !event.target.classList.contains('max-w-3xl')) {
+    } else if (event.target instanceof HTMLDialogElement && backdropPressed === event.target && !event.target.matches('.max-w-3xl, .max-w-5xl')) {
         event.target.close();
     }
 
@@ -1409,4 +1409,173 @@ document.querySelectorAll('[data-invoice-item]').forEach((item) => {
 
     sync();
     select.addEventListener('change', sync);
+});
+
+// Gráfico de área do financeiro: linha vertical, marcadores e caixa com os
+// valores do mês mais próximo do ponteiro (ou escolhido pelas setas do teclado).
+// Os valores vêm prontos do servidor e entram como texto.
+document.querySelectorAll('[data-area-chart]').forEach((chart) => {
+    const points = JSON.parse(chart.dataset.points);
+    const crosshair = chart.querySelector('[data-chart-crosshair]');
+    const tooltip = chart.querySelector('[data-chart-tooltip]');
+    const label = chart.querySelector('[data-chart-label]');
+    const dots = chart.querySelectorAll('[data-chart-dot]');
+    const values = chart.querySelectorAll('[data-chart-value]');
+    let current = null;
+
+    const show = (index) => {
+        const point = points[index];
+        current = index;
+
+        crosshair.style.left = `${point.x}%`;
+        dots.forEach((dot, series) => {
+            dot.style.left = `${point.x}%`;
+            dot.style.top = `${point.y[series]}%`;
+        });
+        label.textContent = point.label;
+        values.forEach((value, series) => {
+            value.textContent = point.values[series];
+        });
+
+        // A caixa fica do lado com mais espaço, sem cobrir a linha.
+        const onRight = point.x < 60;
+        tooltip.style.left = onRight ? `calc(${point.x}% + 0.75rem)` : '';
+        tooltip.style.right = onRight ? '' : `calc(${100 - point.x}% + 0.75rem)`;
+
+        [crosshair, tooltip, ...dots].forEach((element) => element.classList.remove('hidden'));
+    };
+
+    const hide = () => {
+        current = null;
+        [crosshair, tooltip, ...dots].forEach((element) => element.classList.add('hidden'));
+    };
+
+    chart.addEventListener('pointermove', (event) => {
+        const box = chart.getBoundingClientRect();
+        const index = Math.min(points.length - 1, Math.max(0, Math.floor(((event.clientX - box.left) / box.width) * points.length)));
+
+        if (index !== current) {
+            show(index);
+        }
+    });
+    chart.addEventListener('pointerleave', () => {
+        if (document.activeElement !== chart) {
+            hide();
+        }
+    });
+    chart.addEventListener('focus', () => show(current ?? points.length - 1));
+    chart.addEventListener('blur', hide);
+    chart.addEventListener('keydown', (event) => {
+        const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+
+        if (event.key === 'Escape') {
+            hide();
+        } else if (step) {
+            event.preventDefault();
+            show(Math.min(points.length - 1, Math.max(0, (current ?? points.length - 1) + step)));
+        }
+    });
+});
+
+// Quadro de tarefas: arrastar um cartão para outra coluna ou posição grava a
+// mudança no servidor na hora. Quem não pode mover a tarefa não recebe o
+// draggable; o servidor confere de novo. Se o envio falhar, a página recarrega
+// para o quadro voltar ao que está gravado.
+const taskBoard = document.querySelector('[data-task-board]');
+
+if (taskBoard) {
+    let dragged = null;
+    const token = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
+    const refreshCounts = () => {
+        taskBoard.querySelectorAll('[data-task-column]').forEach((column) => {
+            const total = column.querySelectorAll('[data-task-card]').length;
+            column.querySelector('[data-task-count]').textContent = String(total);
+            column.querySelector('[data-task-empty]')?.classList.toggle('hidden', total > 0);
+        });
+    };
+
+    taskBoard.addEventListener('dragstart', (event) => {
+        const card = event.target.closest('[data-task-card][draggable="true"]');
+
+        if (!card) return;
+
+        dragged = card;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', card.dataset.taskCard);
+        card.classList.add('opacity-50');
+    });
+
+    taskBoard.addEventListener('dragend', () => {
+        dragged?.classList.remove('opacity-50');
+        dragged = null;
+        taskBoard.querySelectorAll('[data-task-column]').forEach((column) => column.classList.remove('ring-2', 'ring-slate-400'));
+    });
+
+    taskBoard.addEventListener('dragover', (event) => {
+        const column = dragged && event.target.closest('[data-task-column]');
+
+        if (!column) return;
+
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+
+        // O cartão arrastado já se encaixa onde vai cair, na frente do primeiro cartão abaixo do ponteiro.
+        const list = column.querySelector('[data-task-list]');
+        const after = [...list.querySelectorAll('[data-task-card]')]
+            .filter((card) => card !== dragged)
+            .find((card) => event.clientY < card.getBoundingClientRect().top + card.offsetHeight / 2);
+
+        after ? list.insertBefore(dragged, after) : list.append(dragged);
+        taskBoard.querySelectorAll('[data-task-column]').forEach((other) => other.classList.toggle('ring-2', other === column));
+        taskBoard.querySelectorAll('[data-task-column]').forEach((other) => other.classList.toggle('ring-slate-400', other === column));
+        refreshCounts();
+    });
+
+    taskBoard.addEventListener('drop', async (event) => {
+        const column = dragged && event.target.closest('[data-task-column]');
+
+        if (!column) return;
+
+        event.preventDefault();
+
+        const card = dragged;
+        const position = [...column.querySelectorAll('[data-task-card]')].indexOf(card);
+
+        try {
+            const response = await fetch(card.dataset.moveUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ task_column_id: column.dataset.taskColumn, position }),
+            });
+
+            if (!response.ok) throw new Error(String(response.status));
+        } catch {
+            location.reload();
+        }
+    });
+}
+
+// Fechar o painel da tarefa tira "tarefa" do endereço, para um recarregamento não reabri-lo.
+document.getElementById('task-panel')?.addEventListener('close', () => {
+    const url = new URL(location.href);
+
+    url.searchParams.delete('tarefa');
+    history.replaceState(null, '', url);
+});
+
+// Abas dentro de uma janela (painel da tarefa): o botão [data-panel-tab="x"]
+// mostra a seção [data-panel-section="x"] da mesma janela e esconde as outras.
+document.querySelectorAll('[data-panel-tabs]').forEach((tabs) => {
+    const scope = tabs.closest('dialog') ?? document;
+
+    tabs.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-panel-tab]');
+
+        if (!button) return;
+
+        tabs.querySelectorAll('[data-panel-tab]').forEach((other) => other.setAttribute('aria-selected', String(other === button)));
+        scope.querySelectorAll('[data-panel-section]').forEach((section) => section.classList.toggle('hidden', section.dataset.panelSection !== button.dataset.panelTab));
+    });
 });

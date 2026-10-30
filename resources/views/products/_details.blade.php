@@ -11,7 +11,7 @@
     $canAdjust = auth()->user()->can('adjust', $product);
     $canDiscard = auth()->user()->can('discard', $product);
     $discarding = (float) ($product->discard_quantity ?? 0) > 0;
-    $action = 'cursor-pointer font-medium text-teal-800 hover:underline';
+    $action = 'cursor-pointer font-medium text-slate-800 hover:underline';
 @endphp
 <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -72,7 +72,7 @@
         · {{ $product->hours_after_opening ? 'usar até '.$product->hours_after_opening.' h depois de aberta' : 'sem prazo depois de aberta além da validade do lote' }}
         · {{ $product->multi_patient_use ? 'sobra pode ir para outro paciente' : 'uso em um só paciente' }}.
         @if ($product->open_units_count > 0)
-            <a href="{{ route('stock.units.index', ['produto' => $product->id]) }}" class="font-medium text-teal-800 hover:underline">{{ $product->open_units_count }} {{ $product->open_units_count === 1 ? 'unidade aberta' : 'unidades abertas' }}</a>{{ $discarding ? ', com sobra a descartar' : '' }}.
+            <a href="{{ route('stock.units.index', ['produto' => $product->id]) }}" class="font-medium text-slate-800 hover:underline">{{ $product->open_units_count }} {{ $product->open_units_count === 1 ? 'unidade aberta' : 'unidades abertas' }}</a>{{ $discarding ? ', com sobra a descartar' : '' }}.
         @else
             Nenhuma unidade aberta no momento.
         @endif
@@ -109,7 +109,7 @@
                     @php $preset = json_encode(['product_batch_id' => $batch->id]); @endphp
                     <tr @class(['text-slate-400' => (float) $batch->quantity === 0.0])>
                         <td data-label="Lote" class="px-4 py-3 font-medium tabular-nums sm:px-6">
-                            <a href="{{ route('stock.batches.show', $batch) }}" class="text-teal-800 hover:underline">{{ $batch->batch_code }}</a>
+                            <a href="{{ route('stock.batches.show', $batch) }}" class="text-slate-800 hover:underline">{{ $batch->batch_code }}</a>
                         </td>
                         <td data-label="Fabricação" class="px-4 py-3 whitespace-nowrap tabular-nums">{{ $batch->manufactured_on?->format('d/m/Y') ?? '—' }}</td>
                         <td data-label="Validade" class="px-4 py-3 whitespace-nowrap">

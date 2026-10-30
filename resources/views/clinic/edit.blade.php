@@ -2,9 +2,9 @@
     use App\Support\Cnpj;
     use App\Support\Phone;
 @endphp
-<x-layouts.app title="Clínica">
+<x-layouts.app title="Dados da clínica">
     <div class="mx-auto max-w-2xl">
-        <h1 class="text-xl font-semibold tracking-tight">Clínica</h1>
+        <h1 class="text-xl font-semibold tracking-tight">Dados da clínica</h1>
         <p class="mt-1 text-sm text-slate-600">Identificação impressa no prontuário, nos termos de consentimento e nos orçamentos. O nome exibido no menu é {{ config('app.name') }}, definido na instalação.</p>
 
         <form method="POST" action="{{ route('clinic.update') }}" class="mt-6 space-y-6" novalidate>

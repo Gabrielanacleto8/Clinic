@@ -37,7 +37,7 @@ class NavigationTest extends TestCase
 
         $this->assertStringContainsString('href="'.route('patients.index').'"', $sidebar);
         $this->assertStringNotContainsString('href="'.route('users.index').'"', $sidebar);
-        $this->assertStringNotContainsString('Administração', $sidebar);
+        $this->assertStringNotContainsString('Configurações', $sidebar);
     }
 
     public function test_sidebar_marks_the_current_module(): void
@@ -138,5 +138,19 @@ class NavigationTest extends TestCase
     public function test_guest_pages_have_no_sidebar(): void
     {
         $this->assertStringNotContainsString('id="sidebar"', $this->get('/login')->getContent());
+    }
+
+    public function test_settings_group_lists_users_and_permissions_and_clinic_data(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $sidebar = $this->sidebar($this->actingAs($admin)->get('/')->getContent());
+
+        $this->assertMatchesRegularExpression('/Configurações.*Usuários e permissões.*Dados da clínica.*Auditoria/s', $sidebar);
+        $this->assertStringNotContainsString('Administração', $sidebar);
+        $this->assertStringContainsString('href="'.route('clinic.edit').'"', $sidebar);
+
+        $this->get('/usuarios')->assertOk()->assertSee('<title>Usuários e permissões', false);
+        $this->get('/configuracoes')->assertOk()->assertSee('<title>Dados da clínica', false);
+        $this->assertMatchesRegularExpression('/href="[^"]*\/configuracoes"[^>]*aria-current="page"/', $this->sidebar($this->get('/configuracoes')->getContent()));
     }
 }

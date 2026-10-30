@@ -80,7 +80,7 @@
                     <x-form.select class="md:col-span-6" :id="$id('product')" :name="$name('product_id')" label="Produto no estoque" :options="$productOptions" :selected="$match"
                                    placeholder="Cadastrar como produto novo" data-invoice-product />
                     @if ($match)
-                        <p class="-mt-2 text-xs text-teal-800 md:col-span-6">
+                        <p class="-mt-2 text-xs text-slate-800 md:col-span-6">
                             Este item já está cadastrado: a entrada vai para o produto acima.
                             @if ($item['converted'] ?? false)
                                 A quantidade dos lotes já está na unidade do estoque (frascos × conteúdo de cada um).

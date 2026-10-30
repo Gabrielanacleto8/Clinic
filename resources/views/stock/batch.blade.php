@@ -23,7 +23,7 @@
             <a href="{{ route('stock.batches.index') }}" class="text-sm text-slate-600 hover:underline">← Lotes e validade</a>
             <h1 class="mt-1 text-xl font-semibold tracking-tight">Lote {{ $batch->batch_code }}</h1>
             <p class="mt-1 text-sm text-slate-600">
-                <a href="{{ route('products.show', $product) }}" class="text-teal-800 hover:underline">{{ $product->name }}</a>
+                <a href="{{ route('products.show', $product) }}" class="text-slate-800 hover:underline">{{ $product->name }}</a>
                 @unless ($product->is_active)
                     <span class="badge ml-1 bg-slate-200 text-slate-700">Inativo</span>
                 @endunless
@@ -128,7 +128,7 @@
                         @foreach ($units as $openUnit)
                             <tr>
                                 <td data-label="Unidade" class="px-4 py-3 font-medium">
-                                    <a href="{{ route('stock.units.show', $openUnit) }}" class="text-teal-800 hover:underline">{{ $openUnit->label() }}</a>
+                                    <a href="{{ route('stock.units.show', $openUnit) }}" class="text-slate-800 hover:underline">{{ $openUnit->label() }}</a>
                                 </td>
                                 <td data-label="Aberta em" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ ClinicTime::format($openUnit->opened_at) }}</td>
                                 <td data-label="Usar até" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ $openUnit->usableUntil() ? ClinicTime::format($openUnit->usableUntil()) : 'Validade do lote' }}</td>

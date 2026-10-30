@@ -14,7 +14,7 @@
     @if ($canAttach)
         {{-- O envio fica no topo, recolhido: no celular, antes das miniaturas. Reabre sozinho quando volta com erro. --}}
         <details class="mt-4 rounded-lg border border-slate-200" @if ($photoErrors) open @endif>
-            <summary class="cursor-pointer px-4 py-2 text-sm font-medium text-teal-800 select-none">Adicionar fotos avulsas</summary>
+            <summary class="cursor-pointer px-4 py-2 text-sm font-medium text-slate-800 select-none">Adicionar fotos avulsas</summary>
             <div class="px-4 pb-4">
                 <x-photos.upload-form :action="route('patients.photos.store', $patient)" title="Fotos avulsas" :stage="false" :bordered="false"
                                       description="Para fotos anteriores ao sistema ou de procedimentos sem atendimento registrado.">
@@ -45,7 +45,7 @@
                             <span class="sr-only">Comparar esta foto</span>
                         </label>
                         <a href="{{ route('patients.photos.show', [$patient, $photo]) }}" target="_blank" rel="noopener"
-                           class="block overflow-hidden rounded-lg border border-slate-200 bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700">
+                           class="block overflow-hidden rounded-lg border border-slate-200 bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700">
                             <img src="{{ route('patients.photos.show', [$patient, $photo, 'miniatura' => 1]) }}"
                                  alt="Foto: {{ $label }}" loading="lazy" width="{{ $photo->width }}" height="{{ $photo->height }}" class="aspect-square w-full object-cover">
                         </a>
@@ -60,7 +60,7 @@
                                 <p class="text-xs text-slate-500">
                                     {{ $photo->takenOn()->format('d/m/Y') }} ·
                                     @if ($treatment)
-                                        <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-teal-800 hover:underline">{{ $treatment->procedure->name }}</a>
+                                        <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-slate-800 hover:underline">{{ $treatment->procedure->name }}</a>
                                     @else
                                         Foto avulsa
                                     @endif

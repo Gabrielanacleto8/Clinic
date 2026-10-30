@@ -58,7 +58,7 @@
                                         <span class="block text-xs font-normal text-slate-500">Arquivado em {{ $patient->deleted_at->timezone(App\Support\ClinicTime::timezone())->format('d/m/Y') }}</span>
                                     </span>
                                 @else
-                                    <a href="{{ route('patients.show', $patient) }}" class="text-teal-800 hover:underline">{{ $patient->name }}</a>
+                                    <a href="{{ route('patients.show', $patient) }}" class="text-slate-800 hover:underline">{{ $patient->name }}</a>
                                 @endif
                             </div>
                         </td>
@@ -72,19 +72,19 @@
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             @if ($archived)
                                 @can('viewClinicalRecords', $patient)
-                                    <a href="{{ route('patients.record', $patient) }}" class="mr-3 font-medium text-teal-800 hover:underline">Prontuário</a>
+                                    <a href="{{ route('patients.record', $patient) }}" class="mr-3 font-medium text-slate-800 hover:underline">Prontuário</a>
                                 @endcan
                                 @can('restore', $patient)
                                     <form method="POST" action="{{ route('patients.restore', $patient) }}" class="inline"
                                           data-confirm="Restaurar o cadastro de {{ $patient->name }}?">
                                         @csrf
                                         @method('PATCH')
-                                        <button type="submit" class="font-medium text-teal-800 hover:underline">Restaurar</button>
+                                        <button type="submit" class="font-medium text-slate-800 hover:underline">Restaurar</button>
                                     </form>
                                 @endcan
                             @else
                                 @can('update', $patient)
-                                    <a href="{{ route('patients.edit', $patient) }}" class="font-medium text-teal-800 hover:underline">Editar</a>
+                                    <a href="{{ route('patients.edit', $patient) }}" class="font-medium text-slate-800 hover:underline">Editar</a>
                                 @endcan
                             @endif
                         </td>

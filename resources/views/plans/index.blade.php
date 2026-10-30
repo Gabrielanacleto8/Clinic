@@ -47,7 +47,7 @@
                     {{-- Clicar na linha (ou no número) abre os detalhes em janela; ver app.js. --}}
                     <tr class="cursor-pointer hover:bg-slate-50" data-summary="{{ route('patients.plans.summary', [$plan->patient, $plan]) }}" data-summary-dialog="plan-summary">
                         <td class="px-4 py-3 tabular-nums">
-                            <a href="{{ route('patients.plans.show', [$plan->patient, $plan]) }}" class="font-medium text-teal-800 hover:underline" data-summary-link>nº {{ $plan->id }}</a>
+                            <a href="{{ route('patients.plans.show', [$plan->patient, $plan]) }}" class="font-medium text-slate-800 hover:underline" data-summary-link>nº {{ $plan->id }}</a>
                             <span class="block text-xs text-slate-500">{{ ClinicTime::format($plan->created_at, 'd/m/Y') }}</span>
                         </td>
                         <td data-label="Paciente" class="px-4 py-3">{{ $plan->patient->name }}</td>
@@ -69,7 +69,7 @@
                                         data-dialog-values='@json(['plan_id' => $plan->id])'
                                         data-dialog-summary="{{ LocalizedDecimal::money($plan->total()) }}">Converter em venda</button>
                             @else
-                                <a href="{{ route('patients.plans.show', [$plan->patient, $plan]) }}" class="font-medium text-teal-800 hover:underline" data-summary-link>Abrir<span class="sr-only"> orçamento nº {{ $plan->id }}</span></a>
+                                <a href="{{ route('patients.plans.show', [$plan->patient, $plan]) }}" class="font-medium text-slate-800 hover:underline" data-summary-link>Abrir<span class="sr-only"> orçamento nº {{ $plan->id }}</span></a>
                             @endcan
                         </td>
                     </tr>

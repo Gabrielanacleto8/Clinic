@@ -48,10 +48,10 @@ class InterfaceRefinementsTest extends TestCase
         $recorder->record(FinancialCategory::OtherIncome, 'Out/25', '400.00', PaymentMethod::Pix, 1, '2025-10-10', false, null, '2025-10-10');
         $recorder->record(FinancialCategory::OtherIncome, 'Out/26', '500.00', PaymentMethod::Pix, 1, '2026-10-10', true, null, '2026-10-10');
 
-        $response = $this->actingAs(User::factory()->admin()->create())->get('/financeiro')->assertOk();
+        $response = $this->actingAs(User::factory()->admin()->create())->get('/financeiro/comparativo')->assertOk();
 
-        $this->assertSame(500.0, $response->viewData('receivedByMonth')['2026-10']);
-        $this->assertSame(400.0, $response->viewData('revenueYearBefore')['2026-10']);
-        $response->assertSee('+25% vs 10/2025');
+        $this->assertSame(500.0, $response->viewData('months')['2026-10']->received);
+        $this->assertSame(400.0, $response->viewData('months')['2026-10']->before->issued);
+        $response->assertSee('+25%')->assertSee('vs Out/25');
     }
 }

@@ -70,7 +70,7 @@
                     {{-- Clicar na linha (ou no nome) abre o produto em janela; ver app.js. --}}
                     <tr class="cursor-pointer hover:bg-slate-50" data-summary="{{ route('products.summary', $product) }}" data-summary-dialog="product-summary">
                         <td class="px-4 py-3">
-                            <a href="{{ route('products.show', $product) }}" class="font-medium text-teal-800 hover:underline" data-summary-link>{{ $product->name }}</a>
+                            <a href="{{ route('products.show', $product) }}" class="font-medium text-slate-800 hover:underline" data-summary-link>{{ $product->name }}</a>
                             @if ($product->code || $product->brand)
                                 <span class="block text-xs text-slate-500">{{ implode(' · ', array_filter([$product->code, $product->brand])) }}</span>
                             @endif
@@ -104,7 +104,7 @@
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             @can('update', $product)
-                                @include('products._edit_button', ['class' => 'cursor-pointer font-medium text-teal-800 hover:underline'])
+                                @include('products._edit_button', ['class' => 'cursor-pointer font-medium text-slate-800 hover:underline'])
                             @endcan
                         </td>
                     </tr>
@@ -113,11 +113,11 @@
                         <td colspan="6" class="px-4 py-10 text-center text-slate-500">
                             @if ($filtered)
                                 Nenhum produto encontrado com estes filtros.
-                                <a href="{{ route('products.index') }}" class="font-medium text-teal-800 hover:underline">Limpar filtros</a>
+                                <a href="{{ route('products.index') }}" class="font-medium text-slate-800 hover:underline">Limpar filtros</a>
                             @else
                                 Nenhum produto cadastrado.
                                 @if ($canCreate)
-                                    <button type="button" class="cursor-pointer font-medium text-teal-800 hover:underline" data-dialog-open="product-create">Cadastrar o primeiro produto</button>
+                                    <button type="button" class="cursor-pointer font-medium text-slate-800 hover:underline" data-dialog-open="product-create">Cadastrar o primeiro produto</button>
                                 @endif
                             @endif
                         </td>

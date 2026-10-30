@@ -111,7 +111,7 @@
                             </td>
                             <td class="px-4 py-3 text-right sm:px-6">
                                 @if ($canManage)
-                                    <button type="button" class="cursor-pointer font-medium text-teal-800 hover:underline" data-dialog-open="recurring-expense-edit"
+                                    <button type="button" class="cursor-pointer font-medium text-slate-800 hover:underline" data-dialog-open="recurring-expense-edit"
                                             data-dialog-action="{{ route('finance.recurring.update', $expense) }}"
                                             data-dialog-summary="{{ $expense->description }}"
                                             data-dialog-values="{{ json_encode([

@@ -3,9 +3,16 @@
     $tabs = [
         'produtos' => ['Produtos', route('products.index')],
         'entradas' => ['Entradas', route('stock.entries.index')],
-        'movimentacoes' => ['Movimentações', route('stock.movements.index')],
+        'movimentacoes' => ['Histórico', route('stock.movements.index')],
         'lotes' => ['Lotes e validade', route('stock.batches.index')],
         'unidades' => ['Unidades abertas', route('stock.units.index')],
+    ];
+
+    // Três abas principais, cada uma com as suas subabas, como no financeiro.
+    $groups = [
+        'Produtos' => ['produtos'],
+        'Movimentações' => ['entradas', 'movimentacoes'],
+        'Validade' => ['lotes', 'unidades'],
     ];
 
     $plural = fn (int $total, string $one, string $many) => $total.' '.($total === 1 ? $one : $many);
@@ -17,8 +24,6 @@
         $alerts['units_to_discard'] > 0 ? [$plural($alerts['units_to_discard'], 'unidade aberta a descartar', 'unidades abertas a descartar'), route('stock.units.index'), 'bg-red-100 text-red-800'] : null,
         $alerts['expiring'] > 0 ? [$plural($alerts['expiring'], 'lote perto do vencimento', 'lotes perto do vencimento'), route('stock.batches.index', ['situacao' => 'vencendo']), 'bg-amber-100 text-amber-800'] : null,
     ]);
-
-    $tabClass = fn (bool $current) => 'rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap '.($current ? 'bg-brand text-on-brand' : 'text-slate-700 hover:bg-slate-100');
 @endphp
 {{-- Moldura das abas do estoque: título, alertas e navegação. --}}
 <x-layouts.app title="Estoque">
@@ -42,11 +47,7 @@
         </ul>
     @endif
 
-    <nav class="mt-4 flex gap-1 relative overflow-x-auto rounded-xl border border-slate-200 bg-white p-1" aria-label="Seções do estoque" data-tabs>
-        @foreach ($tabs as $key => [$label, $url])
-            <a href="{{ $url }}" class="{{ $tabClass($active === $key) }}" @if ($active === $key) aria-current="page" @endif>{{ $label }}</a>
-        @endforeach
-    </nav>
+    <x-section-tabs :tabs="$tabs" :groups="$groups" :active="$active" label="Seções do estoque" />
 
     {{ $slot }}
 </x-layouts.app>

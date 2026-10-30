@@ -45,17 +45,17 @@
                 <td data-label="Tipo" class="px-4 py-3">
                     <span class="badge {{ $movement->type->badgeClasses() }}">{{ $movement->type->label() }}</span>
                     @if ($movement->stock_unit_id)
-                        <a href="{{ route('stock.units.show', $movement->stock_unit_id) }}" class="mt-1 block text-xs text-teal-800 hover:underline">unidade nº {{ $movement->stock_unit_id }}</a>
+                        <a href="{{ route('stock.units.show', $movement->stock_unit_id) }}" class="mt-1 block text-xs text-slate-800 hover:underline">unidade nº {{ $movement->stock_unit_id }}</a>
                     @endif
                 </td>
                 @if (! $product)
                     <td data-label="Produto" class="px-4 py-3">
-                        <a href="{{ route('products.show', $rowProduct) }}" class="font-medium text-teal-800 hover:underline">{{ $rowProduct->name }}</a>
+                        <a href="{{ route('products.show', $rowProduct) }}" class="font-medium text-slate-800 hover:underline">{{ $rowProduct->name }}</a>
                     </td>
                 @endif
                 @if (! $batch)
                     <td data-label="Lote" class="px-4 py-3 tabular-nums">
-                        <a href="{{ route('stock.batches.show', $rowBatch) }}" class="text-teal-800 hover:underline">{{ $rowBatch->batch_code }}</a>
+                        <a href="{{ route('stock.batches.show', $rowBatch) }}" class="text-slate-800 hover:underline">{{ $rowBatch->batch_code }}</a>
                     </td>
                 @endif
                 <td data-label="Quantidade" @class(['px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums', 'text-emerald-700' => $positive, 'text-red-700' => ! $positive])>
@@ -65,7 +65,7 @@
                 <td data-label="Valor" class="px-4 py-3 text-right whitespace-nowrap text-slate-600 tabular-nums">
                     {{ $movement->value() !== null ? LocalizedDecimal::money($movement->value()) : '—' }}
                     @if ($canCorrectCost && $movement->type === StockMovementType::Entry)
-                        <button type="button" class="block w-full cursor-pointer text-right text-xs text-teal-800 hover:underline" data-dialog-open="entry-cost"
+                        <button type="button" class="block w-full cursor-pointer text-right text-xs text-slate-800 hover:underline" data-dialog-open="entry-cost"
                                 data-dialog-action="{{ route('stock.movements.cost', $movement) }}"
                                 data-dialog-summary="Entrada de {{ ClinicTime::format($movement->created_at) }} · {{ $rowProduct->name }} · lote {{ $rowBatch->batch_code }}"
                                 data-dialog-values="{{ json_encode(['unit_cost' => LocalizedDecimal::unitMoneyInput($movement->unit_cost)]) }}">Corrigir custo</button>
@@ -75,7 +75,7 @@
                     @if ($treatment)
                         {{-- Rastreabilidade do consumo: o atendimento e quem aplicou. O paciente só aparece no prontuário. --}}
                         @can('view', $treatment)
-                            <a href="{{ route('patients.treatments.show', [$treatment->patient_id, $treatment]) }}" class="text-teal-800 hover:underline">Atendimento nº {{ $treatment->id }}</a>
+                            <a href="{{ route('patients.treatments.show', [$treatment->patient_id, $treatment]) }}" class="text-slate-800 hover:underline">Atendimento nº {{ $treatment->id }}</a>
                         @else
                             Atendimento nº {{ $treatment->id }}
                         @endcan

@@ -37,6 +37,9 @@ enum Permission: string
     case PlansView = 'plans.view';
     case PlansManage = 'plans.manage';
 
+    case TasksView = 'tasks.view';
+    case TasksManage = 'tasks.manage';
+
     public function label(): string
     {
         return match ($this) {
@@ -60,6 +63,8 @@ enum Permission: string
             self::FinanceCash => 'Fechar o caixa do dia (conferir o recebido em cada forma de pagamento)',
             self::PlansView => 'Ver orçamentos e pacotes dos pacientes',
             self::PlansManage => 'Criar orçamentos, converter em venda (gera a cobrança) e encerrar pacotes',
+            self::TasksView => 'Ver o quadro de tarefas, criar tarefas, comentar e cuidar das próprias (criadas por si ou atribuídas a si)',
+            self::TasksManage => 'Editar, mover e excluir qualquer tarefa e configurar as colunas e etiquetas do quadro',
         };
     }
 
@@ -76,6 +81,7 @@ enum Permission: string
             self::StockView, self::StockManage, self::StockAdjust, self::StockDiscard => 'Estoque',
             self::FinanceView, self::FinanceManage, self::FinanceReceive, self::FinanceCash => 'Financeiro',
             self::PlansView, self::PlansManage => 'Orçamentos e pacotes',
+            self::TasksView, self::TasksManage => 'Tarefas',
         };
     }
 
@@ -105,6 +111,7 @@ enum Permission: string
             self::FinanceCash => [self::FinanceReceive],
             self::PlansView => [self::PatientsView],
             self::PlansManage => [self::PlansView],
+            self::TasksManage => [self::TasksView],
             default => [],
         };
     }
@@ -124,12 +131,14 @@ enum Permission: string
                 self::ProceduresView,
                 self::StockView, self::StockDiscard,
                 self::PlansView, self::PlansManage,
+                self::TasksView,
             ],
             UserRole::Receptionist => [
                 self::PatientsView, self::PatientsManage,
                 self::AgendaView, self::AgendaManage,
                 self::FinanceReceive, self::FinanceCash,
                 self::PlansView, self::PlansManage,
+                self::TasksView,
             ],
             UserRole::Admin => self::cases(),
         };

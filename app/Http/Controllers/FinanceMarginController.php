@@ -33,7 +33,6 @@ class FinanceMarginController extends Controller
             'end' => $end,
             'rows' => $margin->between($start, $end, $professionalId, $group),
             'group' => $group,
-            'groups' => ProcedureMargin::GROUPS,
             'professionalId' => $professionalId,
             'professionals' => User::query()->whereIn('id', Treatment::query()->select('professional_id'))->orderBy('name')->pluck('name', 'id'),
         ]);

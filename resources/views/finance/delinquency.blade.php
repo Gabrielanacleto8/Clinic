@@ -13,7 +13,7 @@
     @if ((float) $summary->without_patient > 0)
         <p class="mt-3 text-sm text-slate-600">
             Inclui {{ LocalizedDecimal::money($summary->without_patient) }} em receitas vencidas sem paciente ligado, que não aparecem na lista abaixo.
-            <a href="{{ route('finance.receivable', ['faixa' => 'vencidas']) }}" class="text-teal-800 hover:underline">Ver todas as vencidas</a>
+            <a href="{{ route('finance.receivable', ['faixa' => 'vencidas']) }}" class="text-slate-800 hover:underline">Ver todas as vencidas</a>
         </p>
     @endif
 
@@ -38,7 +38,7 @@
                     @foreach ($patients as $row)
                         <tr>
                             <td data-label="Paciente" class="px-4 py-3 sm:px-6">
-                                <a href="{{ route('patients.show', [$row->patient_id, 'aba' => 'financeiro']) }}" class="font-medium text-teal-800 hover:underline">{{ $names[$row->patient_id] ?? 'Paciente nº '.$row->patient_id }}</a>
+                                <a href="{{ route('patients.show', [$row->patient_id, 'aba' => 'financeiro']) }}" class="font-medium text-slate-800 hover:underline">{{ $names[$row->patient_id] ?? 'Paciente nº '.$row->patient_id }}</a>
                             </td>
                             <td data-label="Vencido" class="px-4 py-3 text-right font-semibold text-red-700 tabular-nums">{{ LocalizedDecimal::money($row->total) }}</td>
                             <td data-label="Parcelas" class="px-4 py-3 text-right tabular-nums">{{ $row->installments }}</td>

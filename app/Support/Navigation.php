@@ -8,6 +8,7 @@ use App\Models\FinancialEntry;
 use App\Models\Patient;
 use App\Models\Procedure;
 use App\Models\Product;
+use App\Models\Task;
 use App\Models\Treatment;
 use App\Models\TreatmentPlan;
 use App\Models\User;
@@ -28,21 +29,23 @@ final class Navigation
         return [
             'Módulos' => [
                 ['label' => 'Início', 'route' => 'home', 'active' => 'home', 'icon' => 'home', 'can' => null],
+                ['label' => 'Tarefas', 'route' => 'tasks.index', 'active' => 'tasks.*', 'icon' => 'check-square', 'can' => ['viewAny', Task::class]],
                 ['label' => 'Agenda', 'route' => 'agenda.index', 'active' => ['agenda.*', 'appointments.*'], 'icon' => 'calendar', 'can' => ['viewAny', Appointment::class]],
                 ['label' => 'Atendimentos', 'route' => 'treatments.index', 'active' => 'treatments.index', 'icon' => 'activity', 'can' => ['viewAny', Treatment::class]],
                 ['label' => 'Pacientes', 'route' => 'patients.index', 'active' => 'patients.*', 'icon' => 'patients', 'can' => ['viewAny', Patient::class]],
                 ['label' => 'Orçamentos', 'route' => 'plans.index', 'active' => ['plans.*', 'patients.plans.*'], 'icon' => 'file-text', 'can' => ['viewAny', TreatmentPlan::class]],
                 ['label' => 'Procedimentos', 'route' => 'procedures.index', 'active' => 'procedures.*', 'icon' => 'clipboard', 'can' => ['viewAny', Procedure::class]],
                 ['label' => 'Estoque', 'route' => 'products.index', 'active' => ['products.*', 'stock.*'], 'icon' => 'box', 'can' => ['viewAny', Product::class]],
-                ['label' => 'Financeiro', 'route' => 'finance.index', 'active' => 'finance.*', 'icon' => 'dollar', 'can' => ['viewAny', FinancialEntry::class]],
+                ['label' => 'Financeiro', 'route' => 'finance.index', 'active' => 'finance.*', 'icon' => 'bar-chart', 'can' => ['viewAny', FinancialEntry::class]],
                 // Quem só fecha o caixa (recepção) não vê o financeiro: o item leva direto ao caixa do dia.
                 ['label' => 'Caixa do dia', 'route' => 'finance.cash.show', 'active' => 'finance.cash.*', 'icon' => 'dollar', 'can' => ['cashOnly', FinancialEntry::class]],
             ],
-            'Administração' => [
+            'Configurações' => [
                 // As permissões ficam numa aba dentro de usuários.
-                ['label' => 'Usuários', 'route' => 'users.index', 'active' => 'users.*', 'icon' => 'shield', 'can' => ['viewAny', User::class]],
+                ['label' => 'Usuários e permissões', 'route' => 'users.index', 'active' => 'users.*', 'icon' => 'shield', 'can' => ['viewAny', User::class]],
+                ['label' => 'Dados da clínica', 'route' => 'clinic.edit', 'active' => 'clinic.*', 'icon' => 'sliders', 'can' => ['manage-clinic']],
+                // A trilha de auditoria continua no menu do administrador (LGPD: responder ao titular).
                 ['label' => 'Auditoria', 'route' => 'audit.index', 'active' => 'audit.*', 'icon' => 'eye', 'can' => ['viewAny', AuditLog::class]],
-                ['label' => 'Clínica', 'route' => 'clinic.edit', 'active' => 'clinic.*', 'icon' => 'sliders', 'can' => ['manage-clinic']],
             ],
         ];
     }

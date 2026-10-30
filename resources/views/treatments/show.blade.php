@@ -72,7 +72,7 @@
                     @php $label = $stage->label().($photo->caption ? ' · '.$photo->caption : ''); @endphp
                     <li>
                         <a href="{{ route('patients.photos.show', [$patient, $photo]) }}" target="_blank" rel="noopener"
-                           class="block overflow-hidden rounded-lg border border-slate-200 bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700">
+                           class="block overflow-hidden rounded-lg border border-slate-200 bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700">
                             <img src="{{ route('patients.photos.show', [$patient, $photo, 'miniatura' => 1]) }}"
                                  alt="Foto: {{ $label }}" loading="lazy" width="{{ $photo->width }}" height="{{ $photo->height }}"
                                  class="aspect-square w-full object-cover">
@@ -113,7 +113,7 @@
                 @foreach ($treatment->documents as $document)
                     <li class="flex flex-wrap items-center justify-between gap-3 py-3">
                         <div class="min-w-0">
-                            <a href="{{ route('patients.treatments.documents.show', [$patient, $treatment, $document]) }}" class="font-medium break-words text-teal-800 hover:underline">{{ $document->caption }}</a>
+                            <a href="{{ route('patients.treatments.documents.show', [$patient, $treatment, $document]) }}" class="font-medium break-words text-slate-800 hover:underline">{{ $document->caption }}</a>
                             <p class="mt-0.5 text-xs text-slate-500">
                                 PDF · {{ number_format($document->size / 1024, 0, ',', '.') }} KB · adicionado em {{ ClinicTime::format($document->created_at) }}
                             </p>

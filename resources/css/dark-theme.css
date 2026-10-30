@@ -5,7 +5,7 @@
    - Cinzas: white é a superfície (painel, cartões, campos); slate-50 a 200
      são preenchimentos e bordas um pouco mais claros que ela; slate-400 a 950
      são texto, do mais apagado ao principal. Grafite, quase sem azul.
-   - Cores (teal, red, amber...): 50 a 300 viram fundos e bordas escuros com
+   - Cores (red, amber, sky...): 50 a 300 viram fundos e bordas escuros com
      pouca saturação (avisos, etiquetas); 500 continua igual (marcadores);
      600 a 950 viram texto claro e suave, legível sobre esses fundos.
    - Fundo da página (canvas) e cor sólida da marca (brand, com texto
@@ -14,8 +14,9 @@
    (gerada a partir do croma e do matiz do tom 500). */
 @theme {
     --color-canvas: oklch(96.8% 0.007 247.896);
-    --color-brand: oklch(51.1% 0.096 186.391);
-    --color-brand-strong: oklch(43.7% 0.078 188.216);
+    /* Marca em grafite, o mesmo cinza da barra lateral (slate-800 e 900). */
+    --color-brand: oklch(27.9% 0.041 260.031);
+    --color-brand-strong: oklch(20.8% 0.042 265.755);
     --color-on-brand: oklch(100% 0 0);
 }
 
@@ -24,8 +25,10 @@
         @variant dark {
             color-scheme: dark;
             --color-canvas: oklch(16.5% 0.006 260);
-            --color-brand: oklch(51.1% 0.096 186.391);
-            --color-brand-strong: oklch(56.5% 0.104 185);
+            /* No escuro a marca inverte: cinza claro com texto escuro. */
+            --color-brand: oklch(88% 0.007 260);
+            --color-brand-strong: oklch(94% 0.005 260);
+            --color-on-brand: oklch(18% 0.007 260);
             --color-white: oklch(20.5% 0.007 260);
             --color-black: oklch(0% 0 0);
             --color-slate-50: oklch(23% 0.007 260);
@@ -39,17 +42,6 @@
             --color-slate-800: oklch(90% 0.007 260);
             --color-slate-900: oklch(95% 0.005 260);
             --color-slate-950: oklch(98% 0.003 260);
-            --color-teal-50: oklch(24.5% 0.024 182.5);
-            --color-teal-100: oklch(29% 0.038 182.5);
-            --color-teal-200: oklch(36% 0.045 182.5);
-            --color-teal-300: oklch(46% 0.059 182.5);
-            --color-teal-400: oklch(62% 0.098 182.5);
-            --color-teal-500: oklch(70.4% 0.14 182.503);
-            --color-teal-600: oklch(70% 0.112 182.5);
-            --color-teal-700: oklch(76% 0.095 182.5);
-            --color-teal-800: oklch(82% 0.073 182.5);
-            --color-teal-900: oklch(89% 0.046 182.5);
-            --color-teal-950: oklch(94% 0.021 182.5);
             --color-red-50: oklch(24.5% 0.040 25.3);
             --color-red-100: oklch(29% 0.064 25.3);
             --color-red-200: oklch(36% 0.076 25.3);

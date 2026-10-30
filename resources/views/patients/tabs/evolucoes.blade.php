@@ -11,7 +11,7 @@
                 <li class="rounded-lg border border-slate-200 px-4 py-3">
                     <p class="text-xs text-slate-500">
                         {{ ClinicTime::format($note->created_at) }} · {{ $note->author?->name ?? 'Usuário removido' }} ·
-                        <a href="{{ route('patients.treatments.show', [$patient, $note->treatment]) }}" class="text-teal-800 hover:underline">
+                        <a href="{{ route('patients.treatments.show', [$patient, $note->treatment]) }}" class="text-slate-800 hover:underline">
                             {{ $note->treatment->procedure->name }} de {{ ClinicTime::format($note->treatment->performed_at, 'd/m/Y') }}
                         </a>
                     </p>

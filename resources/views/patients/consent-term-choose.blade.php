@@ -11,7 +11,7 @@
                 @foreach ($procedures as $procedure)
                     <li>
                         <a href="{{ route('patients.consent-term', [$patient, 'procedimento' => $procedure->id]) }}" class="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 sm:px-6">
-                            <span class="font-medium text-teal-800">{{ $procedure->name }}</span>
+                            <span class="font-medium text-slate-800">{{ $procedure->name }}</span>
                             <span class="text-xs text-slate-500">{{ filled($procedure->consent_template) ? 'Texto próprio' : 'Modelo padrão' }}</span>
                         </a>
                     </li>

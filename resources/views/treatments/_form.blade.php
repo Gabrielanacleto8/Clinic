@@ -61,7 +61,7 @@
         <h2 class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Atendimento</h2>
         @unless ($scope)
             @can('updateClinicalRecords', $patient)
-                <a href="{{ route('patients.anamnesis.edit', $patient) }}" class="text-sm text-teal-800 hover:underline" target="_blank" rel="noopener">
+                <a href="{{ route('patients.anamnesis.edit', $patient) }}" class="text-sm text-slate-800 hover:underline" target="_blank" rel="noopener">
                     {{ $patient->anamnesis ? 'Atualizar a ficha de saúde (anamnese)' : 'Preencher a ficha de saúde (anamnese)' }}
                 </a>
             @endcan

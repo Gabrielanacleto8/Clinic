@@ -18,7 +18,7 @@
                     <tr class="hover:bg-slate-50">
                         <td data-label="Data" class="px-4 py-3 whitespace-nowrap text-slate-600 tabular-nums">{{ App\Support\ClinicTime::format($treatment->performed_at) }}</td>
                         <td data-label="Procedimento" class="px-4 py-3 font-medium">
-                            <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-teal-800 hover:underline">{{ $treatment->procedure->name }}</a>
+                            <a href="{{ route('patients.treatments.show', [$patient, $treatment]) }}" class="text-slate-800 hover:underline">{{ $treatment->procedure->name }}</a>
                             @if ($treatment->isVoided())
                                 <span class="badge ml-1 bg-red-100 text-red-800">Anulado</span>
                             @endif

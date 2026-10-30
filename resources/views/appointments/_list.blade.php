@@ -35,7 +35,7 @@
                 <p class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span class="font-medium">
                         @can('view', $patient)
-                            <a href="{{ route('patients.show', $patient) }}" class="text-teal-800 hover:underline">{{ $patient->name }}</a>
+                            <a href="{{ route('patients.show', $patient) }}" class="text-slate-800 hover:underline">{{ $patient->name }}</a>
                         @else
                             {{ $patient->name }}
                         @endcan
@@ -47,8 +47,8 @@
                     @can('view', $patient)
                         {{-- Para confirmar ou avisar o paciente sem abrir a ficha. --}}
                         <p class="mt-0.5 flex flex-wrap gap-x-3 text-xs">
-                            <a href="tel:+55{{ $patient->phone }}" class="text-teal-800 tabular-nums hover:underline">{{ $patient->formattedPhone() }}</a>
-                            <a href="https://wa.me/55{{ $patient->phone }}" target="_blank" rel="noopener noreferrer" class="text-teal-800 hover:underline">WhatsApp</a>
+                            <a href="tel:+55{{ $patient->phone }}" class="text-slate-800 tabular-nums hover:underline">{{ $patient->formattedPhone() }}</a>
+                            <a href="https://wa.me/55{{ $patient->phone }}" target="_blank" rel="noopener noreferrer" class="text-slate-800 hover:underline">WhatsApp</a>
                         </p>
                     @endcan
                 @endif

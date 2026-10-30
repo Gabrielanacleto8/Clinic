@@ -35,7 +35,7 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 text-right">
-                            <a href="{{ route('users.edit', $user) }}" class="font-medium text-teal-800 hover:underline">Editar</a>
+                            <a href="{{ route('users.edit', $user) }}" class="font-medium text-slate-800 hover:underline">Editar</a>
                         </td>
                     </tr>
                 @endforeach

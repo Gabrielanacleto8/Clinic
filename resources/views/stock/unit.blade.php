@@ -15,7 +15,7 @@
             <a href="{{ route('stock.batches.show', $batch) }}" class="text-sm text-slate-600 hover:underline">← Lote {{ $batch->batch_code }}</a>
             <h1 class="mt-1 text-xl font-semibold tracking-tight">{{ $unit->label() }}</h1>
             <p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                <a href="{{ route('products.show', $product) }}" class="text-teal-800 hover:underline">{{ $product->name }}</a>
+                <a href="{{ route('products.show', $product) }}" class="text-slate-800 hover:underline">{{ $product->name }}</a>
                 · lote {{ $batch->batch_code }}
                 @if ((float) $unit->quantity <= 0)
                     <span class="badge bg-slate-200 text-slate-700">Esgotada</span>

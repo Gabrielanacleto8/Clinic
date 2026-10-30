@@ -22,7 +22,7 @@
             <p class="px-4 py-10 text-center text-sm text-slate-500">
                 Nenhuma regra de comissão cadastrada.
                 @can('manage', FinancialEntry::class)
-                    <a href="{{ route('finance.commissions.rates') }}" class="font-medium text-teal-800 hover:underline">Cadastrar regras</a>
+                    <a href="{{ route('finance.commissions.rates') }}" class="font-medium text-slate-800 hover:underline">Cadastrar regras</a>
                 @endcan
             </p>
         @else
@@ -41,7 +41,7 @@
                         @php $row = $summary->get($professional->id); @endphp
                         <tr>
                             <td data-label="Profissional" class="px-4 py-3 sm:px-6">
-                                <a href="{{ route('finance.commissions.show', $professional) }}" class="font-medium text-teal-800 hover:underline">{{ $professional->name }}</a>
+                                <a href="{{ route('finance.commissions.show', $professional) }}" class="font-medium text-slate-800 hover:underline">{{ $professional->name }}</a>
                                 @unless ($professional->is_active)
                                     <span class="badge ml-1 bg-slate-200 text-slate-700">Inativo</span>
                                 @endunless
