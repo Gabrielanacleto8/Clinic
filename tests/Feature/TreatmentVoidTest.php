@@ -176,11 +176,13 @@ class TreatmentVoidTest extends TestCase
         $treatment = $this->record();
 
         $this->actingAs($this->admin);
-        $before = $this->get('/')->viewData('totals');
+        // O atendimento é de outro profissional: "todos" tira o filtro dos próprios.
+        $before = $this->get('/?todos=1')->viewData('totals');
         $this->post($this->voidUrl($treatment), ['reason' => 'Registrado em duplicidade.'])->assertSessionHasNoErrors();
-        $after = $this->get('/')->viewData('totals');
+        $after = $this->get('/?todos=1')->viewData('totals');
 
-        $this->assertSame($before['treatments'] - 1, $after['treatments']);
+        $this->assertSame(1, $before['treatments']);
+        $this->assertSame(0, $after['treatments']);
     }
 
     public function test_the_typed_reason_stays_only_in_the_encrypted_record(): void

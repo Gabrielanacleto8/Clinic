@@ -6,16 +6,16 @@
     $activeToday = $todayAppointments?->where('status', '!==', AppointmentStatus::Cancelled);
     $plural = fn (int $total, string $one, string $many) => $total.' '.($total === 1 ? $one : $many);
 
-    // Indicadores, cada um com o módulo onde o número é detalhado. Só entram os que o perfil pode ver.
-    // Os do estoque seguem as mesmas regras e links dos alertas do módulo de estoque.
+    $todayDate = $today->format('Y-m-d');
+    $stockAlerts = isset($totals['low_stock']) ? $totals['low_stock'] + $totals['expiring_batches'] + $totals['units_to_discard'] : null;
+
+    // Visão operacional: só contagens do dia, nenhum valor em dinheiro. Cada indicador
+    // leva ao lugar onde é detalhado e só entra para o perfil que pode vê-lo.
     $cards = array_filter([
         $todayAppointments !== null ? ['Agendamentos de hoje', $activeToday->count(), $plural($activeToday->whereIn('status', AppointmentStatus::open())->count(), 'em aberto', 'em aberto'), route('agenda.index')] : null,
-        isset($totals['treatments']) ? ['Atendimentos registrados', $totals['treatments'], 'Neste mês, sem os anulados', route('treatments.index', ['de' => $today->startOfMonth()->format('Y-m-d')])] : null,
-        isset($totals['revenue']) ? ['Faturamento do mês (lançado)', LocalizedDecimal::money($totals['revenue']), 'Receitas lançadas, pagas ou não', route('finance.index')] : null,
-        isset($totals['received']) ? ['Recebido no mês', LocalizedDecimal::money($totals['received']), 'Pagamentos registrados', route('finance.index', ['situacao' => 'pagas'])] : null,
-        isset($totals['low_stock']) ? ['Estoque baixo', $totals['low_stock'], $plural($totals['low_stock'], 'produto no mínimo ou abaixo', 'produtos no mínimo ou abaixo'), route('products.index', ['situacao' => 'baixo'])] : null,
-        isset($totals['expiring_batches']) ? ['Vencimento', $totals['expiring_batches'], $plural($totals['expiring_batches'], 'lote vencido ou vencendo', 'lotes vencidos ou vencendo'), route('stock.batches.index', ['situacao' => 'vencendo'])] : null,
-        isset($totals['units_to_discard']) && $totals['units_to_discard'] > 0 ? ['A descartar', $totals['units_to_discard'], $plural($totals['units_to_discard'], 'unidade aberta', 'unidades abertas'), route('stock.units.index')] : null,
+        isset($totals['treatments']) ? ['Atendimentos de hoje', $totals['treatments'], 'Registrados, sem os anulados', route('treatments.index', array_filter(['de' => $todayDate, 'ate' => $todayDate, 'profissional' => $attends && ! $showAll ? auth()->id() : null]))] : null,
+        $pending !== null ? ['Pendentes de registro', $pending['total'], 'Dias anteriores sem registro', $pending['total'] > 0 ? '#pendentes-de-registro' : route('agenda.index')] : null,
+        $stockAlerts !== null ? ['Alertas de estoque', $stockAlerts, $stockAlerts === 0 ? 'Nada a resolver' : 'Baixo, vencendo ou a descartar', $stockAlerts > 0 ? '#alertas-de-estoque' : route('products.index')] : null,
     ]);
 @endphp
 <x-layouts.app title="Início">
@@ -49,13 +49,13 @@
     {{-- No celular, a agenda do dia vem antes dos indicadores: é o que a recepção abre às 8h. --}}
     <div class="mt-6 flex flex-col gap-6">
         @if ($cards !== [])
-            <dl class="order-last grid grid-cols-2 gap-4 sm:order-none lg:grid-cols-3">
+            <dl class="order-last grid grid-cols-2 gap-4 sm:order-none lg:grid-cols-4">
                 @foreach ($cards as [$label, $value, $caption, $url])
                     <div class="card relative px-4 py-3 hover:bg-slate-50">
                         <dt class="text-xs text-slate-500">{{ $label }}</dt>
                         <dd class="mt-0.5 text-2xl font-semibold tabular-nums">
                             {{-- O link cobre o cartão inteiro. --}}
-                            <a href="{{ $url }}" class="after:absolute after:inset-0 hover:text-teal-800">{{ $value }}</a>
+                            <a href="{{ $url }}" class="after:absolute after:inset-0 hover:text-slate-800">{{ $value }}</a>
                         </dd>
                         <dd class="mt-0.5 text-xs text-slate-500">{{ $caption }}</dd>
                     </div>
@@ -66,7 +66,7 @@
         @if ($pending !== null && $pending['total'] > 0)
             <section class="card border-amber-300" aria-labelledby="pendentes-de-registro">
                 <div class="flex flex-wrap items-center justify-between gap-2 px-4 pt-5 pb-3 sm:px-6">
-                    <h2 id="pendentes-de-registro" class="text-sm font-semibold tracking-wide text-amber-800 uppercase">
+                    <h2 id="pendentes-de-registro" class="scroll-mt-20 text-sm font-semibold tracking-wide text-amber-800 uppercase">
                         Pendentes de registro · {{ $plural($pending['total'], 'agendamento', 'agendamentos') }}
                     </h2>
                     <p class="text-sm text-slate-600">Dias anteriores sem atendimento registrado nem falta marcada: estoque e cobrança ficaram sem lançar.</p>
@@ -75,7 +75,7 @@
                 @if ($pending['total'] > $pending['list']->count())
                     <p class="border-t border-slate-100 px-4 py-3 text-sm text-slate-600 sm:px-6">
                         Mostrando os {{ $pending['list']->count() }} mais antigos.
-                        <a href="{{ route('agenda.index', ['data' => $pending['list']->first()->localDay()]) }}#dia" class="text-teal-800 hover:underline">Abrir a agenda nesse dia</a>
+                        <a href="{{ route('agenda.index', ['data' => $pending['list']->first()->localDay()]) }}#dia" class="text-slate-800 hover:underline">Abrir a agenda nesse dia</a>
                     </p>
                 @endif
             </section>
@@ -90,9 +90,9 @@
                     <p class="flex flex-wrap gap-x-4 text-sm">
                         @if ($attends)
                             {{-- Quem atende abre com a própria agenda; a de todos fica a um clique. --}}
-                            <a href="{{ route('home', $showAll ? [] : ['todos' => 1]) }}" class="text-teal-800 hover:underline">{{ $showAll ? 'Só os meus' : 'Ver todos os profissionais' }}</a>
+                            <a href="{{ route('home', $showAll ? [] : ['todos' => 1]) }}" class="text-slate-800 hover:underline">{{ $showAll ? 'Só os meus' : 'Ver todos os profissionais' }}</a>
                         @endif
-                        <a href="{{ route('agenda.index') }}" class="text-teal-800 hover:underline">Abrir a agenda</a>
+                        <a href="{{ route('agenda.index') }}" class="text-slate-800 hover:underline">Abrir a agenda</a>
                     </p>
                 </div>
                 @if ($todayAppointments->isEmpty())
@@ -105,7 +105,7 @@
             <section class="card" aria-labelledby="proximos-agendamentos">
                 <div class="flex flex-wrap items-center justify-between gap-2 px-4 pt-5 pb-3 sm:px-6">
                     <h2 id="proximos-agendamentos" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Próximos agendamentos</h2>
-                    <a href="{{ route('agenda.index', ['data' => $today->addDay()->format('Y-m-d')]) }}#dia" class="text-sm text-teal-800 hover:underline">Ver amanhã na agenda</a>
+                    <a href="{{ route('agenda.index', ['data' => $today->addDay()->format('Y-m-d')]) }}#dia" class="text-sm text-slate-800 hover:underline">Ver amanhã na agenda</a>
                 </div>
                 @if ($upcomingAppointments->isEmpty())
                     <p class="px-4 pt-1 pb-6 text-sm text-slate-600 sm:px-6">Nada agendado para os próximos dias.</p>
@@ -114,7 +114,7 @@
                         @foreach ($upcomingAppointments as $appointment)
                             <li class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 sm:px-6">
                                 <a href="{{ route('agenda.index', ['data' => $appointment->localDay()]) }}#dia"
-                                   class="w-36 shrink-0 text-sm font-medium text-teal-800 tabular-nums hover:underline">
+                                   class="w-36 shrink-0 text-sm font-medium text-slate-800 tabular-nums hover:underline">
                                     {{ ClinicTime::format($appointment->scheduled_at, 'd/m') }} às {{ ClinicTime::format($appointment->scheduled_at, 'H:i') }}
                                 </a>
                                 <div class="min-w-0 flex-1 basis-48 text-sm">
@@ -126,8 +126,8 @@
                                         @can('view', $appointment->patient)
                                             {{-- Para confirmar o horário de amanhã sem abrir a ficha. --}}
                                             <p class="flex flex-wrap gap-x-3 text-xs">
-                                                <a href="tel:+55{{ $appointment->patient->phone }}" class="text-teal-800 tabular-nums hover:underline">{{ $appointment->patient->formattedPhone() }}</a>
-                                                <a href="https://wa.me/55{{ $appointment->patient->phone }}" target="_blank" rel="noopener noreferrer" class="text-teal-800 hover:underline">WhatsApp</a>
+                                                <a href="tel:+55{{ $appointment->patient->phone }}" class="text-slate-800 tabular-nums hover:underline">{{ $appointment->patient->formattedPhone() }}</a>
+                                                <a href="https://wa.me/55{{ $appointment->patient->phone }}" target="_blank" rel="noopener noreferrer" class="text-slate-800 hover:underline">WhatsApp</a>
                                             </p>
                                         @endcan
                                     @endif
@@ -153,7 +153,7 @@
                                 {{ $treatment->return_date->format('d/m/Y') }}
                             </span>
                             <p class="min-w-0 flex-1 basis-48 text-sm">
-                                <a href="{{ route('patients.show', $treatment->patient) }}" class="font-medium text-teal-800 hover:underline">{{ $treatment->patient->name }}</a>
+                                <a href="{{ route('patients.show', $treatment->patient) }}" class="font-medium text-slate-800 hover:underline">{{ $treatment->patient->name }}</a>
                                 <span class="text-slate-600">· retorno de {{ $treatment->procedure->name }} ({{ ClinicTime::format($treatment->performed_at, 'd/m') }})</span>
                             </p>
                             @can('create', App\Models\Appointment::class)
@@ -166,44 +166,84 @@
         @endif
 
         @if ($lowStockProducts !== null)
-            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <section class="card p-6" aria-labelledby="estoque-baixo">
-                    <h2 id="estoque-baixo" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Produtos com estoque baixo</h2>
-                    @if ($lowStockProducts->isEmpty())
-                        <p class="mt-4 text-sm text-slate-600">Nenhum produto abaixo do mínimo.</p>
-                    @else
-                        <ul class="mt-4 divide-y divide-slate-100">
-                            @foreach ($lowStockProducts as $product)
-                                <li class="flex items-center justify-between gap-3 py-2 text-sm">
-                                    <a href="{{ route('products.show', $product) }}" class="min-w-0 truncate font-medium text-teal-800 hover:underline">{{ $product->name }}</a>
-                                    <span class="shrink-0 whitespace-nowrap text-red-700 tabular-nums">
-                                        {{ LocalizedDecimal::quantity($product->available_quantity ?? 0) }} de {{ LocalizedDecimal::quantity($product->minimum_stock) }} {{ $product->unit->symbol() }}
-                                    </span>
-                                </li>
-                            @endforeach
-                        </ul>
-                    @endif
-                </section>
+            <section class="card scroll-mt-20" id="alertas-de-estoque" aria-labelledby="alertas-de-estoque-titulo">
+                <div class="flex flex-wrap items-center justify-between gap-2 px-4 pt-5 pb-3 sm:px-6">
+                    <h2 id="alertas-de-estoque-titulo" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Alertas de estoque</h2>
+                    <a href="{{ route('products.index') }}" class="text-sm text-slate-800 hover:underline">Abrir o estoque</a>
+                </div>
+                <div class="grid grid-cols-1 gap-x-6 gap-y-5 px-4 pb-5 sm:px-6 lg:grid-cols-3">
+                    <div>
+                        <h3 class="flex items-baseline justify-between gap-2 text-sm font-medium">
+                            Estoque baixo
+                            @if ($totals['low_stock'] > 0)
+                                <a href="{{ route('products.index', ['situacao' => 'baixo']) }}" class="text-xs font-normal text-slate-800 hover:underline">Ver {{ $totals['low_stock'] }}</a>
+                            @endif
+                        </h3>
+                        @if ($lowStockProducts->isEmpty())
+                            <p class="mt-2 text-sm text-slate-600">Nenhum produto abaixo do mínimo.</p>
+                        @else
+                            <ul class="mt-2 divide-y divide-slate-100">
+                                @foreach ($lowStockProducts as $product)
+                                    <li class="flex items-center justify-between gap-3 py-2 text-sm">
+                                        <a href="{{ route('products.show', $product) }}" class="min-w-0 truncate text-slate-800 hover:underline">{{ $product->name }}</a>
+                                        <span class="shrink-0 whitespace-nowrap text-red-700 tabular-nums">
+                                            {{ LocalizedDecimal::quantity($product->available_quantity ?? 0) }} de {{ LocalizedDecimal::quantity($product->minimum_stock) }} {{ $product->unit->symbol() }}
+                                        </span>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
 
-                <section class="card p-6" aria-labelledby="vencimento">
-                    <h2 id="vencimento" class="text-sm font-semibold tracking-wide text-slate-500 uppercase">Lotes vencidos ou próximos do vencimento</h2>
-                    @if ($expiringBatches->isEmpty())
-                        <p class="mt-4 text-sm text-slate-600">Nenhum lote vencido nem vencendo nos próximos {{ config('clinic.stock.expiry_alert_days') }} dias.</p>
-                    @else
-                        <ul class="mt-4 divide-y divide-slate-100">
-                            @foreach ($expiringBatches as $batch)
-                                <li class="flex items-center justify-between gap-3 py-2 text-sm">
-                                    {{-- Leva ao lote, onde a perda é lançada. --}}
-                                    <a href="{{ route('stock.batches.show', $batch) }}" class="min-w-0 truncate font-medium text-teal-800 hover:underline">
-                                        {{ $batch->product->name }} <span class="font-normal text-slate-500">· lote {{ $batch->batch_code }}</span>
-                                    </a>
-                                    <span class="shrink-0 text-xs text-slate-500 tabular-nums">{{ $batch->expires_on->format('d/m/Y') }}@include('stock._expiry_badge', ['batch' => $batch])</span>
-                                </li>
-                            @endforeach
-                        </ul>
-                    @endif
-                </section>
-            </div>
+                    <div>
+                        <h3 class="flex items-baseline justify-between gap-2 text-sm font-medium">
+                            Vencidos ou vencendo
+                            @if ($totals['expiring_batches'] > 0)
+                                <a href="{{ route('stock.batches.index', ['situacao' => 'vencendo']) }}" class="text-xs font-normal text-slate-800 hover:underline">Ver {{ $totals['expiring_batches'] }}</a>
+                            @endif
+                        </h3>
+                        @if ($expiringBatches->isEmpty())
+                            <p class="mt-2 text-sm text-slate-600">Nenhum lote vencido nem vencendo nos próximos {{ config('clinic.stock.expiry_alert_days') }} dias.</p>
+                        @else
+                            <ul class="mt-2 divide-y divide-slate-100">
+                                @foreach ($expiringBatches as $batch)
+                                    <li class="flex items-center justify-between gap-3 py-2 text-sm">
+                                        {{-- Leva ao lote, onde a perda é lançada. --}}
+                                        <a href="{{ route('stock.batches.show', $batch) }}" class="min-w-0 truncate text-slate-800 hover:underline">
+                                            {{ $batch->product->name }} <span class="text-slate-500">· lote {{ $batch->batch_code }}</span>
+                                        </a>
+                                        <span class="shrink-0 text-xs text-slate-500 tabular-nums">{{ $batch->expires_on->format('d/m/Y') }}@include('stock._expiry_badge', ['batch' => $batch])</span>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+
+                    <div>
+                        <h3 class="flex items-baseline justify-between gap-2 text-sm font-medium">
+                            Unidades a descartar
+                            @if ($totals['units_to_discard'] > 0)
+                                <a href="{{ route('stock.units.index') }}" class="text-xs font-normal text-slate-800 hover:underline">Ver {{ $totals['units_to_discard'] }}</a>
+                            @endif
+                        </h3>
+                        @if ($unitsToDiscard->isEmpty())
+                            <p class="mt-2 text-sm text-slate-600">Nenhuma unidade aberta aguardando descarte.</p>
+                        @else
+                            <ul class="mt-2 divide-y divide-slate-100">
+                                @foreach ($unitsToDiscard as $unit)
+                                    <li class="py-2 text-sm">
+                                        {{-- Leva à unidade, onde o descarte é lançado. --}}
+                                        <a href="{{ route('stock.units.show', $unit) }}" class="block truncate text-slate-800 hover:underline">
+                                            {{ $unit->batch->product->name }} <span class="text-slate-500">· lote {{ $unit->batch->batch_code }}</span>
+                                        </a>
+                                        <p class="text-xs text-red-700">{{ $unit->discardReason() }}</p>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+                </div>
+            </section>
         @endif
     </div>
 

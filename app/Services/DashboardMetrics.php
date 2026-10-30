@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\AppointmentStatus;
-use App\Enums\FinancialEntryType;
 use App\Enums\Permission;
 use App\Models\Appointment;
 use App\Models\Product;
@@ -25,46 +24,33 @@ class DashboardMetrics
     private const LIST_LIMIT = 5;
 
     /**
-     * Totais do mês em uma única consulta, montada com as partes que o usuário pode ver.
+     * Contagens do dia em uma única consulta, montada com as partes que o
+     * usuário pode ver. O Início é a visão operacional: nenhum valor em dinheiro.
      *
-     * @return array<string, float|int> Chaves possíveis: patients, treatments, revenue, low_stock, expiring_batches.
+     * @return array<string, int> Chaves possíveis: treatments, low_stock, expiring_batches, units_to_discard.
      */
-    public function totals(User $user): array
+    public function totals(User $user, ?int $professionalId = null): array
     {
-        $month = CarbonImmutable::createFromFormat('!Y-m-d', ClinicTime::today(), ClinicTime::timezone())->startOfMonth();
         $selects = [];
         $bindings = [];
 
-        if ($user->hasPermission(Permission::PatientsView)) {
-            $selects[] = '(select count(*) from patients where deleted_at is null) as patients';
-        }
-
         if ($user->hasPermission(Permission::RecordsView)) {
-            $selects[] = '(select count(*) from treatments where deleted_at is null and voided_at is null and performed_at between ? and ?) as treatments';
-            array_push($bindings, $month->utc(), $month->endOfMonth()->utc());
-        }
-
-        if ($user->hasPermission(Permission::FinanceView)) {
-            // Lançado (competência) e recebido (caixa) são números diferentes, e os dois importam.
-            $selects[] = '(select coalesce(sum(i.amount), 0) from financial_installments i join financial_entries e on e.id = i.financial_entry_id'
-                .' where e.type = ? and e.issued_on between ? and ?) as revenue';
-            array_push($bindings, FinancialEntryType::Income->value, $month->format('Y-m-d'), $month->endOfMonth()->format('Y-m-d'));
-            $selects[] = '(select coalesce(sum(i.amount), 0) from financial_installments i join financial_entries e on e.id = i.financial_entry_id'
-                .' where e.type = ? and i.paid_at between ? and ?) as received';
-            array_push($bindings, FinancialEntryType::Income->value, $month->format('Y-m-d'), $month->endOfMonth()->format('Y-m-d'));
+            // Atendimentos registrados hoje, sem os anulados; com o mesmo filtro de profissional da agenda do dia.
+            [$start, $end] = ClinicTime::dayBounds(ClinicTime::today());
+            $selects[] = '(select count(*) from treatments where deleted_at is null and voided_at is null and performed_at between ? and ?'
+                .($professionalId ? ' and professional_id = ?' : '').') as treatments';
+            array_push($bindings, $start, $end, ...($professionalId ? [$professionalId] : []));
         }
 
         if ($user->hasPermission(Permission::StockView)) {
-            $alertLimit = ClinicTime::local(now())->addDays((int) config('clinic.stock.expiry_alert_days'))->format('Y-m-d');
-
-            // Mesma regra de estoque baixo da aba do estoque (Product::lowStock()).
+            // Mesmas regras dos alertas do módulo de estoque (StockAlerts).
             $lowStock = Product::query()->lowStock()->selectRaw('count(*)')->toBase();
             $selects[] = '('.$lowStock->toSql().') as low_stock';
             array_push($bindings, ...$lowStock->getBindings());
-            // Lotes com saldo já vencidos ou que vencem dentro do prazo de alerta.
-            $selects[] = '(select count(*) from product_batches where quantity > 0 and expires_on <= ?) as expiring_batches';
-            $bindings[] = $alertLimit;
-            // Unidades abertas que não podem mais ir para paciente (mesma regra da aba do estoque).
+            $expiring = ProductBatch::query()->where(fn ($query) => $query->expiringSoon()->orWhere(fn ($expired) => $expired->expiredWithStock()))
+                ->selectRaw('count(*)')->toBase();
+            $selects[] = '('.$expiring->toSql().') as expiring_batches';
+            array_push($bindings, ...$expiring->getBindings());
             $toDiscard = StockUnit::query()->awaitingDiscard()->selectRaw('count(*)')->toBase();
             $selects[] = '('.$toDiscard->toSql().') as units_to_discard';
             array_push($bindings, ...$toDiscard->getBindings());
@@ -74,7 +60,7 @@ class DashboardMetrics
             return [];
         }
 
-        return array_map(fn ($value) => $value + 0, (array) DB::selectOne('select '.implode(', ', $selects), $bindings));
+        return array_map(intval(...), (array) DB::selectOne('select '.implode(', ', $selects), $bindings));
     }
 
     /**
@@ -190,6 +176,23 @@ class DashboardMetrics
             ->with('product:id,name,unit')
             ->where(fn ($query) => $query->where(fn ($soon) => $soon->expiringSoon())->orWhere(fn ($expired) => $expired->expiredWithStock()))
             ->orderBy('expires_on')
+            ->limit(self::LIST_LIMIT)
+            ->get();
+    }
+
+    /**
+     * Unidades abertas que não podem mais ir para paciente, das abertas há mais tempo.
+     *
+     * @return Collection<int, StockUnit>
+     */
+    public function unitsToDiscard(): Collection
+    {
+        return StockUnit::query()
+            ->awaitingDiscard()
+            ->withConsumption()
+            ->with(['batch:id,product_id,batch_code,expires_on', 'batch.product:id,name,hours_after_opening,multi_patient_use,is_active'])
+            ->orderBy('opened_at')
+            ->orderBy('id')
             ->limit(self::LIST_LIMIT)
             ->get();
     }

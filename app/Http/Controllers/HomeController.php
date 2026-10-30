@@ -16,7 +16,8 @@ use Illuminate\View\View;
 class HomeController extends Controller
 {
     /**
-     * Início: o dia da clínica em resumo. Cada bloco só é montado, e
+     * Início: a visão operacional do dia (agenda, pendências e alertas de
+     * estoque), sem valores em dinheiro. Cada bloco só é montado, e
      * consultado no banco, para quem tem a permissão correspondente.
      */
     public function index(Request $request, DashboardMetrics $metrics, TreatmentFormOptions $options, AuditLogger $audit): View
@@ -37,7 +38,7 @@ class HomeController extends Controller
 
         return view('home', [
             'today' => ClinicTime::local(now()),
-            'totals' => $metrics->totals($user),
+            'totals' => $metrics->totals($user, $professionalId),
             'attends' => $attends,
             'showAll' => $showAll,
             'todayAppointments' => $seesAgenda ? $metrics->todayAppointments($professionalId) : null,
@@ -46,6 +47,7 @@ class HomeController extends Controller
             'returns' => $seesAgenda && $user->hasPermission(Permission::RecordsView) ? $metrics->returnsToSchedule() : null,
             'lowStockProducts' => $seesStock ? $metrics->lowStockProducts() : null,
             'expiringBatches' => $seesStock ? $metrics->expiringBatches() : null,
+            'unitsToDiscard' => $seesStock ? $metrics->unitsToDiscard() : null,
             'treatmentForm' => $user->can('create', Treatment::class) ? $options->forDialog($request) : null,
         ]);
     }
